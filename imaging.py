@@ -1,0 +1,276 @@
+"""Komposisi struk foto 1-bit untuk printer thermal 80mm (576 dot)."""
+import os
+from datetime import datetime
+
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+
+try:
+    import qrcode
+except ImportError:  # QR opsional
+    qrcode = None
+
+BLACK, WHITE = 0, 255
+
+LAYOUTS = {
+    # nama: (jumlah foto, label)
+    "solo": (1, "SOLO · 1 FOTO"),
+    "duo": (2, "DUO · 2 FOTO"),
+    "strip": (3, "STRIP · 3 FOTO"),
+    "grid": (4, "GRID · 4 FOTO"),
+}
+
+_FONT_CANDIDATES = {
+    True: ["arialbd.ttf", "DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"],
+    False: ["arial.ttf", "DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"],
+}
+_MONO_CANDIDATES = ["consola.ttf", "cour.ttf", "DejaVuSansMono.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"]
+_font_cache = {}
+
+
+def font(size, bold=False, mono=False):
+    key = (size, bold, mono)
+    if key in _font_cache:
+        return _font_cache[key]
+    here = os.path.dirname(os.path.abspath(__file__))
+    custom = os.path.join(here, "fonts", "mono.ttf" if mono else ("bold.ttf" if bold else "regular.ttf"))
+    for name in [custom] + (_MONO_CANDIDATES if mono else _FONT_CANDIDATES[bold]):
+        try:
+            f = ImageFont.truetype(name, size)
+            _font_cache[key] = f
+            return f
+        except OSError:
+            continue
+    f = ImageFont.load_default(size=size)
+    _font_cache[key] = f
+    return f
+
+
+# ---------- gaya cetak (foto -> 1-bit) ----------
+
+def _prep(img, size):
+    img = ImageOps.exif_transpose(img).convert("RGB")
+    img = ImageOps.fit(img, size, Image.LANCZOS)
+    g = ImageOps.grayscale(img)
+    g = ImageOps.autocontrast(g, cutoff=1)
+    return g
+
+
+def _halftone(g, cell=8):
+    w, h = g.size
+    small = g.resize((max(1, w // cell), max(1, h // cell)), Image.BILINEAR)
+    out = Image.new("L", (w, h), WHITE)
+    d = ImageDraw.Draw(out)
+    sw, sh = small.size
+    px = small.load()
+    max_r = cell * 0.72
+    for y in range(sh):
+        for x in range(sw):
+            darkness = 1 - px[x, y] / 255
+            r = max_r * (darkness ** 0.8)
+            if r < 0.6:
+                continue
+            cx, cy = x * cell + cell / 2, y * cell + cell / 2
+            d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=BLACK)
+    return out
+
+
+ASCII_RAMP = "@#S%?*+;:,. "   # gelap -> terang
+
+
+def _ascii(g, cell_w=7):
+    """Foto -> susunan huruf/simbol (font mono)."""
+    w, h = g.size
+    f = font(12, mono=True)
+    cw = cell_w
+    ch = int(cw * 1.75)
+    cols, rows = max(1, w // cw), max(1, h // ch)
+    small = g.resize((cols, rows), Image.BILINEAR)
+    small = ImageOps.autocontrast(small, cutoff=2)
+    out = Image.new("L", (w, h), WHITE)
+    d = ImageDraw.Draw(out)
+    px = small.load()
+    n = len(ASCII_RAMP) - 1
+    ox = (w - cols * cw) // 2
+    for y in range(rows):
+        line = "".join(ASCII_RAMP[int(px[x, y] / 255 * n)] for x in range(cols))
+        for x, chx in enumerate(line):
+            if chx != " ":
+                d.text((ox + x * cw, y * ch), chx, font=f, fill=BLACK)
+    return out.point(lambda v: WHITE if v > 140 else BLACK)
+
+
+def _coloring(g):
+    """Foto -> garis luar tebal untuk diwarnai (coloring page)."""
+    s = g.filter(ImageFilter.GaussianBlur(2.2))
+    s = ImageOps.posterize(s, 3)
+    e = s.filter(ImageFilter.FIND_EDGES)
+    e = ImageOps.autocontrast(e)
+    lines = e.point(lambda v: 255 if v > 40 else 0).filter(ImageFilter.MaxFilter(3))
+    lines = lines.filter(ImageFilter.MedianFilter(3))
+    out = ImageOps.invert(lines)
+    d = ImageDraw.Draw(out)
+    d.rectangle((0, 0, out.width - 1, out.height - 1), outline=BLACK, width=3)
+    return out
+
+
+def stylize(img, size, style="dither", brightness=1.0):
+    """Kembalikan gambar mode 'L' yang isinya hanya 0/255."""
+    g = _prep(img, size)
+    if brightness != 1.0:
+        g = g.point(lambda v: max(0, min(255, int(v * brightness))))
+    if style == "halftone":
+        out = _halftone(g)
+    elif style == "ascii":
+        out = _ascii(g)
+    elif style == "mewarnai":
+        out = _coloring(g)
+    elif style == "kontras":
+        out = g.point(lambda v: WHITE if v > 120 else BLACK)
+    elif style == "sketsa":
+        e = g.filter(ImageFilter.GaussianBlur(1)).filter(ImageFilter.FIND_EDGES)
+        e = ImageOps.invert(ImageOps.autocontrast(e))
+        out = e.point(lambda v: WHITE if v > 200 else BLACK)
+    else:  # dither Floyd–Steinberg
+        g = g.filter(ImageFilter.UnsharpMask(radius=2, percent=80))
+        out = g.convert("1").convert("L")
+    return out
+
+
+# ---------- komposisi struk ----------
+
+def _text_center(d, y, text, f, width):
+    w = d.textlength(text, font=f)
+    d.text(((width - w) / 2, y), text, font=f, fill=BLACK)
+    bbox = f.getbbox(text)
+    return y + (bbox[3] - bbox[1]) + 8
+
+
+def _wrap(d, text, f, max_w):
+    words, lines, cur = text.split(), [], ""
+    for wd in words:
+        t = (cur + " " + wd).strip()
+        if d.textlength(t, font=f) <= max_w:
+            cur = t
+        else:
+            if cur:
+                lines.append(cur)
+            cur = wd
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _dashed(d, y, x0, x1, dash=14, gap=10, h=4):
+    x = x0
+    while x < x1:
+        d.rectangle((x, y, min(x + dash, x1), y + h - 1), fill=BLACK)
+        x += dash + gap
+    return y + h
+
+
+def compose_receipt(photos, layout="strip", style="dither", caption="", show_logo=True,
+                    event_name="NAMA EVENT", logo_path=None, qr_url=None, number=None,
+                    width=576, brightness=1.0, footer="TERIMA KASIH", template="klasik",
+                    custom=None, asset_dir=None, now=None, social=None, opts=None, ph_cache=None):
+    """photos: list PIL.Image. Return PIL.Image mode '1' lebar `width`."""
+    import templates as T
+
+    logo = logo_src = None
+    if show_logo and logo_path and os.path.exists(logo_path):
+        logo_src = Image.open(logo_path).convert("RGBA")
+        logo = logo_src.copy()
+        logo.thumbnail((int(width * 0.6), 140))
+        if logo.mode in ("RGBA", "LA"):
+            bg = Image.new("RGB", logo.size, "white")
+            bg.paste(logo, mask=logo.split()[-1])
+            logo = bg
+        logo = ImageOps.grayscale(logo).convert("1").convert("L")
+
+    qr = None
+    if qr_url and qrcode:
+        q = qrcode.QRCode(border=1, box_size=1, error_correction=qrcode.constants.ERROR_CORRECT_M)
+        q.add_data(qr_url)
+        q.make(fit=True)
+        qr = q.make_image(fill_color="black", back_color="white").convert("L")
+
+    ctx = T.Ctx(list(photos), layout if layout in LAYOUTS else "strip",
+                lambda im, size: stylize(im, size, style, brightness),
+                event=event_name, caption=caption, number=number, qr=qr, logo=logo, width=width,
+                logo_src=logo_src, asset_dir=asset_dir, now=now, social=social, opts=opts,
+                ph_cache=ph_cache)
+    return T.render(template, ctx, custom).convert("1", dither=Image.NONE)
+
+
+def stylize_sample(img, style, width=576, brightness=1.0):
+    return stylize(img, (width, int(width * 2 / 3)), style, brightness)
+
+
+# ---------- blok tambahan di bawah struk (undian, pose, buku tamu) ----------
+
+def append_extras(img, extras, width=576):
+    """img: struk mode '1'. extras: {'lucky': '0127', 'poses': [...], 'guestbook': {name, message, signature(PIL)}}."""
+    if not extras or not any(extras.get(k) for k in ("lucky", "poses", "guestbook")):
+        return img
+    import templates as T
+    p = T.Paper(width)
+    W, L, R = width, T.M, width - T.M
+    p.y = 6
+    p.y = p.dashed(h=3, x0=L, x1=R) + 22
+    gb = extras.get("guestbook") or {}
+    if gb.get("message") or gb.get("signature") is not None:
+        p.y = p.center("BUKU TAMU", T.F("monob", 17), spacing=4) + 14
+        if gb.get("message"):
+            p.para_center("“" + gb["message"].strip() + "”", T.F("hand", 38), max_w=R - L, line_gap=4)
+        sig = gb.get("signature")
+        if sig is not None:
+            s = sig.convert("RGBA")
+            bg = Image.new("RGB", s.size, "white")
+            bg.paste(s, mask=s.split()[3])
+            g = ImageOps.grayscale(bg)
+            bbox = ImageOps.invert(g).getbbox()
+            if bbox:
+                g = g.crop(bbox)
+                g.thumbnail((360, 130))
+                ink = g.point(lambda v: 255 if v < 160 else 0)
+                x = (W - g.width) // 2
+                p.y += 8
+                p.img.paste(T.K, (x, p.y, x + g.width, p.y + g.height), ink)
+                p.y += g.height + 6
+        if gb.get("name"):
+            p.d.rectangle((W / 2 - 150, p.y, W / 2 + 150, p.y + 1), fill=T.K)
+            p.y = p.center(gb["name"].strip()[:40], T.F("sansb", 20), y=p.y + 10) + 18
+        p.y += 6
+    poses = [x for x in (extras.get("poses") or []) if x]
+    if poses:
+        p.y = p.center("TANTANGAN POSE", T.F("monob", 17), spacing=4) + 14
+        for i, t in enumerate(poses, 1):
+            for line in p.wrap(f"{i}. {t}", T.F("sans", 20), R - L):
+                p.text(L, p.y, line, T.F("sans", 20))
+                p.y += 28
+        p.y += 14
+    if extras.get("lucky"):
+        h = 120
+        p.d.rounded_rectangle((L, p.y, R, p.y + h), radius=16, fill=T.K)
+        p.center("NOMOR UNDIAN", T.F("monob", 18), y=p.y + 16, fill=T.P, spacing=4)
+        p.center(str(extras["lucky"]), T.F("bebas", 70), y=p.y + 42, fill=T.P)
+        p.y += h + 10
+        p.y = p.center("Simpan struk ini untuk undian doorprize", T.F("sans", 17)) + 10
+    block = p.finish(bottom_pad=24).convert("1", dither=Image.NONE)
+    out = Image.new("1", (width, img.height + block.height), 1)
+    out.paste(img, (0, 0))
+    out.paste(block, (0, img.height))
+    return out
+
+
+def host_copy(img, width=576, label="ARSIP TUAN RUMAH"):
+    """Salinan untuk tuan rumah: tambah pita hitam di atas."""
+    import templates as T
+    p = T.Paper(width, h=80)
+    p.d.rectangle((0, 0, width, 56), fill=T.K)
+    p.center(label, T.F("monob", 22), y=17, fill=T.P, spacing=4)
+    p.y = 66
+    head = p.finish(bottom_pad=0).convert("1", dither=Image.NONE)
+    out = Image.new("1", (width, img.height + head.height), 1)
+    out.paste(head, (0, 0))
+    out.paste(img, (0, head.height))
+    return out

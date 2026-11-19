@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slideshow — Photobooth</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+html,body{margin:0;height:100%;background:#0d0d0d;color:#F2EFE8;font-family:'Space Grotesk',system-ui,sans-serif;overflow:hidden;cursor:none}
+.stage{position:fixed;inset:0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3vmin;padding:4vmin;box-sizing:border-box}
+.photo{position:relative;border-radius:2vmin;overflow:hidden;background:#1a1a1a}
+.photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity 1.2s ease}
+.photo img.on{opacity:1}
+.side{display:flex;flex-direction:column;gap:2vmin;width:min(28vw,42vh);min-height:0}
+.struk{flex:1;min-height:0;background:#fff;border-radius:1.2vmin;overflow:hidden;display:flex;justify-content:center}
+.struk img{width:100%;object-fit:cover;object-position:top;transition:opacity .8s}
+.event{font-weight:700;font-size:4.2vmin;line-height:1.05}
+.meta{font-family:'JetBrains Mono',monospace;font-size:2vmin;letter-spacing:.1em;color:#FF8A5C}
+.cap{font-size:2.6vmin;opacity:.85}
+.empty{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2vmin;text-align:center}
+.empty b{font-size:6vmin}
+.new{position:absolute;left:2vmin;top:2vmin;background:#C8410F;color:#fff;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:2vmin;padding:.8vmin 1.4vmin;border-radius:.8vmin;opacity:0;transition:opacity .4s}
+.new.on{opacity:1}
+@media (orientation:portrait){.stage{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) auto}.side{width:auto;flex-direction:row;height:22vh}.struk{flex:0 0 30%}.info{flex:1;display:flex;flex-direction:column;justify-content:center;gap:1.5vmin}}
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="photo" id="photo"><img id="imgA" alt=""><img id="imgB" alt=""><span class="new" id="newTag">FOTO BARU!</span></div>
+  <div class="side">
+    <div class="struk"><img id="struk" alt="Struk"></div>
+    <div class="info">
+      <div class="event" id="event"></div>
+      <div class="meta" id="meta"></div>
+      <div class="cap" id="cap"></div>
+    </div>
+  </div>
+</div>
+<div class="empty hidden" id="empty" style="display:none"><b id="emptyEvent">Photobooth</b><span class="meta">FOTO AKAN MUNCUL DI SINI</span></div>
+<script>
+const $ = (s) => document.querySelector(s);
+let items = [], seen = new Set(), queue = [], idx = 0, showA = true, first = true;
+const SLIDE_MS = 5000;
+
+async function poll() {
+  try {
+    const r = await fetch('/api/slideshow?limit=60'); const j = await r.json();
+    $('#event').textContent = j.event; $('#emptyEvent').textContent = j.event || 'Photobooth';
+    const fresh = j.items.filter((m) => !seen.has(m.id));
+    fresh.forEach((m) => seen.add(m.id));
+    items = j.items;
+    if (!first && fresh.length) queue.unshift(...fresh.reverse());
+    first = false;
+    $('#empty').style.display = items.length ? 'none' : 'flex';
+    $('#stage').style.display = items.length ? '' : 'none';
+  } catch (e) { /* server mati sebentar: coba lagi */ }
+}
+function slide() {
+  if (!items.length) return;
+  let m, isNew = false;
+  if (queue.length) { m = queue.shift(); isNew = true; } else { m = items[idx % items.length]; idx++; }
+  const src = m.photos[Math.floor(Math.random() * m.photos.length)] || m.struk;
+  const show = showA ? $('#imgA') : $('#imgB'), hide = showA ? $('#imgB') : $('#imgA');
+  show.onload = () => { show.classList.add('on'); hide.classList.remove('on'); };
+  show.src = src; showA = !showA;
+  $('#struk').src = m.struk;
+  $('#meta').textContent = `NO. ${String(m.number || '').padStart(4, '0')} · ${new Date(m.time * 1000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+  $('#cap').textContent = m.caption || '';
+  $('#newTag').classList.toggle('on', isNew);
+}
+poll().then(slide);
+setInterval(poll, 8000);
+setInterval(slide, SLIDE_MS);
+document.addEventListener('click', () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}));
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "event_name": "NAMA EVENT",
+  "logo_path": "",
+  "footer": "TERIMA KASIH",
+  "port": 5000,
+  "public_base_url": "",
+
+  "paper_px": 576,
+  "brightness": 1.0,
+  "max_copies": 2,
+  "countdown_seconds": 3,
+  "reset_seconds": 15,
+  "idle_seconds": 90,
+  "mirror": true,
+  "dummy_camera": false,
+  "qr_download": false,
+
+  "studio_pin": "",
+  "paper_roll_m": 50,
+  "paper_warn_m": 3,
+  "https": {"enabled": false, "port": 5443},
+  "camera_facing": "user",
+
+  "default_template": "klasik",
+  "templates": [],
+
+  "printer": {
+    "type": "file",
+
+    "name": "POS-80",
+
+    "vendor_id": "0x0416",
+    "product_id": "0x5011",
+
+    "host": "192.168.1.50",
+    "port": 9100,
+    "serial_port": "COM3",
+    "baudrate": 9600,
+
+    "impl": "bitImageRaster",
+    "fragment_height": 256,
+    "feed_lines": 3,
+    "cut": true,
+    "profile": ""
+  }
+}

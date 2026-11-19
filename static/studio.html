@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Template Studio — Photobooth</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+:root{--paper:#F2EFE8;--ink:#121212;--muted:#5A5650;--line:#D3CDC2;--accent:#C8410F;--ok:#2F7D3A;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 Inter,system-ui,sans-serif}
+h1,h2,h3{font-family:'Space Grotesk',sans-serif;margin:0}
+.mono{font-family:'JetBrains Mono',Consolas,monospace;letter-spacing:.04em}
+.muted{color:var(--muted)}.small{font-size:13px}
+.hidden{display:none!important}
+button,.btn{font:600 14px Inter,sans-serif;border:1.5px solid var(--ink);background:#fff;color:var(--ink);border-radius:10px;padding:8px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+button.primary,.btn.primary{background:var(--ink);color:#fff}
+button.accent{background:var(--accent);border-color:var(--accent);color:#fff}
+button.ghost{border-color:var(--line)}
+button.danger{color:var(--accent);border-color:#E6B7A5}
+button:disabled{opacity:.45;cursor:default}
+input[type=text],input[type=number],select,textarea{font:14px Inter,sans-serif;border:1.5px solid var(--line);border-radius:8px;padding:7px 9px;background:#fff;color:var(--ink);width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--ink);outline-offset:1px}
+label{display:block}
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 24px;border-bottom:2px solid var(--ink);background:var(--paper);position:sticky;top:0;z-index:5}
+.top .left{display:flex;align-items:center;gap:16px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 8px;border-radius:99px;background:#E6E1D6}
+.badge.on{background:#DCEBDD;color:#1F5A29}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.wrap{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:calc(100vh - 62px)}
+.side{border-right:1.5px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:10px}
+.ev{border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;display:block;width:100%;font-weight:400}
+.ev.sel{border:2px solid var(--accent)}
+.ev b{display:block;font-family:'Space Grotesk',sans-serif;font-size:16px}
+.main{padding:20px 24px 80px;min-width:0}
+.tabs{display:flex;gap:6px;margin:14px 0 18px;border-bottom:1.5px solid var(--line)}
+.tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:8px 12px}
+.tabs button.on{border-bottom-color:var(--ink)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.card{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:16px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field > span{font-size:13px;font-weight:600}
+.hint{font-size:12px;color:var(--muted)}
+.check{display:flex;align-items:center;gap:8px;font-size:14px}
+.check input{width:18px;height:18px;accent-color:var(--ink)}
+.split{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:22px;align-items:start}
+.preview{position:sticky;top:80px;display:flex;flex-direction:column;gap:10px}
+.preview .paperbox{background:#d9d4ca;border-radius:14px;padding:14px;max-height:calc(100vh - 230px);overflow:auto;display:flex;justify-content:center}
+.preview img{width:288px;image-rendering:auto;box-shadow:0 2px 10px rgba(0,0,0,.15);background:#fff}
+.seg{display:inline-flex;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 10px}
+.seg button.on{background:var(--ink);color:#fff}
+.tpl-row{display:grid;grid-template-columns:28px 1fr auto auto;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;border:1.5px solid transparent}
+.tpl-row:hover{background:#FAF8F3}
+.tpl-row.sel{border-color:var(--accent);background:#fff}
+.tpl-row .name{cursor:pointer}
+.tpl-row .tag{font-size:11px;font-weight:700;color:var(--muted);margin-left:6px}
+.arrows button{padding:3px 7px;border-color:var(--line)}
+.blk{border:1.5px solid var(--line);border-radius:12px;padding:12px;display:grid;grid-template-columns:2fr 1.3fr 70px 70px auto;gap:8px;align-items:end}
+.blk .field > span{font-size:12px}
+.sec{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:17px;margin:20px 0 10px}
+.frame-slot{border:1.5px dashed var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center;background:#FAF8F3}
+.frame-slot img{max-width:100%;max-height:180px;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/16px 16px}
+.warn{color:var(--accent);font-weight:600}
+.okc{color:var(--ok);font-weight:600}
+.savebar{position:fixed;right:24px;bottom:20px;display:flex;gap:10px;align-items:center;background:#fff;border:1.5px solid var(--ink);border-radius:14px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:10}
+.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+.logo-prev{height:70px;max-width:220px;object-fit:contain;background:repeating-conic-gradient(#e5e5e5 0 25%,#fff 0 50%) 0 0/14px 14px;border-radius:8px;border:1px solid var(--line)}
+@media (max-width:1100px){.split{grid-template-columns:1fr}.preview{position:static}.wrap{grid-template-columns:1fr}.side{border-right:0;border-bottom:1.5px solid var(--line)}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="left">
+    <h1 style="font-size:22px">Template Studio</h1>
+    <span class="badge" id="activeBadge"><span class="dot"></span><span id="activeText">-</span></span>
+  </div>
+  <div class="row">
+    <a class="btn" href="/slideshow" target="_blank" rel="noopener">Slideshow TV ↗</a>
+    <a class="btn" href="/" target="_blank" rel="noopener">Buka kiosk ↗</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside class="side">
+    <div class="row" style="justify-content:space-between"><h2 style="font-size:17px">Event</h2><button class="primary" id="btnNewEvent">+ Event baru</button></div>
+    <div id="eventList" class="col"></div>
+    <button class="ghost" id="btnSettings" style="justify-content:center">⚙ Printer &amp; tablet</button>
+    <p class="hint">Event aktif = yang dipakai layar kiosk. Kiosk otomatis ikut berganti saat kembali ke layar awal.</p>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="empty" id="emptyState">Pilih event di kiri, atau buat event baru.</div>
+
+    <div id="settings" class="hidden">
+      <h2 style="font-size:26px">Printer &amp; tablet</h2>
+      <p class="muted" style="margin-top:4px">Pengaturan ini berlaku untuk semua event (disimpan di config.json).</p>
+      <div class="split" style="margin-top:16px">
+        <div>
+          <div class="card">
+            <div class="row" style="justify-content:space-between"><b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Printer thermal</b><span class="badge" id="prStatus">-</span></div>
+            <div class="grid2" style="margin-top:12px">
+              <label class="field"><span>Jenis koneksi</span>
+                <select id="prType">
+                  <option value="file">Mode tes (tanpa printer)</option>
+                  <option value="win32">Windows (printer sudah terpasang/driver)</option>
+                  <option value="network">LAN / Wi-Fi (alamat IP)</option>
+                  <option value="serial">Bluetooth / Serial (COM port)</option>
+                  <option value="usb">USB langsung (tanpa driver)</option>
+                  <option value="device">Raspberry Pi / Linux (USB, /dev/usb/lp0)</option>
+                  <option value="webusb">USB di tablet Android (kabel OTG)</option>
+                </select></label>
+              <label class="field"><span>Lebar kertas</span>
+                <select id="prPaper"><option value="576">80 mm (576 dot)</option><option value="512">80 mm aman (512 dot)</option><option value="384">58 mm (384 dot)</option></select></label>
+            </div>
+            <div class="grid2 pr-group" data-type="win32" style="margin-top:12px">
+              <label class="field"><span>Nama printer Windows</span><input type="text" id="prName" list="prWinList" placeholder="mis. POS-80"><datalist id="prWinList"></datalist>
+                <span class="hint">Klik "Cari perangkat" untuk daftar printer yang terpasang.</span></label>
+            </div>
+            <div class="grid2 pr-group" data-type="network" style="margin-top:12px">
+              <label class="field"><span>Alamat IP printer</span><input type="text" id="prHost" placeholder="192.168.1.50"></label>
+              <label class="field"><span>Port</span><input type="number" id="prPort" placeholder="9100"></label>
+            </div>
+            <div class="grid2 pr-group" data-type="serial" style="margin-top:12px">
+              <label class="field"><span>COM port</span><input type="text" id="prSerial" list="prComList" placeholder="COM3"><datalist id="prComList"></datalist></label>
+              <label class="field"><span>Baudrate</span><select id="prBaud"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option></select></label>
+            </div>
+            <div class="grid2 pr-group" data-type="usb" style="margin-top:12px">
+              <label class="field"><span>Vendor ID</span><input type="text" id="prVid" placeholder="0x0416"></label>
+              <label class="field"><span>Product ID</span><input type="text" id="prPid" placeholder="0x5011"></label>
+            </div>
+            <p class="hint pr-group" data-type="serial">Bluetooth: pasangkan (pair) printer di Windows dulu. Kalau muncul di daftar printer → pilih <b>Windows</b>. Kalau muncul sebagai COM port (Bluetooth SPP, lihat Device Manager → Ports) → pilih <b>Bluetooth / Serial</b>.</p>
+            <div class="grid2 pr-group" data-type="device" style="margin-top:12px">
+              <label class="field"><span>File perangkat printer</span><input type="text" id="prDev" list="prDevList" placeholder="/dev/usb/lp0"><datalist id="prDevList"></datalist>
+                <span class="hint">Printer USB di Raspberry Pi/Linux biasanya /dev/usb/lp0. Klik "Cari perangkat".</span></label>
+            </div>
+            <div class="pr-group" data-type="webusb" style="margin-top:12px">
+              <div class="row"><button class="primary" id="btnUsbPair" type="button">Sambungkan printer USB</button><span class="small" id="usbInfo">-</span></div>
+              <p class="hint">Untuk printer USB yang dicolok ke tablet Android lewat kabel OTG. Buka Studio/kiosk di <b>Chrome di tablet itu</b> (alamat localhost), tekan tombol di atas lalu pilih printernya. Cukup sekali per tablet. Di Windows pakai mode <b>Windows</b>.</p>
+            </div>
+            <p class="hint pr-group" data-type="usb">Mode ini butuh driver WinUSB (Zadig). Kalau printer sudah punya driver Windows, lebih mudah pakai mode Windows.</p>
+            <details style="margin-top:12px"><summary class="small" style="cursor:pointer">Pengaturan lanjutan</summary>
+              <div class="grid4" style="margin-top:10px">
+                <label class="field"><span>Mode gambar</span><select id="prImpl"><option value="bitImageRaster">bitImageRaster</option><option value="graphics">graphics</option><option value="bitImageColumn">bitImageColumn</option></select></label>
+                <label class="field"><span>Kecerahan</span><input type="number" id="prBright" step="0.05" min="0.5" max="2"></label>
+                <label class="field"><span>Baris kosong sebelum potong</span><input type="number" id="prFeed" min="0" max="10"></label>
+                <label class="check" style="margin-top:22px"><input type="checkbox" id="prCut"> Auto-cutter</label>
+              </div>
+              <p class="hint">Hasil cetak berupa karakter acak → ganti Mode gambar. Terlalu gelap → naikkan Kecerahan (mis. 1.15).</p>
+            </details>
+            <div class="row" style="margin-top:16px">
+              <button id="btnDiscover">Cari perangkat</button>
+              <button id="btnCheck">Cek koneksi</button>
+              <button id="btnTestPrint">Cetak tes</button>
+              <button class="primary" id="btnSavePrinter">Simpan pengaturan printer</button>
+            </div>
+            <p class="small" id="prMsg" style="margin-top:10px"></p>
+          </div>
+
+          <div class="card" style="margin-top:18px">
+            <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Kertas</b><span class="badge" id="paperBadge">-</span></div>
+            <div style="height:16px;border:2px solid var(--ink);border-radius:8px;overflow:hidden;margin-top:12px"><div id="paperBar" style="height:100%;background:var(--ink);width:0"></div></div>
+            <p class="small" id="paperInfo" style="margin:8px 0 12px">-</p>
+            <div class="row">
+              <label class="field" style="width:180px"><span>Panjang 1 roll (meter)</span><input type="number" id="paperRoll" min="5" max="200" step="1"></label>
+              <button id="btnPaperSave" style="margin-top:20px">Simpan</button>
+              <button class="accent" id="btnPaperReset" style="margin-top:20px">Ganti roll baru (reset)</button>
+            </div>
+            <p class="hint">Perkiraan dari panjang struk yang dicetak. Kiosk menampilkan "KERTAS HAMPIR HABIS" saat sisa ≤ 3 m.</p>
+          </div>
+
+          <div class="card" style="margin-top:18px">
+            <b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Buka kiosk di tablet</b>
+            <div class="row" style="margin-top:12px;align-items:flex-start;gap:18px">
+              <img id="kioskQr" alt="QR alamat kiosk" style="width:170px;height:170px;image-rendering:pixelated;border:1px solid var(--line);border-radius:8px">
+              <div style="flex:1;min-width:240px">
+                <div class="small">Scan QR ini dari tablet, atau ketik:</div>
+                <div class="mono" id="kioskUrl" style="font-size:16px;font-weight:700;margin:6px 0 10px;word-break:break-all">-</div>
+                <label class="check"><input type="checkbox" id="httpsToggle"> Aktifkan HTTPS (wajib untuk kamera Android / iPad)</label>
+                <p class="hint" id="httpsHint">Setelah diubah, restart server (tutup lalu jalankan run.bat).</p>
+              </div>
+            </div>
+            <ul class="small" style="margin:12px 0 0;padding-left:18px;line-height:1.6">
+              <li><b>Windows (PC/tablet)</b>: cukup jalankan <span class="mono">run.bat</span> di perangkat itu — kamera &amp; printer langsung jalan.</li>
+              <li><b>Android</b>: PC/mini PC jadi server. Buka alamat HTTPS di Chrome → "Lanjutan → Lanjutkan" (sekali saja) → izinkan kamera → menu ⋮ → <i>Tambahkan ke layar utama</i> supaya layar penuh.</li>
+              <li><b>iPad</b>: buka alamat HTTPS di Safari → "Tampilkan detail → kunjungi situs" → izinkan kamera → Bagikan → <i>Tambah ke Layar Utama</i>. Aktifkan <i>Guided Access</i> supaya tamu tidak keluar dari aplikasi.</li>
+              <li>Tablet &amp; server harus satu Wi-Fi. Printer tersambung ke server (USB/Bluetooth) atau ke jaringan (LAN/Wi-Fi).</li>
+            </ul>
+          </div>
+        </div>
+        <div class="preview">
+          <b>Hasil cetak tes</b>
+          <div class="paperbox"><img id="testImg" alt="Struk tes" class="hidden"><span class="hint" id="testHint">Klik "Cetak tes". Struk tes punya penggaris tepi untuk cek apakah kiri-kanan terpotong.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="editor" class="hidden">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <h2 id="evTitle" style="font-size:26px">-</h2>
+          <div class="muted small mono" id="evId"></div>
+        </div>
+        <div class="row">
+          <button class="accent" id="btnActivate">Aktifkan di kiosk</button>
+          <button class="ghost" id="btnDuplicate">Duplikat</button>
+          <button class="danger" id="btnDelete">Hapus</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button data-tab="info" class="on">Info event</button>
+        <button data-tab="templates">Template</button>
+        <button data-tab="guest">Buku tamu &amp; undian</button>
+      </div>
+
+      <!-- INFO -->
+      <section id="tab-info">
+        <div class="grid2">
+          <label class="field"><span>Nama event (di Studio)</span><input type="text" data-k="name"></label>
+          <label class="field"><span>Nama yang dicetak di struk</span><input type="text" data-k="event_name"><span class="hint">Dipakai di semua template sebagai {event}.</span></label>
+          <label class="field"><span>Teks penutup (footer)</span><input type="text" data-k="footer"></label>
+          <div class="field"><span>Logo</span>
+            <div class="row"><img class="logo-prev hidden" id="logoPrev" alt="Logo event"><label class="btn">Upload logo<input type="file" id="logoFile" class="hidden" accept="image/png,image/jpeg"></label><button class="ghost hidden" id="btnLogoDel">Hapus logo</button></div>
+            <span class="hint">PNG transparan paling bagus. Logo gelap di atas transparan/putih.</span>
+          </div>
+        </div>
+        <div class="sec">Fitur tambahan</div>
+        <div class="grid2" id="featureChecks">
+          <label class="check card"><input type="checkbox" data-f="guestbook"> <span><b>Buku tamu + tanda tangan</b><br><span class="hint">Tamu menulis ucapan &amp; tanda tangan di tablet, ikut tercetak dan tersimpan.</span></span></label>
+          <label class="check card"><input type="checkbox" data-f="lucky_draw"> <span><b>Nomor undian</b><br><span class="hint">Setiap struk dapat nomor undian. Undi di tab Buku tamu &amp; undian.</span></span></label>
+          <label class="check card"><input type="checkbox" data-f="pose_challenge"> <span><b>Tantangan pose</b><br><span class="hint">Pose acak muncul sebelum tiap jepretan, ikut tercetak.</span></span></label>
+          <label class="check card"><input type="checkbox" data-f="host_copy"> <span><b>Cetak arsip tuan rumah</b><br><span class="hint">Otomatis cetak 1 salinan tambahan berlabel ARSIP.</span></span></label>
+        </div>
+
+        <div class="sec">Teks template Sertifikat &amp; Boarding Pass</div>
+        <div class="grid2">
+          <label class="field"><span>Daftar gelar Sertifikat (satu per baris)</span>
+            <textarea id="certTitles" rows="9" style="font-family:'JetBrains Mono',monospace;font-size:13px"></textarea>
+            <span class="hint">Format: <span class="mono">GELAR | keterangan kecil</span>. Tamu memilih di layar Review (atau tekan Acak). Kosongkan untuk memakai daftar bawaan.</span></label>
+          <div class="field"><span>Rute Boarding Pass</span>
+            <div class="grid2">
+              <label class="field"><span class="small">Kode asal</span><input type="text" data-b="from_code" maxlength="4" placeholder="DPS"></label>
+              <label class="field"><span class="small">Nama asal</span><input type="text" data-b="from" placeholder="Denpasar"></label>
+              <label class="field"><span class="small">Kode tujuan</span><input type="text" data-b="to_code" maxlength="4" placeholder="BHG"></label>
+              <label class="field"><span class="small">Nama tujuan</span><input type="text" data-b="to" placeholder="Bahagia"></label>
+            </div>
+            <button class="ghost" id="btnCertDefault" type="button" style="align-self:flex-start;margin-top:8px">Isi gelar bawaan</button>
+          </div>
+        </div>
+
+        <div class="sec">QR unduh foto digital</div>
+        <label class="check"><input type="checkbox" id="qrToggle"> Cetak QR di struk &amp; tampilkan di layar Selesai</label>
+        <p class="hint">Tamu scan QR untuk mengunduh foto berwarna. HP tamu harus tersambung ke Wi-Fi yang sama dengan server (atau isi <span class="mono">public_base_url</span>). Matikan untuk kiosk umum.</p>
+
+        <div class="sec">Layout yang boleh dipilih tamu</div>
+        <div class="row" id="layoutChecks"></div>
+        <label class="field" style="max-width:260px;margin-top:12px"><span>Layout terpilih otomatis</span><select data-k="default_layout" id="defaultLayout"></select></label>
+
+        <div class="sec">Template Sosial Media (Instagram, Threads, X, Facebook, YouTube)</div>
+        <p class="hint" style="margin-top:-6px">Dipakai bersama oleh kelima template sosial media. Angka followers, like, views, subscriber diacak setiap cetak. Avatar = logo event (atau foto pertama kalau tidak ada logo).</p>
+        <div class="grid2">
+          <label class="field"><span>Username</span><input type="text" data-s="username" placeholder="mis. themulia.bali"></label>
+          <label class="field"><span>Website</span><input type="text" data-s="website" placeholder="mis. www.themulia.com"></label>
+          <label class="field"><span>Nama tampilan</span><input type="text" data-s="display" placeholder="{event}"></label>
+          <label class="field"><span>Bio</span><input type="text" data-s="bio" placeholder="{date_long}"><span class="hint">Pesan tamu otomatis ditambahkan di bawah bio.</span></label>
+        </div>
+      </section>
+
+      <!-- BUKU TAMU & UNDIAN -->
+      <section id="tab-guest" class="hidden">
+        <div class="grid2">
+          <div class="card">
+            <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Undian doorprize</b><span class="badge" id="drawCount">-</span></div>
+            <div id="drawWinner" style="text-align:center;padding:18px 0">
+              <div class="mono muted small">NOMOR PEMENANG</div>
+              <div id="drawNum" style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:96px;line-height:1">----</div>
+              <img id="drawPhoto" alt="Foto pemenang" class="hidden" style="max-width:100%;max-height:220px;border-radius:10px;margin-top:10px">
+            </div>
+            <div class="row"><button class="accent" id="btnDraw">Undi sekarang</button><button class="ghost" id="btnDrawReset">Reset undian</button></div>
+            <p class="small" style="margin-top:12px"><b>Sudah keluar:</b> <span id="drawList" class="mono">-</span></p>
+            <p class="hint">Aktifkan "Nomor undian" di Info event. Nomor yang sudah keluar tidak akan keluar lagi.</p>
+          </div>
+          <div class="card">
+            <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Buku tamu</b><span class="badge" id="gbCount">-</span></div>
+            <p class="hint">Semua ucapan &amp; tanda tangan tamu event ini. Buka halamannya lalu Cetak / Simpan PDF untuk diberikan ke tuan rumah.</p>
+            <a class="btn primary" id="gbOpen" target="_blank" rel="noopener">Buka halaman buku tamu ↗</a>
+            <div id="gbList" style="margin-top:14px;display:flex;flex-direction:column;gap:10px;max-height:520px;overflow:auto"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TEMPLATE -->
+      <section id="tab-templates" class="hidden">
+        <div class="split">
+          <div>
+            <div id="tplListView">
+              <div class="row" style="justify-content:space-between">
+                <div class="sec" style="margin:0">Template yang tampil di kiosk</div>
+                <div class="row"><button id="btnNewBuilder" class="primary">+ Template builder</button><button id="btnNewOverlay">+ Upload frame PNG</button></div>
+              </div>
+              <p class="hint">Centang untuk menampilkan, ★ = terpilih otomatis, panah untuk urutan. Klik nama untuk preview.</p>
+              <div class="card" id="tplList" style="padding:6px"></div>
+            </div>
+
+            <div id="specView" class="hidden">
+              <div class="row" style="justify-content:space-between;margin-bottom:10px">
+                <button class="ghost" id="btnBackList">← Kembali ke daftar</button>
+                <div class="row"><button class="ghost" id="btnDupSpec">Duplikat</button><button class="danger" id="btnDelSpec">Hapus template</button></div>
+              </div>
+              <div id="specForm"></div>
+            </div>
+          </div>
+
+          <div class="preview">
+            <div class="row" style="justify-content:space-between">
+              <b id="pvName">Preview</b>
+              <div class="seg" id="pvLayouts"></div>
+            </div>
+            <label class="field"><span class="small">Contoh pesan tamu {caption}</span><input type="text" id="pvCaption" value="Happy wedding!" maxlength="40"></label>
+            <div class="paperbox"><img id="pvImg" alt="Preview struk"></div>
+            <div class="hint" id="pvInfo">Foto contoh: foto sesi terakhir (atau ilustrasi kalau belum ada).</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div class="savebar hidden" id="saveBar">
+  <span class="small" id="saveState">Ada perubahan belum disimpan</span>
+  <button class="primary" id="btnSave">Simpan</button>
+</div>
+
+<script src="/static/webusb.js"></script>
+<script src="/static/studio.js"></script>
+</body>
+</html>
