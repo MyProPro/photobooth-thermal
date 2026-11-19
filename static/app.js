@@ -16,10 +16,15 @@ let skipCountdown = false, shooting = false;
 function freshState() {
   S = { layout: CFG.defaultLayout || 'strip', copies: 1, style: (CFG.styles && CFG.styles[0].id) || 'dither', caption: '', showLogo: true,
         photos: [], lastPrint: null, printed: 0, template: CFG.defaultTemplate, photoVer: 0, tplKey: '',
-        poses: [], guestbook: null, certTitle: '', pendingJobs: null };
+        poses: [], guestbook: null, certTitle: '', pendingJobs: null,
+        eventName: CFG.eventName || '', footer: CFG.footer || '',
+        username: (CFG.social && CFG.social.username) || '', website: (CFG.social && CFG.social.website) || '',
+        koranTitle: 'Kabar Booth',
+        brightness: CFG.brightness !== undefined ? CFG.brightness : 1.0 };
   if ($('#gbName')) { $('#gbName').value = ''; $('#gbMsg').value = ''; clearSign(); }
   $('#caption').value = '';
   $('#showLogo').checked = true;
+  syncEditFields();
   renderOptions();
 }
 
@@ -52,7 +57,8 @@ function bumpIdle() {
 let pendingReload = false;
 function resetAll() {
   if (pendingReload) { location.reload(); return; }
-  freshState(); go('welcome');
+  freshState();
+  initEditControls(); go('welcome');
 }
 
 // ---------- kamera ----------
@@ -320,6 +326,7 @@ $('#s-welcome').addEventListener('click', (e) => {
 $('#btnStart').addEventListener('click', async () => {
   kioskMode();
   freshState();
+  initEditControls();
   go('layout');
   startCamera();
 });
@@ -521,7 +528,10 @@ $('#btnTplRetake').addEventListener('click', () => {
 function payload() {
   return { layout: S.layout, style: S.style, caption: S.caption, showLogo: S.showLogo,
            copies: S.copies, template: S.template, photos: S.photos.filter(Boolean),
-           poses: S.poses.slice(0, SHOTS[S.layout]), guestbook: S.guestbook, certTitle: S.certTitle };
+           poses: S.poses.slice(0, SHOTS[S.layout]), guestbook: S.guestbook, certTitle: S.certTitle,
+           event_name: S.eventName, footer: S.footer, username: S.username, website: S.website,
+           newspaper_name: S.koranTitle, koran_title: S.koranTitle,
+           brightness: S.brightness };
 }
 function renderCertPick() {
   const on = S.template === 'sertifikat' && CFG.certTitles.length;
@@ -565,6 +575,108 @@ async function renderPreview() {
   $('#btnPrint').disabled = false;
 }
 
+let editDebounce = null;
+function schedulePreview() {
+  clearTimeout(editDebounce);
+  editDebounce = setTimeout(() => {
+    renderPreview();
+  }, 350);
+}
+
+function updateEditFieldsForTemplate() {
+  const tpl = S.template || 'klasik';
+  const isKoran = tpl === 'koran';
+  const isSocial = ['sosmed', 'threads', 'xprofil', 'facebook', 'youtube'].includes(tpl);
+  const isCustom = tpl.startsWith('c:');
+  const isPhoto = CFG.output === 'photo';
+
+  // 1. Teks penutup (footer): hanya ada jika template benar-benar mencetak footer
+  const showFooter = isPhoto || isCustom || tpl === 'klasik';
+  $('#fieldFooter')?.classList.toggle('hidden', !showFooter);
+
+  // 2. Sosmed: username & website
+  $('#fieldSocial')?.classList.toggle('hidden', !isSocial);
+
+  // 3. Khusus Koran: Nama Koran ("Kabar Booth")
+  $('#fieldKoranTitle')?.classList.toggle('hidden', !isKoran);
+
+  // 4. Nama Event: hampir semua template menampilkannya kecuali komik & sertifikat
+  const hideEvent = ['komik', 'sertifikat'].includes(tpl);
+  $('#fieldEventName')?.classList.toggle('hidden', hideEvent);
+
+  // 5. Pesan / Headline:
+  const noCaption = ['pass', 'kalender', 'cocok'].includes(tpl);
+  $('#fieldCaption')?.classList.toggle('hidden', noCaption);
+  if ($('#labelCaption')) {
+    $('#labelCaption').textContent = isKoran ? 'Judul Berita (Headline Koran)' : 'Pesan di Bawah Foto';
+  }
+  if ($('#editCaption')) {
+    $('#editCaption').placeholder = isKoran ? 'TAMU INI TERTANGKAP KAMERA SEDANG BAHAGIA' : 'Tulis pesan singkat…';
+  }
+}
+
+function syncEditFields() {
+  updateEditFieldsForTemplate();
+  if ($('#editKoranTitle')) $('#editKoranTitle').value = S.koranTitle || 'Kabar Booth';
+  if ($('#editEventName')) $('#editEventName').value = S.eventName || '';
+  if ($('#editCaption')) $('#editCaption').value = S.caption || '';
+  if ($('#editFooter')) $('#editFooter').value = S.footer || '';
+  if ($('#editUsername')) $('#editUsername').value = S.username || '';
+  if ($('#editWebsite')) $('#editWebsite').value = S.website || '';
+  if ($('#editBrightness')) {
+    const b = S.brightness !== undefined ? S.brightness : 1.0;
+    $('#editBrightness').value = b;
+    if ($('#valBright')) $('#valBright').textContent = Math.round(b * 100) + '%';
+  }
+}
+
+let editControlsInit = false;
+function initEditControls() {
+  if (editControlsInit) return;
+  editControlsInit = true;
+  $('#editKoranTitle')?.addEventListener('input', (e) => {
+    S.koranTitle = e.target.value;
+    schedulePreview();
+  });
+  $('#editCaption')?.addEventListener('input', (e) => {
+    S.caption = e.target.value;
+    if ($('#caption')) $('#caption').value = e.target.value;
+    schedulePreview();
+  });
+  $('#editEventName')?.addEventListener('input', (e) => {
+    S.eventName = e.target.value;
+    schedulePreview();
+  });
+  $('#editFooter')?.addEventListener('input', (e) => {
+    S.footer = e.target.value;
+    schedulePreview();
+  });
+  $('#editUsername')?.addEventListener('input', (e) => {
+    S.username = e.target.value;
+    schedulePreview();
+  });
+  $('#editWebsite')?.addEventListener('input', (e) => {
+    S.website = e.target.value;
+    schedulePreview();
+  });
+  $('#editBrightness')?.addEventListener('input', (e) => {
+    S.brightness = parseFloat(e.target.value);
+    if ($('#valBright')) $('#valBright').textContent = Math.round(S.brightness * 100) + '%';
+    schedulePreview();
+  });
+  $('#btnResetEdit')?.addEventListener('click', () => {
+    S.eventName = CFG.eventName || '';
+    S.footer = CFG.footer || '';
+    S.username = (CFG.social && CFG.social.username) || '';
+    S.website = (CFG.social && CFG.social.website) || '';
+    S.koranTitle = 'Kabar Booth';
+    S.caption = $('#caption') ? $('#caption').value : '';
+    S.brightness = CFG.brightness !== undefined ? CFG.brightness : 1.0;
+    syncEditFields();
+    renderPreview();
+  });
+}
+
 async function renderReview() {
   const list = $('#shotList');
   list.innerHTML = '';
@@ -577,6 +689,7 @@ async function renderReview() {
     list.appendChild(row);
   });
   renderCertPick();
+  syncEditFields();
   await renderPreview();
 }
 $('#btnRetakeAll').addEventListener('click', () => {
@@ -786,6 +899,7 @@ fitScreen();
     $('#eventName').textContent = c.eventName;
   } catch (e) { console.warn(e); }
   freshState();
+  initEditControls();
   document.body.classList.add('intro-on');
   startIntro();
   pollStatus();

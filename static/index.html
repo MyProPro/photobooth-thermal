@@ -143,10 +143,28 @@
     <p class="lead">Yang kamu lihat di sini sama persis dengan hasil cetak.</p>
     <div class="review">
       <div class="paper"><img id="receiptPreview" alt="Preview struk"><div class="loading mono" id="previewLoading">MEMBUAT PREVIEW…</div></div>
-      <div class="col">
+      <div class="col review-col">
         <div id="shotList" class="col gap"></div>
         <button class="btn ghost tpl-change" data-go="template">Ganti template</button>
         <div class="cert-pick hidden" id="certPick"><b>Pilih gelar sertifikat</b><div class="chips" id="certChips"></div></div>
+        <details class="edit-panel" id="editPanel">
+          <summary class="btn ghost edit-toggle">✏️ Sesuaikan Teks &amp; Kecerahan</summary>
+          <div class="card compact edit-form">
+            <label class="field hidden" id="fieldKoranTitle"><span>Nama Koran (Header)</span><input type="text" id="editKoranTitle" maxlength="35" placeholder="Kabar Booth"></label>
+            <label class="field" id="fieldEventName"><span>Nama Event</span><input type="text" id="editEventName" maxlength="40" placeholder="NAMA EVENT"></label>
+            <label class="field" id="fieldCaption"><span id="labelCaption">Pesan di Bawah Foto</span><input type="text" id="editCaption" maxlength="50" placeholder="Tulis pesan / judul…"></label>
+            <label class="field" id="fieldFooter"><span>Teks Penutup</span><input type="text" id="editFooter" maxlength="60" placeholder="TERIMA KASIH"></label>
+            <div class="row-between" id="fieldSocial" style="gap:10px">
+              <label class="field" style="flex:1"><span>Username</span><input type="text" id="editUsername" maxlength="30" placeholder="@username"></label>
+              <label class="field" style="flex:1"><span>Website</span><input type="text" id="editWebsite" maxlength="50" placeholder="www.website.com"></label>
+            </div>
+            <label class="field" id="fieldBrightness">
+              <div class="row-between"><span>Kecerahan Cetak</span><b id="valBright">100%</b></div>
+              <input type="range" id="editBrightness" min="0.6" max="1.4" step="0.05" value="1.0" class="range-slider">
+            </label>
+            <button type="button" class="btn ghost small-btn" id="btnResetEdit" style="align-self:flex-end">Reset ke Default</button>
+          </div>
+        </details>
         <div class="grow"></div>
         <div class="card compact row-between">
           <div><b class="h3">Jumlah cetak</b><div class="muted">Maks <span id="maxCopies">2</span> <span data-photo="lembar">struk</span></div></div>

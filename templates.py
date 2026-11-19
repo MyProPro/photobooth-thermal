@@ -75,7 +75,7 @@ def F(name, size):
 class Ctx:
     def __init__(self, photos, layout, stylize_fn, event="NAMA EVENT", caption="",
                  number=None, qr=None, logo=None, width=576, now=None, logo_src=None, asset_dir=None,
-                 social=None, opts=None, ph_cache=None):
+                 social=None, opts=None, ph_cache=None, footer="TERIMA KASIH"):
         self.photos = photos
         self.layout = layout
         self.n = {"solo": 1, "duo": 2, "strip": 3, "grid": 4, "feed": 9}.get(layout, 3)
@@ -92,6 +92,7 @@ class Ctx:
         self.social = social or {}    # username/website untuk template Profil Sosmed
         self.opts = opts or {}        # pilihan teks (gelar sertifikat, rute boarding, dll.)
         self._ph = ph_cache if ph_cache is not None else {}   # bisa dibagi antar template (lebih cepat)
+        self.footer = (footer or "").strip() or "TERIMA KASIH"
 
     # foto yang sudah dijadikan 1-bit sesuai gaya
     def ph(self, i, w, h):
@@ -315,7 +316,7 @@ def t_klasik(c):
     p.y += 46
     p.qr_row(c, x=M)
     p.y += 30
-    p.y = p.center("TERIMA KASIH", F("bebas", 52))
+    p.y = p.center(c.footer, F("bebas", 52))
     return p.finish()
 
 
@@ -531,7 +532,11 @@ def t_koran(c):
     W = c.W
     p.y = 20
     p.y = p.rule(2) + 10
-    p.y = p.center("Kabar Booth", F("serifk", 76)) + 12
+    newspaper_name = (c.opts.get("newspaper_name") or "Kabar Booth").strip() or "Kabar Booth"
+    fsize = 76
+    while fsize > 36 and p.tw(newspaper_name, F("serifk", fsize)) > W - 20:
+        fsize -= 4
+    p.y = p.center(newspaper_name, F("serifk", fsize)) + 12
     p.y = p.rule(5) + 3
     p.y = p.rule(1) + 8
     f = F("mono", 14)
@@ -681,7 +686,7 @@ def t_belanja(c):
     p.y = p.center(f"{c.now.strftime('%y%m%d')}{c.no}", F("mono", 16), spacing=4) + 26
     p.qr_row(c, size=150, x=M)
     p.y += 24
-    p.y = p.center("*** TERIMA KASIH ***", F("monob", 20))
+    p.y = p.center(f"*** {c.footer} ***", F("monob", 20))
     return p.finish()
 
 
@@ -2071,7 +2076,7 @@ RATIOS = {"auto": None, "wide": 0.56, "landscape": 0.66, "classic": 0.75, "squar
 
 def fill_tokens(text, c):
     t = (text or "")
-    for k, v in {"{event}": c.event, "{date}": c.date_num, "{date_long}": c.date_long, "{time}": c.time,
+    for k, v in {"{event}": c.event, "{footer}": c.footer, "{date}": c.date_num, "{date_long}": c.date_long, "{time}": c.time,
                  "{caption}": c.caption, "{no}": c.no, "{day}": c.day.title()}.items():
         t = t.replace(k, v)
     return t.strip()

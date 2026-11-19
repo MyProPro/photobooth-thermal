@@ -197,7 +197,7 @@ def compose_receipt(photos, layout="strip", style="dither", caption="", show_log
                 lambda im, size: stylize(im, size, style, brightness),
                 event=event_name, caption=caption, number=number, qr=qr, logo=logo, width=width,
                 logo_src=logo_src, asset_dir=asset_dir, now=now, social=social, opts=opts,
-                ph_cache=ph_cache)
+                ph_cache=ph_cache, footer=footer)
     return T.render(template, ctx, custom).convert("1", dither=Image.NONE)
 
 

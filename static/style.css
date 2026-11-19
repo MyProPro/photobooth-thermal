@@ -113,6 +113,16 @@ h1.hero{font-size:clamp(64px,9vw,96px);line-height:.95}
 .shot b{flex:1;font-family:var(--head-font);font-size:20px}
 .shot button{height:48px;padding:0 16px;border-radius:12px;border:2px solid var(--ink);background:#fff;font-weight:600;font-size:16px;cursor:pointer}
 .review .btn{margin-top:12px}
+.review-col{overflow-y:auto;min-height:0;padding-right:6px}
+.edit-panel{margin-top:12px}
+.edit-panel summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:center;height:52px;border-radius:14px;border:2px solid var(--ink);background:var(--card,#fff);font-weight:600;font-size:17px;user-select:none}
+.edit-panel summary::-webkit-details-marker{display:none}
+.edit-panel[open] summary{margin-bottom:8px;background:var(--ink);color:var(--paper,#fff)}
+.edit-form{display:flex;flex-direction:column;gap:10px}
+.edit-form .field{font-size:14px;display:flex;flex-direction:column;gap:4px}
+.edit-form .field span{font-weight:600;font-size:13px;color:var(--muted)}
+.edit-form .field input[type="text"]{height:44px;border-radius:10px;border:2px solid var(--ink);background:#fff;padding:0 12px;font-family:inherit;font-size:15px;color:var(--ink);box-sizing:border-box;width:100%}
+.edit-form .range-slider{width:100%;height:28px;accent-color:var(--accent);cursor:pointer}
 
 .printer-art{display:flex;flex-direction:column;align-items:center;height:400px;align-self:center}
 .printer{width:440px;height:120px;background:var(--ink);border-radius:22px 22px 10px 10px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:16px;gap:14px}

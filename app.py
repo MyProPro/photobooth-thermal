@@ -164,17 +164,27 @@ def template_list(ev, layout=None):
 
 def render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_override=None, ph_cache=None,
                    lucky=None):
+    event_name = p.get("event_name") if p.get("event_name") is not None and str(p.get("event_name")).strip() else (ev.get("event_name") or "NAMA EVENT")
+    footer = p.get("footer") if p.get("footer") is not None else ev.get("footer", "TERIMA KASIH")
+    brightness = float(p.get("brightness") if p.get("brightness") is not None else CFG.get("brightness", 1.0))
+    social = dict(ev.get("social") or {})
+    if p.get("social") and isinstance(p["social"], dict):
+        social.update(p["social"])
+    if p.get("username") is not None:
+        social["username"] = p["username"]
+    if p.get("website") is not None:
+        social["website"] = p["website"]
     if is_photo(ev):
         logo = ev.get("logo")
         style = p.get("style") if p.get("style") in PH.STYLE_IDS else "warna"
         return PH.compose_photo(
             photos, layout=p.get("layout") if p.get("layout") in LAYOUTS else "strip", style=style,
             caption=p.get("caption", ""), show_logo=bool(p.get("showLogo", True)),
-            event_name=ev.get("event_name") or "NAMA EVENT",
+            event_name=event_name,
             logo_path=os.path.join(asset_dir, logo) if logo else None, qr_url=qr_url,
             template=p.get("template") or ev.get("photo_default_template", "klasik"), theme=ev.get("theme"),
             lucky=lucky, number=number, frames=ev.get("photo_frames"), asset_dir=asset_dir,
-            footer=ev.get("footer", ""))
+            footer=footer, brightness=brightness)
     layout = p.get("layout") if p.get("layout") in LAYOUTS else "strip"
     custom = {t["id"]: t for t in ev.get("custom_templates", [])}
     if spec_override:
@@ -186,17 +196,17 @@ def render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_over
         style=p.get("style", "dither"),
         caption=p.get("caption", ""),
         show_logo=bool(p.get("showLogo", True)),
-        event_name=ev.get("event_name") or "NAMA EVENT",
+        event_name=event_name,
         logo_path=os.path.join(asset_dir, logo) if logo else None,
         qr_url=qr_url,
         number=number,
         width=int(CFG.get("paper_px", 576)),
-        brightness=float(CFG.get("brightness", 1.0)),
-        footer=ev.get("footer", "TERIMA KASIH"),
+        brightness=brightness,
+        footer=footer,
         template=p.get("template") or ev.get("default_template", "klasik"),
         custom=custom,
         asset_dir=asset_dir,
-        social=ev.get("social"),
+        social=social,
         opts=template_opts(ev, p),
         ph_cache=ph_cache,
     )
@@ -211,7 +221,8 @@ def template_opts(ev, p):
     b = ev.get("boarding") or {}
     return {"cert_titles": cert_titles(ev), "cert_title": (p.get("certTitle") or "")[:80],
             "board_from_code": b.get("from_code"), "board_from": b.get("from"),
-            "board_to_code": b.get("to_code"), "board_to": b.get("to")}
+            "board_to_code": b.get("to_code"), "board_to": b.get("to"),
+            "newspaper_name": (p.get("newspaper_name") or p.get("koran_title") or "")[:50]}
 
 
 POSES = [
@@ -284,6 +295,9 @@ def api_config():
         "eventId": ev.get("id", ""),
         "eventVersion": f"{ev.get('id', '')}:{ev.get('updated', 0)}",
         "eventName": ev.get("event_name") or "NAMA EVENT",
+        "footer": ev.get("footer", "TERIMA KASIH"),
+        "social": ev.get("social") or {},
+        "brightness": float(CFG.get("brightness", 1.0)),
         "layouts": layouts,
         "defaultLayout": ev.get("default_layout") if ev.get("default_layout") in layouts else layouts[0],
         "maxCopies": int(CFG.get("max_copies", 2)),
@@ -518,6 +532,12 @@ def api_print():
                               "signature": gb.get("signature") is not None} if gb else None}
         copies = max(1, min(int(p.get("copies", 1)), int(CFG.get("max_copies", 2))))
         meta.update({"style": p.get("style", "dither"), "copies": copies, "host_copy": ft["host_copy"]})
+        if p.get("event_name"):
+            meta["event_name"] = p["event_name"]
+        if p.get("footer"):
+            meta["footer"] = p["footer"]
+        if p.get("brightness"):
+            meta["brightness"] = float(p["brightness"])
         with open(os.path.join(folder, "meta.json"), "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False)
         db_safe(DB.add_session, meta)

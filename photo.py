@@ -396,9 +396,14 @@ def date_str(now=None):
 
 def compose_photo(photos, layout="strip", style="warna", caption="", show_logo=True, event_name="",
                   logo_path=None, qr_url=None, template="klasik", theme=None, lucky=None, number=None,
-                  frames=None, asset_dir=None, footer="", now=None):
+                  frames=None, asset_dir=None, footer="", now=None, brightness=1.0):
     """Hasil: RGB 1200x1800 (4R potret, 300 dpi). Strip = 2 strip kembar berdampingan."""
-    styled = [style_photo(p, style) for p in photos]
+    styled = []
+    for p in photos:
+        im = style_photo(p, style)
+        if brightness != 1.0:
+            im = ImageEnhance.Brightness(im).enhance(brightness)
+        styled.append(im)
     logo = None
     if show_logo and logo_path and os.path.exists(logo_path):
         try:
