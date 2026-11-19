@@ -234,3 +234,83 @@ Perintah berguna:
 
 Tips Pi 4: centang 6–10 template per event di Studio supaya layar Pilih Template cepat; gunakan microSD A1/A2 atau SSD USB 3.
 Layar Pilih Template menampilkan template satu per satu begitu siap (`render_workers` di config.json, default 3).
+
+## Data & database
+
+Semua data disimpan sebagai file (mudah dicadangkan/dipindah):
+
+| Data | Lokasi |
+|---|---|
+| Pengaturan umum | `config.json` |
+| Event, logo, frame | `events/<id>/` (`event.json`, `*.png`), event aktif: `events/active.txt` |
+| Sesi tamu (foto, struk, info, tanda tangan) | `output/sessions/<kode>/` |
+| Salinan semua struk | `output/prints/` |
+| Nomor struk, undian, kertas | `output/counter.txt`, `output/draws/`, `output/paper.json` |
+
+Tambahan **SQLite** (`output/photobooth.db`, bawaan Python, tanpa install) mencatat setiap sesi & undian untuk
+**statistik** dan **ekspor CSV** (Studio → *Buku tamu, undian & statistik*). File tetap sumber utama:
+kalau database dihapus, otomatis dibangun ulang dari `output/sessions/*/meta.json` saat server menyala.
+Tabel: `sessions` (event, nomor, waktu, template, layout, gaya, pesan, undian, buku tamu, …) dan `draws`.
+
+## Git: push & pull
+
+Repo: `https://github.com/MyProPro/photobooth-thermal.git`
+
+Yang **tidak** ikut Git (lihat `.gitignore`): `config.json`, `events/`, `output/` (foto tamu, struk, database), `.venv/`, `certs/`.
+Jadi setelan printer & event di tiap perangkat aman saat `git pull`. Perangkat baru otomatis membuat `config.json` dari `config.example.json`.
+
+### Pertama kali (dari PC Windows yang sudah berisi kode)
+```bat
+cd E:\Projects\Python\yt\thermal-photobooth
+git init
+git add .
+git commit -m "Thermal photobooth 80mm"
+git branch -M main
+git remote add origin https://github.com/MyProPro/photobooth-thermal.git
+git push -u origin main
+```
+Repo GitHub sudah berisi README/LICENSE dan push ditolak? Gabungkan dulu:
+```bat
+git pull origin main --allow-unrelated-histories --no-rebase
+git push -u origin main
+```
+Kalau `config.json`/`events/` terlanjur ikut ter-commit sebelumnya, keluarkan dari Git (file di PC tidak dihapus):
+```bat
+git rm -r --cached config.json events
+git commit -m "Lepas config & events dari Git"
+git push
+```
+
+### Kirim perubahan berikutnya (push)
+```bat
+git add .
+git commit -m "Tulis apa yang berubah"
+git push
+```
+
+### Pasang di perangkat baru (clone)
+```bash
+git clone https://github.com/MyProPro/photobooth-thermal.git
+cd photobooth-thermal
+# Windows : run.bat
+# Raspberry Pi : bash install-autostart.sh   (sekali), lalu sudo reboot
+# Android (Termux): pkg install git -y lalu clone seperti di atas, bash setup-android.sh
+```
+
+### Ambil update terbaru (pull)
+```bash
+cd photobooth-thermal
+git pull
+```
+Lalu restart server:
+- Windows: tutup jendela server, jalankan `run.bat` (modul baru otomatis terpasang).
+- Raspberry Pi: `bash run-linux.sh --setup && sudo systemctl restart photobooth`
+- Android: hentikan server (Ctrl+C di Termux), jalankan lagi `bash start-android.sh`
+  (kalau `requirements` berubah: `pip install flask qrcode python-escpos`).
+
+`git pull` gagal karena ada file yang diubah di perangkat itu? Lihat dulu `git status`.
+Untuk membuang perubahan lokal pada kode (bukan config/event): `git checkout -- <nama-file>` lalu `git pull` lagi.
+
+### Memindahkan event ke perangkat lain
+Event tidak ikut Git. Salin folder `events/<nama-event>/` ke folder `events/` di perangkat tujuan,
+lalu aktifkan dari Studio.

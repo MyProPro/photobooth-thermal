@@ -17,6 +17,7 @@ import uuid
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 from PIL import Image
 
+import db as DB
 import events as EV
 import templates as TPL
 from imaging import LAYOUTS, append_extras, compose_receipt, host_copy, stylize_sample
@@ -29,7 +30,12 @@ os.makedirs(os.path.join(OUT, "sessions"), exist_ok=True)
 
 
 def load_config():
-    with open(os.path.join(BASE, "config.json"), encoding="utf-8") as f:
+    path = os.path.join(BASE, "config.json")
+    if not os.path.exists(path):  # perangkat baru (hasil git clone): buat dari contoh
+        import shutil
+        shutil.copyfile(os.path.join(BASE, "config.example.json"), path)
+        print("config.json dibuat dari config.example.json")
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -37,6 +43,21 @@ CFG = load_config()
 PAPER = PaperCounter(OUT)
 PRINTER = ThermalPrinter(CFG.get("printer", {}), OUT, counter=PAPER)
 _counter_lock = threading.Lock()
+
+# SQLite: catatan tambahan untuk statistik/ekspor (file tetap sumber utama)
+try:
+    DB.init()
+    threading.Thread(target=DB.backfill, args=(os.path.join(OUT, "sessions"),), daemon=True).start()
+except Exception as _e:  # noqa: BLE001
+    print("SQLite tidak aktif:", _e)
+
+
+def db_safe(fn, *a):
+    """Database tidak boleh menggagalkan proses cetak."""
+    try:
+        fn(*a)
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning("SQLite: %s", e)
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024
@@ -363,9 +384,11 @@ def api_print():
                 "poses": ex.get("poses") or [], "caption": p.get("caption", ""),
                 "guestbook": {"name": gb.get("name", ""), "message": gb.get("message", ""),
                               "signature": gb.get("signature") is not None} if gb else None}
+        copies = max(1, min(int(p.get("copies", 1)), int(CFG.get("max_copies", 2))))
+        meta.update({"style": p.get("style", "dither"), "copies": copies, "host_copy": ft["host_copy"]})
         with open(os.path.join(folder, "meta.json"), "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False)
-        copies = max(1, min(int(p.get("copies", 1)), int(CFG.get("max_copies", 2))))
+        db_safe(DB.add_session, meta)
         jobs = []
         PRINTER.print_image(img, copies=copies, sink=jobs)
         if ft["host_copy"]:
@@ -725,6 +748,7 @@ def studio_draw(eid):
     data["drawn"].append(win)
     with open(_draw_path(eid), "w", encoding="utf-8") as f:
         json.dump(data, f)
+    db_safe(DB.add_draw, eid, win["lucky"], win["session"], win["time"])
     return jsonify({"ok": True, "winner": win, "left": len(pool) - 1})
 
 
@@ -734,7 +758,36 @@ def studio_draw_reset(eid):
     need_event(eid)
     with open(_draw_path(eid), "w", encoding="utf-8") as f:
         json.dump({"drawn": []}, f)
+    db_safe(DB.reset_draws, eid)
     return jsonify({"ok": True})
+
+
+@app.get("/api/studio/events/<eid>/stats")
+@studio_auth
+def studio_stats(eid):
+    need_event(eid)
+    names = {t[0]: t[1] for t in TPL.TEMPLATES}
+    names.update({"c:" + t["id"]: t.get("name", "Custom") for t in EV.load(eid).get("custom_templates", [])})
+    s = DB.stats(eid)
+    for r in s["templates"]:
+        r["name"] = names.get(r["template"], r["template"] or "-")
+    return jsonify(s)
+
+
+@app.get("/studio/export/<eid>.csv")
+@studio_auth
+def studio_export(eid):
+    import csv
+    need_event(eid)
+    cols, rows = DB.export_rows(eid)
+    buf = io.StringIO()
+    buf.write("\ufeff")  # supaya Excel membaca UTF-8
+    w = csv.writer(buf)
+    w.writerow(cols)
+    w.writerows([tuple(r) for r in rows])
+    from flask import Response
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=photobooth-{eid}.csv"})
 
 
 @app.get("/slideshow")

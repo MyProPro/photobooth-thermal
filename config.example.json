@@ -13,7 +13,7 @@
   "idle_seconds": 90,
   "mirror": true,
   "dummy_camera": false,
-  "qr_download": false,
+  "qr_download": true,
 
   "studio_pin": "",
   "paper_roll_m": 50,

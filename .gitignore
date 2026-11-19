@@ -1,6 +1,13 @@
+# lingkungan & cache
 .venv/
 __pycache__/
-output/
 .chrome-kiosk/
+.photobooth-kiosk/
 certs/
-events/_trash/
+
+# data tamu (foto, struk, database)
+output/
+
+# pengaturan & event per perangkat (tidak ikut Git supaya pull tidak menimpa)
+config.json
+events/

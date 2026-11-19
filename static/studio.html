@@ -213,7 +213,7 @@ label{display:block}
       <div class="tabs">
         <button data-tab="info" class="on">Info event</button>
         <button data-tab="templates">Template</button>
-        <button data-tab="guest">Buku tamu &amp; undian</button>
+        <button data-tab="guest">Buku tamu, undian &amp; statistik</button>
       </div>
 
       <!-- INFO -->
@@ -271,6 +271,16 @@ label{display:block}
 
       <!-- BUKU TAMU & UNDIAN -->
       <section id="tab-guest" class="hidden">
+        <div class="card" style="margin-bottom:16px">
+          <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Statistik event</b>
+            <a class="btn" id="csvOpen" target="_blank" rel="noopener">Unduh CSV ↓</a></div>
+          <div class="grid4" id="statNums" style="margin-top:12px"></div>
+          <div class="grid2" style="margin-top:14px">
+            <div><b class="small">Template terpopuler</b><div id="statTpl" class="small" style="margin-top:6px"></div></div>
+            <div><b class="small">Sesi per jam</b><div id="statHours" class="small" style="margin-top:6px"></div></div>
+          </div>
+          <p class="hint" style="margin-top:10px">Dari database <span class="mono">output/photobooth.db</span> (SQLite). CSV bisa dibuka di Excel.</p>
+        </div>
         <div class="grid2">
           <div class="card">
             <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Undian doorprize</b><span class="badge" id="drawCount">-</span></div>

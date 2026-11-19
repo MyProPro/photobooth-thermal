@@ -538,7 +538,10 @@ const pinQ = () => (sessionStorage.getItem('studioPin') ? '?pin=' + encodeURICom
 async function loadGuest() {
   if (!ev) return;
   const id = encodeURIComponent(ev.id);
-  const [g, d] = await Promise.all([api(`/api/studio/events/${id}/guestbook`), api(`/api/studio/events/${id}/draw`)]);
+  const [g, d, st] = await Promise.all([api(`/api/studio/events/${id}/guestbook`), api(`/api/studio/events/${id}/draw`),
+    api(`/api/studio/events/${id}/stats`).catch(() => null)]);
+  if (st) renderStats(st);
+  $('#csvOpen').href = `/studio/export/${id}.csv${pinQ()}`;
   $('#gbCount').textContent = g.count + ' ucapan';
   $('#gbOpen').href = `/studio/guestbook/${id}${pinQ()}`;
   $('#gbList').innerHTML = g.items.slice(0, 30).map((m) => `<div class="row" style="align-items:flex-start;flex-wrap:nowrap;gap:10px;border-bottom:1px solid var(--line);padding-bottom:8px">
@@ -547,6 +550,16 @@ async function loadGuest() {
       ${m.guestbook.signature ? `<img src="/d/${m.id}/ttd.png" alt="Tanda tangan" style="height:36px">` : ''}
       <div class="small"><b>${esc(m.guestbook.name)}</b> <span class="muted">· No. ${m.number}</span></div></div></div>`).join('') || '<p class="hint">Belum ada ucapan.</p>';
   renderDraw(d);
+}
+function renderStats(s) {
+  const box = (label, val) => `<div class="card" style="padding:12px;text-align:center"><div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:30px">${val}</div><div class="small muted">${label}</div></div>`;
+  $('#statNums').innerHTML = box('sesi foto', s.sessions) + box('lembar dicetak', s.prints) + box('ucapan buku tamu', s.guestbook) + box('nomor undian', s.lucky);
+  const max = Math.max(1, ...s.templates.map((t) => t.n));
+  $('#statTpl').innerHTML = s.templates.slice(0, 6).map((t) => `<div class="row" style="flex-wrap:nowrap;gap:8px;margin:3px 0"><span style="width:130px">${esc(t.name)}</span>
+      <span style="flex:1;height:10px;background:var(--ink);border-radius:4px;max-width:${Math.round(100 * t.n / max)}%"></span><b>${t.n}</b></div>`).join('') || '<span class="hint">Belum ada data.</span>';
+  const hmax = Math.max(1, ...s.hours.map((h) => h.n));
+  $('#statHours').innerHTML = s.hours.map((h) => `<div class="row" style="flex-wrap:nowrap;gap:8px;margin:3px 0"><span class="mono" style="width:44px">${h.h}:00</span>
+      <span style="flex:1;height:10px;background:var(--accent);border-radius:4px;max-width:${Math.round(100 * h.n / hmax)}%"></span><b>${h.n}</b></div>`).join('') || '<span class="hint">Belum ada data.</span>';
 }
 function renderDraw(d) {
   $('#drawCount').textContent = `${d.issued} nomor · ${d.drawn.length} keluar`;
