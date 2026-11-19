@@ -186,3 +186,109 @@ def discover():
         out["notes"].append(f"Daftar USB langsung tidak tersedia ({e.__class__.__name__}). "
                             "Biasanya lebih mudah pakai mode Windows.")
     return out
+
+
+# ================= printer FOTO (mode cetak 4R berwarna) =================
+PHOTO_TYPES = ["file", "windows", "cups"]
+
+
+class PhotoPrinter:
+    """Cetak foto berwarna lewat driver printer biasa.
+
+    type (config.json -> photo_printer.type):
+      file    : tidak mencetak, hanya simpan JPG di output/prints (tes)
+      windows : printer foto yang terpasang di Windows (Canon Selphy, DNP, Citizen, Epson, dll.)
+      cups    : Linux / Raspberry Pi lewat CUPS (perintah `lp`)
+    Ukuran kertas 4R diatur di driver printer (Preferences -> 4x6 / 10x15 cm, borderless kalau ada).
+    """
+
+    def __init__(self, cfg, out_dir="output"):
+        self.out_dir = out_dir
+        self.lock = threading.Lock()
+        self.configure(cfg)
+
+    def configure(self, cfg):
+        self.cfg = dict(cfg or {})
+        self.mode = self.cfg.get("type", "file")
+
+    def status(self):
+        if self.mode == "file":
+            return {"ok": True, "mode": "file", "message": "Mode tes foto (simpan file, tanpa printer)"}
+        try:
+            names = list_photo_printers().get(self.mode, [])
+            ok = self.cfg.get("name") in names
+            return {"ok": ok, "mode": self.mode,
+                    "message": "Printer foto siap" if ok else f"Printer '{self.cfg.get('name')}' tidak ditemukan"}
+        except Exception as e:  # noqa: BLE001
+            return {"ok": False, "mode": self.mode, "message": str(e) or e.__class__.__name__}
+
+    def print_image(self, img, copies=1, sink=None):
+        os.makedirs(os.path.join(self.out_dir, "prints"), exist_ok=True)
+        path = os.path.join(self.out_dir, "prints", datetime.now().strftime("%Y%m%d_%H%M%S_%f") + ".jpg")
+        img.convert("RGB").save(path, quality=95, dpi=(300, 300))
+        if self.mode == "file":
+            return path
+        with self.lock:
+            for _ in range(max(1, copies)):
+                if self.mode == "windows":
+                    _print_windows(img, self.cfg.get("name"), bool(self.cfg.get("borderless", True)))
+                elif self.mode == "cups":
+                    import subprocess
+                    cmd = ["lp"] + (["-d", self.cfg["name"]] if self.cfg.get("name") else [])
+                    cmd += ["-o", "media=" + (self.cfg.get("media") or "4x6"), "-o", "fit-to-page", path]
+                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    if r.returncode != 0:
+                        raise RuntimeError(r.stderr.strip() or "lp gagal")
+        return path
+
+
+def _print_windows(img, name, borderless=True):
+    """Gambar ke printer Windows lewat GDI (memakai pengaturan kertas di driver)."""
+    import win32print
+    import win32ui
+    from PIL import ImageWin
+    name = name or win32print.GetDefaultPrinter()
+    hdc = win32ui.CreateDC()
+    hdc.CreatePrinterDC(name)
+    try:
+        HORZRES, VERTRES, PHYSW, PHYSH, OFFX, OFFY = 8, 10, 110, 111, 112, 113
+        if borderless:
+            pw, ph = hdc.GetDeviceCaps(PHYSW), hdc.GetDeviceCaps(PHYSH)
+            ox, oy = -hdc.GetDeviceCaps(OFFX), -hdc.GetDeviceCaps(OFFY)
+        else:
+            pw, ph = hdc.GetDeviceCaps(HORZRES), hdc.GetDeviceCaps(VERTRES)
+            ox = oy = 0
+        im = img.convert("RGB")
+        if (im.width > im.height) != (pw > ph):
+            im = im.rotate(90, expand=True)
+        # isi penuh kertas (cover), potong sedikit kalau rasio beda
+        k = max(pw / im.width, ph / im.height)
+        w, h = int(im.width * k), int(im.height * k)
+        x, y = ox + (pw - w) // 2, oy + (ph - h) // 2
+        hdc.StartDoc("Photobooth")
+        hdc.StartPage()
+        ImageWin.Dib(im).draw(hdc.GetHandleOutput(), (x, y, x + w, y + h))
+        hdc.EndPage()
+        hdc.EndDoc()
+    finally:
+        hdc.DeleteDC()
+
+
+def list_photo_printers():
+    out = {"windows": [], "cups": [], "notes": []}
+    try:
+        import win32print
+        out["windows"] = list_windows_printers_raw(win32print)
+    except ImportError:
+        pass
+    except Exception as e:  # noqa: BLE001
+        out["notes"].append(f"Printer Windows: {e}")
+    try:
+        import shutil
+        import subprocess
+        if shutil.which("lpstat"):
+            r = subprocess.run(["lpstat", "-a"], capture_output=True, text=True, timeout=5)
+            out["cups"] = [ln.split()[0] for ln in r.stdout.splitlines() if ln.strip()]
+    except Exception as e:  # noqa: BLE001
+        out["notes"].append(f"CUPS: {e}")
+    return out

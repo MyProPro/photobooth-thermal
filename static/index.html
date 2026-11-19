@@ -14,6 +14,8 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<div id="bgPhoto" aria-hidden="true"></div>
+<div id="bgPat" aria-hidden="true"></div>
 <div id="app">
   <header class="topbar">
     <span class="mono b"><span id="eventName">NAMA EVENT</span> · PHOTOBOOTH</span>
@@ -21,27 +23,64 @@
   </header>
 
   <!-- 1. Sambutan -->
-  <section class="screen active" id="s-welcome">
-    <div class="mono accent b">STRUK FOTO · CETAK INSTAN</div>
-    <h1 class="hero">Foto.<br>Cetak.<br>Bawa pulang.</h1>
-    <p class="lead">Jepret, langsung tercetak di kertas struk. Gratis untuk semua tamu.</p>
-    <div class="grow center-end">
-      <div class="slot"></div>
-      <div class="mini-receipt"><div class="bar"></div><div class="blk"></div><div class="blk"></div><div class="blk"></div></div>
+  <section class="screen active intro" id="s-welcome">
+    <div class="intro-bg" id="introBg" aria-hidden="true"></div>
+    <span class="intro-status hidden" id="introStatus"></span>
+    <header class="intro-head">
+      <img id="introLogo" class="intro-logo hidden" alt="">
+      <h1 id="introName">NAMA EVENT</h1>
+    </header>
+
+    <div class="intro-fit" id="introFit">
+    <div class="intro-stage" id="introStage" aria-hidden="true">
+      <div class="ip-photo"><img id="ipColor" alt=""><img id="ipDither" class="ip-dither" alt=""><span class="ip-scan"></span><span class="ip-flash"></span></div>
+      <div class="ip-printer"><span class="ip-led"></span><span class="ip-slot"></span></div>
+      <span class="ip-lip"></span>
+      <div class="ip-out">
+        <div class="ip-receipt">
+          <b class="ip-r-name" id="ipName">NAMA EVENT</b>
+          <span class="ip-r-dash"></span>
+          <img id="ipPrint" alt="">
+          <span class="ip-r-dash"></span>
+          <span class="ip-r-date mono" id="ipDate"></span>
+        </div>
+      </div>
     </div>
-    <button class="btn primary xl" id="btnStart">Sentuh untuk mulai →</button>
+
+    <!-- intro mode foto: kamera instan -->
+    <div class="intro-stage ic-stage hidden" id="icStage" aria-hidden="true">
+      <div class="ic-out"><div class="ic-card"><div class="ic-photo"><img id="icImg" alt=""></div><b class="ic-name" id="icName"></b><span class="ic-date mono" id="icDate"></span></div></div>
+      <div class="ic-cam">
+        <span class="ic-shutter"></span><span class="ic-flashwin"></span><span class="ic-viewf"></span>
+        <div class="ic-lens"><i></i></div>
+        <span class="ic-stripe"></span><span class="ic-slot"></span>
+      </div>
+      <span class="ic-flash"></span>
+    </div>
+
+    <!-- intro mode foto: photo strip booth -->
+    <div class="intro-stage is-stage hidden" id="isStage" aria-hidden="true">
+      <div class="is-view"><img id="isView" alt=""><b class="is-count" id="isCount"></b><span class="is-rec mono">● FOTO <i id="isShot">1</i>/3</span><span class="is-flash"></span></div>
+      <div class="is-out"><div class="is-strip"><img id="isS1" alt=""><img id="isS2" alt=""><img id="isS3" alt=""><b class="is-name" id="isName"></b><span class="is-date mono" id="isDate"></span></div></div>
+      <div class="is-booth"><span class="is-slot"></span></div>
+    </div>
+    </div>
+
+    <button class="intro-cta" id="btnStart" type="button" aria-label="Mulai foto">
+      <span class="ring"></span>
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.6"></circle></svg>
+    </button>
     <button class="btn ghost small-btn hidden" id="btnUsb" type="button" style="align-self:center">Sambungkan printer USB</button>
-    <div class="row-between mono muted small"><span>± 60 DETIK</span><span>HITAM-PUTIH</span><span>GRATIS</span></div>
   </section>
 
   <!-- 2. Layout -->
   <section class="screen" id="s-layout">
-    <h1>Pilih layout struk</h1>
-    <p class="lead">Semua dicetak di kertas 80mm, hitam-putih.</p>
+    <h1 data-photo="Pilih layout foto">Pilih layout struk</h1>
+    <p class="lead" data-photo="Dicetak berwarna di kertas foto 4R (10×15 cm).">Semua dicetak di kertas 80mm, hitam-putih.</p>
     <div class="grid3 grid-layouts" id="layoutOptions">
       <button class="opt" data-layout="solo"><div class="thumb solo"><i></i></div><b>Solo</b><span>1 foto besar</span></button>
       <button class="opt" data-layout="duo"><div class="thumb duo"><i></i><i></i></div><b>Duo</b><span>2 foto</span></button>
-      <button class="opt" data-layout="strip"><div class="thumb strip"><i></i><i></i><i></i></div><b>Strip</b><span>3 foto</span></button>
+      <button class="opt" data-layout="strip"><div class="thumb strip"><i></i><i></i><i></i></div><b>Strip</b><span data-photo="3 foto · 2 strip">3 foto</span></button>
       <button class="opt" data-layout="grid"><div class="thumb grid"><i></i><i></i><i></i><i></i></div><b>Grid</b><span>4 foto</span></button>
     </div>
     <div class="grow"></div>
@@ -50,8 +89,8 @@
 
   <!-- 3. Gaya -->
   <section class="screen" id="s-style">
-    <h1>Gaya cetak</h1>
-    <p class="lead">Printer thermal hanya mencetak hitam. Pilih cara foto diubah jadi titik-titik.</p>
+    <h1 data-photo="Gaya foto">Gaya cetak</h1>
+    <p class="lead" data-photo="Pilih nuansa warna fotomu.">Printer thermal hanya mencetak hitam. Pilih cara foto diubah jadi titik-titik.</p>
     <div class="preview-box"><img id="stylePreview" alt="Contoh hasil cetak"><span class="tag mono" id="styleTag">PREVIEW · DITHER</span></div>
     <div class="grid4 style-grid" id="styleOptions">
       <button class="opt sm" data-style="dither"><b>Dither</b><span>Detail halus, paling mirip foto</span></button>
@@ -63,7 +102,7 @@
     </div>
     <label class="field" for="caption"><b>Pesan di bawah foto</b> <span class="muted">(opsional, maks 40 huruf)</span></label>
     <input id="caption" type="text" maxlength="40" placeholder="Tulis pesan singkat…" autocomplete="off">
-    <label class="check"><input type="checkbox" id="showLogo" checked> Tampilkan logo event di atas struk</label>
+    <label class="check"><input type="checkbox" id="showLogo" checked> <span data-photo="Tampilkan logo event di hasil cetak">Tampilkan logo event di atas struk</span></label>
     <div class="grow"></div>
     <div class="nav"><button class="btn ghost" data-go="layout">Kembali</button><button class="btn primary" id="btnShoot">Siap foto</button></div>
   </section>
@@ -110,7 +149,7 @@
         <div class="cert-pick hidden" id="certPick"><b>Pilih gelar sertifikat</b><div class="chips" id="certChips"></div></div>
         <div class="grow"></div>
         <div class="card compact row-between">
-          <div><b class="h3">Jumlah cetak</b><div class="muted">Maks <span id="maxCopies">2</span> struk</div></div>
+          <div><b class="h3">Jumlah cetak</b><div class="muted">Maks <span id="maxCopies">2</span> <span data-photo="lembar">struk</span></div></div>
           <div class="stepper">
             <button class="round" id="copyDec" aria-label="Kurangi jumlah cetak">−</button>
             <span id="copies">1</span>
@@ -126,7 +165,7 @@
   <!-- 5b. Buku tamu -->
   <section class="screen" id="s-guestbook">
     <h1>Tulis ucapan</h1>
-    <p class="lead">Ikut tercetak di struk dan tersimpan di buku tamu.</p>
+    <p class="lead" data-photo="Tersimpan di buku tamu event.">Ikut tercetak di struk dan tersimpan di buku tamu.</p>
     <label class="field" for="gbName"><b>Nama</b></label>
     <input id="gbName" class="gb-input" type="text" maxlength="40" placeholder="Nama kamu" autocomplete="off">
     <label class="field" for="gbMsg"><b>Ucapan</b> <span class="muted">(maks 160 huruf)</span></label>
@@ -155,12 +194,12 @@
   <!-- 7. Selesai -->
   <section class="screen" id="s-done">
     <div class="check-circle">✓</div>
-    <h1 class="center">Ambil strukmu!</h1>
+    <h1 class="center" data-photo="Ambil fotomu!">Ambil strukmu!</h1>
     <p class="lead center">Ada di slot printer di bawah layar ↓</p>
-    <div class="lucky-box hidden" id="luckyBox"><span class="mono">NOMOR UNDIAN KAMU</span><b id="luckyNum">0000</b><span>Simpan struknya untuk undian doorprize!</span></div>
+    <div class="lucky-box hidden" id="luckyBox"><span class="mono">NOMOR UNDIAN KAMU</span><b id="luckyNum">0000</b><span data-photo="Simpan fotonya untuk undian doorprize!">Simpan struknya untuk undian doorprize!</span></div>
     <div class="card qr-card" id="qrCard">
       <img id="qrImg" alt="Kode QR untuk mengunduh foto">
-      <div><b class="h3">Mau versi digital berwarna?</b><p class="muted">Scan QR ini pakai kamera HP (sambung ke Wi-Fi yang sama) untuk unduh fotonya.</p></div>
+      <div><b class="h3" data-photo="Mau versi digitalnya?">Mau versi digital berwarna?</b><p class="muted">Scan QR ini pakai kamera HP (sambung ke Wi-Fi yang sama) untuk unduh fotonya.</p></div>
     </div>
     <div class="grow"></div>
     <div class="nav"><button class="btn ghost" id="btnReprint">Cetak lagi</button><button class="btn primary" id="btnFinish">Selesai</button></div>

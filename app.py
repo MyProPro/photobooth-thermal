@@ -19,9 +19,11 @@ from PIL import Image
 
 import db as DB
 import events as EV
+import photo as PH
 import templates as TPL
 from imaging import LAYOUTS, append_extras, compose_receipt, host_copy, stylize_sample
 from printer import TYPES as PRINTER_TYPES, PaperCounter, ThermalPrinter, discover as discover_printers
+from printer import PHOTO_TYPES, PhotoPrinter, list_photo_printers
 from samples import _illustration, sample_photos
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -42,6 +44,16 @@ def load_config():
 CFG = load_config()
 PAPER = PaperCounter(OUT)
 PRINTER = ThermalPrinter(CFG.get("printer", {}), OUT, counter=PAPER)
+PHOTO_PRINTER = PhotoPrinter(CFG.get("photo_printer", {}), OUT)
+
+
+def is_photo(ev):
+    """Event diset 'Foto 4R berwarna' (bukan thermal)."""
+    return (ev or {}).get("output") == "photo"
+
+
+def printer_for(ev):
+    return PHOTO_PRINTER if is_photo(ev) else PRINTER
 _counter_lock = threading.Lock()
 
 # SQLite: catatan tambahan untuk statistik/ekspor (file tetap sumber utama)
@@ -85,6 +97,15 @@ def decode_image(data_url):
     return Image.open(io.BytesIO(base64.b64decode(raw))).convert("RGB")
 
 
+def preview_url(img):
+    """Preview ringan: struk thermal tetap PNG, foto 4R jadi JPEG kecil."""
+    if img.mode == "RGB" and img.width >= 1000:
+        im = img.copy()
+        im.thumbnail((640, 960))
+        return to_data_url(im, "JPEG")
+    return to_data_url(img)
+
+
 def to_data_url(img, fmt="PNG"):
     buf = io.BytesIO()
     img.save(buf, fmt)
@@ -124,6 +145,13 @@ def current_event():
 
 def template_list(ev, layout=None):
     """[(id, nama, spec|None)] sesuai pilihan event."""
+    if is_photo(ev):
+        frames = ev.get("photo_frames") or {}
+        allp = [(t[0], t[1], None) for t in PH.TEMPLATES]
+        by = {t[0]: t for t in allp}
+        ids = ev.get("photo_templates") or [t[0] for t in allp]
+        out = [by[i] for i in ids if i in by]
+        return [t for t in out if t[0] != "bingkai" or (frames.get(layout) if layout else frames)]
     allt = [(t[0], t[1], None) for t in TPL.TEMPLATES]
     allt += [("c:" + t["id"], t.get("name", "Custom"), t) for t in ev.get("custom_templates", [])]
     by = {t[0]: t for t in allt}
@@ -134,7 +162,19 @@ def template_list(ev, layout=None):
     return out
 
 
-def render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_override=None, ph_cache=None):
+def render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_override=None, ph_cache=None,
+                   lucky=None):
+    if is_photo(ev):
+        logo = ev.get("logo")
+        style = p.get("style") if p.get("style") in PH.STYLE_IDS else "warna"
+        return PH.compose_photo(
+            photos, layout=p.get("layout") if p.get("layout") in LAYOUTS else "strip", style=style,
+            caption=p.get("caption", ""), show_logo=bool(p.get("showLogo", True)),
+            event_name=ev.get("event_name") or "NAMA EVENT",
+            logo_path=os.path.join(asset_dir, logo) if logo else None, qr_url=qr_url,
+            template=p.get("template") or ev.get("photo_default_template", "klasik"), theme=ev.get("theme"),
+            lucky=lucky, number=number, frames=ev.get("photo_frames"), asset_dir=asset_dir,
+            footer=ev.get("footer", ""))
     layout = p.get("layout") if p.get("layout") in LAYOUTS else "strip"
     custom = {t["id"]: t for t in ev.get("custom_templates", [])}
     if spec_override:
@@ -209,9 +249,9 @@ def extras_from_payload(p, ev, lucky=None):
 def receipt_from_payload(p, qr_url=None, number=None, lucky=None, with_extras=True):
     ev, asset_dir = current_event()
     photos = [decode_image(x) for x in p.get("photos", [])]
-    img = render_receipt(photos, p, ev, asset_dir, qr_url, number)
+    img = render_receipt(photos, p, ev, asset_dir, qr_url, number, lucky=lucky)
     ex = extras_from_payload(p, ev, lucky) if with_extras else {}
-    if ex:
+    if ex and not is_photo(ev):   # mode foto: buku tamu tetap tersimpan, tidak ikut dicetak
         img = append_extras(img, ex, int(CFG.get("paper_px", 576)))
     return img, photos, ex
 
@@ -255,12 +295,17 @@ def api_config():
         "dummyCamera": bool(CFG.get("dummy_camera", False)),
         "cameraFacing": CFG.get("camera_facing", "user"),
         "features": features(ev),
-        "printerMode": PRINTER.mode,
+        "printerMode": printer_for(ev).mode,
+        "output": "photo" if is_photo(ev) else "thermal",
+        "introStyle": ev.get("intro_style") or "auto",
+        "styles": ([{"id": s[0], "name": s[1], "desc": s[2]} for s in PH.STYLES] if is_photo(ev) else None),
         "renderWorkers": int(CFG.get("render_workers", 3)),
         "certTitles": cert_titles(ev),
+        "theme": ev.get("theme") or {},
         "poses": POSES,
         "templates": [{"id": t[0], "name": t[1]} for t in template_list(ev)],
-        "defaultTemplate": ev.get("default_template", "klasik"),
+        "defaultTemplate": ev.get("photo_default_template", "klasik") if is_photo(ev)
+        else ev.get("default_template", "klasik"),
     })
 
 
@@ -278,10 +323,90 @@ def api_dummy(i):
     return send_file(io.BytesIO(_dummy_cache[i]), mimetype="image/jpeg")
 
 
+# ---------- layar intro (animasi foto -> dither -> struk) ----------
+_intro_cache = {}
+INTRO_STYLE = "bw2"   # ganti kalau cara olah gambar intro berubah (supaya browser tidak pakai cache lama)
+
+
+def intro_sources(ev, asset_dir):
+    """Daftar sumber foto intro: foto intro event, kalau tidak ada foto sesi terakhir, kalau tidak ada ilustrasi."""
+    src = []
+    f = ev.get("intro_photo")
+    if f and os.path.exists(os.path.join(asset_dir, os.path.basename(f))):
+        src.append(("file", os.path.join(asset_dir, os.path.basename(f))))
+    if not src:
+        for m in sessions(ev.get("id", ""), limit=5):
+            if m.get("photos"):
+                src.append(("file", os.path.join(OUT, "sessions", m["id"], m["photos"][0])))
+    if not src:
+        src = [("demo", i) for i in range(4)]
+    return src
+
+
+def _intro_img(src):
+    kind, v = src
+    if kind == "file":
+        return Image.open(v).convert("RGB")
+    return _illustration(v)
+
+
+@app.get("/api/intro")
+def api_intro():
+    ev, asset_dir = current_event()
+    n = len(intro_sources(ev, asset_dir))
+    logo = ev.get("logo")
+    return jsonify({
+        "eventName": ev.get("event_name") or "",
+        "logo": f"/api/studio/events/{ev['id']}/asset/{logo}" if (logo and ev.get("id")) else None,
+        "date": time.strftime("%d.%m.%Y"),
+        "photos": [{"color": f"/api/intro/{i}.jpg?v={ev.get('updated', 0)}-{INTRO_STYLE}",
+                    "dither": f"/api/intro/{i}.png?v={ev.get('updated', 0)}-{INTRO_STYLE}"} for i in range(n)],
+    })
+
+
+@app.get("/api/intro/<int:i>.<ext>")
+def api_intro_img(i, ext):
+    ev, asset_dir = current_event()
+    srcs = intro_sources(ev, asset_dir)
+    src = srcs[i % len(srcs)]
+    key = (str(src), ext, INTRO_STYLE)
+    if key not in _intro_cache:
+        img = ImageOps_fit(_intro_img(src), (720, 540))
+        buf = io.BytesIO()
+        if ext == "png":
+            intro_bw(img).save(buf, "PNG")
+        else:
+            img.save(buf, "JPEG", quality=85)
+        if len(_intro_cache) > 40:
+            _intro_cache.clear()
+        _intro_cache[key] = buf.getvalue()
+    resp = send_file(io.BytesIO(_intro_cache[key]), mimetype="image/png" if ext == "png" else "image/jpeg")
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+def intro_bw(img, w=240):
+    """Versi hitam-putih untuk animasi intro: kontras tinggi + titik dither tegas (dibesarkan 3x)."""
+    from PIL import ImageEnhance, ImageFilter, ImageOps
+    h = int(w * img.height / img.width)
+    g = ImageOps.grayscale(img.resize((w, h), Image.LANCZOS))
+    g = ImageOps.autocontrast(g, cutoff=3)
+    g = ImageEnhance.Brightness(g).enhance(1.04)
+    g = ImageEnhance.Contrast(g).enhance(1.25)
+    g = g.filter(ImageFilter.UnsharpMask(radius=2, percent=120, threshold=2))
+    bw = g.convert("1")
+    return bw.resize((w * 2, h * 2), Image.NEAREST)
+
+
+def ImageOps_fit(img, size):  # noqa: N802
+    from PIL import ImageOps
+    return ImageOps.fit(ImageOps.exif_transpose(img), size, Image.LANCZOS)
+
+
 @app.get("/api/status")
 def api_status():
-    st = PRINTER.status()
     ev, _ = current_event()
+    st = printer_for(ev).status()
     st["eventVersion"] = f"{ev.get('id', '')}:{ev.get('updated', 0)}"
     st["paper"] = paper_info()
     return jsonify(st)
@@ -300,6 +425,11 @@ def paper_info():
 @app.post("/api/stylize")
 def api_stylize():
     p = request.get_json(force=True)
+    ev, _ = current_event()
+    if is_photo(ev):
+        im = PH.style_photo(decode_image(p["photo"]), p.get("style", "warna"))
+        im.thumbnail((900, 900))
+        return jsonify({"image": to_data_url(im, "JPEG")})
     img = stylize_sample(decode_image(p["photo"]), p.get("style", "dither"),
                          int(CFG.get("paper_px", 576)), float(CFG.get("brightness", 1.0)))
     return jsonify({"image": to_data_url(img)})
@@ -309,7 +439,7 @@ def api_stylize():
 def api_preview():
     p = request.get_json(force=True)
     img, _, _ = receipt_from_payload(p, qr_url=preview_qr(), number=None)
-    return jsonify({"image": to_data_url(img)})
+    return jsonify({"image": preview_url(img)})
 
 
 @app.post("/api/templates")
@@ -321,7 +451,7 @@ def api_templates():
     out = []
     for tid, name, _ in template_list(ev, p.get("layout")):
         img = render_receipt(photos, dict(p, template=tid), ev, asset_dir, preview_qr(ev))
-        out.append({"id": tid, "name": name, "image": to_data_url(img)})
+        out.append({"id": tid, "name": name, "image": preview_url(img)})
     return jsonify({"templates": out})
 
 
@@ -357,7 +487,7 @@ def api_templates_render():
     tid = request.args.get("id", "")
     img = render_receipt(s["photos"], dict(s["p"], template=tid), s["ev"], s["dir"], preview_qr(s["ev"]),
                          ph_cache=s["cache"])
-    return jsonify({"id": tid, "image": to_data_url(img)})
+    return jsonify({"id": tid, "image": preview_url(img)})
 
 
 @app.post("/api/print")
@@ -376,6 +506,8 @@ def api_print():
         for i, ph in enumerate(photos, 1):
             ph.save(os.path.join(folder, f"foto_{i}.jpg"), quality=92)
         img.save(os.path.join(folder, "struk.png"))
+        if is_photo(ev):
+            img.save(os.path.join(folder, "hasil_cetak.jpg"), quality=93)
         gb = ex.get("guestbook") or {}
         if gb.get("signature") is not None:
             gb["signature"].convert("RGBA").save(os.path.join(folder, "ttd.png"))
@@ -390,9 +522,12 @@ def api_print():
             json.dump(meta, f, ensure_ascii=False)
         db_safe(DB.add_session, meta)
         jobs = []
-        PRINTER.print_image(img, copies=copies, sink=jobs)
-        if ft["host_copy"]:
-            PRINTER.print_image(host_copy(img, int(CFG.get("paper_px", 576))), copies=1, sink=jobs)
+        if is_photo(ev):
+            PHOTO_PRINTER.print_image(img, copies=copies + (1 if ft["host_copy"] else 0))
+        else:
+            PRINTER.print_image(img, copies=copies, sink=jobs)
+            if ft["host_copy"]:
+                PRINTER.print_image(host_copy(img, int(CFG.get("paper_px", 576))), copies=1, sink=jobs)
     except Exception as e:  # noqa: BLE001
         app.logger.exception("print gagal")
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -413,7 +548,11 @@ def api_reprint(sid):
         abort(404)
     jobs = []
     try:
-        PRINTER.print_image(Image.open(path).convert("1"), copies=1, sink=jobs)
+        im = Image.open(path)
+        if im.mode == "RGB" and im.width >= 1000:      # hasil mode foto 4R
+            PHOTO_PRINTER.print_image(im, copies=1)
+        else:
+            PRINTER.print_image(im.convert("1"), copies=1, sink=jobs)
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(e)}), 500
     return jsonify({"ok": True, "jobs": [base64.b64encode(j).decode() for j in jobs]})
@@ -453,6 +592,7 @@ def studio_meta():
         "layouts": EV.ALL_LAYOUTS,
         "paperPx": int(CFG.get("paper_px", 576)),
         "certTitles": TPL.GELAR,
+        "photoTemplates": [{"id": t[0], "name": t[1]} for t in PH.TEMPLATES],
     })
 
 
@@ -529,6 +669,22 @@ def studio_upload(eid):
         if not slots:
             return jsonify({"ok": False, "error": "tidak ada area transparan untuk foto"}), 400
         fr.save(EV.path(eid, name))
+    elif kind == "photoframe":
+        if "A" not in im.convert("RGBA").getbands() or im.convert("RGBA").split()[3].getextrema()[0] >= 128:
+            return jsonify({"ok": False, "error": "bingkai harus PNG dengan area transparan untuk foto"}), 400
+        fr = im.convert("RGBA")
+        small = fr.resize((600, max(1, fr.height * 600 // fr.width)))
+        slots = TPL.detect_slots(small.split()[3])
+        resp["slots"] = len(slots)
+        if not slots:
+            return jsonify({"ok": False, "error": "tidak ada area transparan untuk foto"}), 400
+        fr.save(EV.path(eid, name))
+    elif kind in ("intro", "bg"):
+        name = EV.new_asset_name(".jpg")
+        resp["file"] = name
+        rgb = im.convert("RGB")
+        rgb.thumbnail((1600, 1600))
+        rgb.save(EV.path(eid, name), quality=90)
     else:
         im.convert("RGBA").save(EV.path(eid, name))
     return jsonify(resp)
@@ -551,6 +707,13 @@ def studio_preview():
     layout = p.get("layout") if p.get("layout") in LAYOUTS else "strip"
     spec = p.get("spec")
     tid = p.get("template") or ("c:" + spec["id"] if spec else "klasik")
+    if is_photo(ev):
+        n = {"solo": 1, "duo": 2, "strip": 3, "grid": 4}[layout]
+        img = render_receipt(sample_photos(9)[:n], {"layout": layout, "template": tid, "showLogo": True,
+                                                     "caption": p.get("caption", "Selamat ya!"), "style": "warna"},
+                             ev, EV.path(eid), preview_qr(ev), number=127, lucky="0127" if features(ev)["lucky_draw"] else None)
+        img.thumbnail((800, 1200))
+        return jsonify({"image": to_data_url(img, "JPEG"), "height": img.height})
     img = render_receipt(sample_photos(9), {"layout": layout, "template": tid,
                                             "caption": p.get("caption", "Happy birthday!"),
                                             "showLogo": True, "style": p.get("style", "dither")},
@@ -624,6 +787,38 @@ def studio_printer_save():
     save_config()
     PRINTER.configure(CFG["printer"])
     return jsonify({"ok": True, "status": PRINTER.status()})
+
+
+@app.get("/api/studio/photo-printer")
+@studio_auth
+def studio_photo_printer_get():
+    return jsonify({"printer": CFG.get("photo_printer", {"type": "file"}), "types": PHOTO_TYPES,
+                    "status": PHOTO_PRINTER.status(), "found": list_photo_printers()})
+
+
+@app.put("/api/studio/photo-printer")
+@studio_auth
+def studio_photo_printer_save():
+    p = request.get_json(force=True).get("printer") or {}
+    CFG["photo_printer"] = {k: p[k] for k in ("type", "name", "borderless", "media") if k in p}
+    save_config()
+    PHOTO_PRINTER.configure(CFG["photo_printer"])
+    return jsonify({"ok": True, "status": PHOTO_PRINTER.status()})
+
+
+@app.post("/api/studio/photo-printer/test")
+@studio_auth
+def studio_photo_printer_test():
+    p = request.get_json(force=True).get("printer") or CFG.get("photo_printer", {})
+    pr = PhotoPrinter(p, OUT)
+    img = PH.test_sheet(p.get("name", ""))
+    try:
+        path = pr.print_image(img)
+    except Exception as e:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(e) or e.__class__.__name__}), 500
+    small = img.copy()
+    small.thumbnail((400, 600))
+    return jsonify({"ok": True, "saved": os.path.relpath(path, BASE), "image": to_data_url(small, "JPEG")})
 
 
 @app.get("/api/studio/connect")
@@ -790,6 +985,19 @@ def studio_export(eid):
                     headers={"Content-Disposition": f"attachment; filename=photobooth-{eid}.csv"})
 
 
+@app.get("/api/theme-bg/<fname>")
+def theme_bg(fname):
+    ev, asset_dir = current_event()
+    if os.path.basename(fname) != (ev.get("theme") or {}).get("bg_image"):
+        abort(404)
+    return send_from_directory(asset_dir, os.path.basename(fname))
+
+
+@app.get("/fonts/<path:fname>")
+def fonts_file(fname):
+    return send_from_directory(os.path.join(BASE, "fonts"), os.path.basename(fname))
+
+
 @app.get("/slideshow")
 def slideshow_page():
     return send_from_directory(os.path.join(BASE, "static"), "slideshow.html")
@@ -833,6 +1041,8 @@ def download_page(sid):
     ev, _ = current_event()
     title = ev.get("event_name", "")
     files = sorted(f for f in os.listdir(folder) if f.startswith("foto_"))
+    if os.path.exists(os.path.join(folder, "hasil_cetak.jpg")):   # mode foto 4R: hasil cetak di paling atas
+        files.insert(0, "hasil_cetak.jpg")
     items = "".join(
         f"<a href='/d/{sid}/{f}' download><img src='/d/{sid}/{f}' alt='{f}'></a>" for f in files)
     return f"""<!doctype html><html lang="id"><meta charset="utf-8">

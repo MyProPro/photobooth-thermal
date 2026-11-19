@@ -18,6 +18,13 @@ DEFAULT = {
     "event_name": "NAMA EVENT",
     "footer": "TERIMA KASIH",
     "logo": "",
+    "intro_photo": "",         # foto untuk animasi layar awal kiosk
+    "theme": {},
+    "output": "thermal",
+    "intro_style": "auto",     # animasi layar awal: auto | thermal | instan | strip       # "thermal" (struk 80mm) atau "photo" (foto 4R berwarna)
+    "photo_templates": [],     # template mode foto yang tampil (kosong = semua)
+    "photo_default_template": "klasik",
+    "photo_frames": {},        # bingkai PNG mode foto per layout: {"solo": "file.png", ...}               # warna & font kiosk (kosong = tema bawaan krem)
     "layouts": list(ALL_LAYOUTS),
     "default_layout": "strip",
     "templates": [],           # kosong = semua template bawaan + custom

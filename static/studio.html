@@ -6,6 +6,10 @@
 <title>Template Studio — Photobooth</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
 <style>
+@font-face{font-family:'PB Playfair';src:url('/fonts/PlayfairDisplay.ttf');font-weight:400 900}
+@font-face{font-family:'PB Josefin';src:url('/fonts/JosefinSans.ttf');font-weight:100 700}
+@font-face{font-family:'PB Archivo';src:url('/fonts/ArchivoBlack-Regular.ttf')}
+@font-face{font-family:'PB Bebas';src:url('/fonts/BebasNeue-Regular.ttf')}
 :root{--paper:#F2EFE8;--ink:#121212;--muted:#5A5650;--line:#D3CDC2;--accent:#C8410F;--ok:#2F7D3A;--card:#fff}
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 Inter,system-ui,sans-serif}
@@ -68,6 +72,38 @@ label{display:block}
 .savebar{position:fixed;right:24px;bottom:20px;display:flex;gap:10px;align-items:center;background:#fff;border:1.5px solid var(--ink);border-radius:14px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:10}
 .empty{padding:60px 20px;text-align:center;color:var(--muted)}
 .logo-prev{height:70px;max-width:220px;object-fit:contain;background:repeating-conic-gradient(#e5e5e5 0 25%,#fff 0 50%) 0 0/14px 14px;border-radius:8px;border:1px solid var(--line)}
+.out-pick{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+.out-pick button{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:14px 16px;border:1.5px solid var(--line);border-radius:14px;background:#fff;cursor:pointer;font:inherit}
+.out-pick button b{font-size:16px}.out-pick button span{font-size:13px;color:#5b564f}
+.out-pick button.on{border:2.5px solid var(--accent);background:#fff8f3}
+body:not(.ev-photo) .photo-only{display:none!important}
+body.ev-photo .thermal-only{display:none!important}
+.frame-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+.frame-slot{border:1.5px dashed var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px;align-items:center;font-size:13px}
+.frame-slot img{height:120px;max-width:100%;object-fit:contain;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/14px 14px}
+.frame-slot .empty{height:120px;display:grid;place-items:center;color:#8a847b;font-size:12px}
+.pat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:8px}
+.pat-sw{border:1.5px solid var(--line);border-radius:10px;padding:0;overflow:hidden;cursor:pointer;background:#fff;display:flex;flex-direction:column;font:600 12px Inter,sans-serif;align-items:stretch}
+.pat-sw i{display:block;width:100%;align-self:stretch;height:46px;position:relative}
+.pat-sw i::before{content:"";position:absolute;inset:0;background:var(--sw-ink);opacity:.5;-webkit-mask-image:var(--sw-pat);mask-image:var(--sw-pat);-webkit-mask-size:var(--sw-size);mask-size:var(--sw-size)}
+.pat-sw span{padding:5px 6px}
+.pat-sw[data-pat=polos] i::before{display:none}
+.pat-sw.on{outline:3px solid #121212;outline-offset:-1px}
+.theme-prev{position:relative;overflow:hidden;background-size:cover;background-position:center}
+.theme-prev>*{position:relative;z-index:1}
+.theme-prev::before{content:"";position:absolute;inset:0;background:var(--tp-text);opacity:var(--tp-alpha,.1);-webkit-mask-image:var(--tp-pat);mask-image:var(--tp-pat);-webkit-mask-size:var(--tp-size);mask-size:var(--tp-size)}
+.theme-prev{border:1.5px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:10px;
+  background:var(--tp-paper);color:var(--tp-text)}
+.tp-name{font-family:var(--tp-font);font-weight:700;font-size:26px;text-align:center}
+.tp-printer{width:180px;height:44px;border-radius:12px 12px 6px 6px;background:var(--tp-printer);position:relative}
+.tp-printer i{position:absolute;left:30px;right:30px;bottom:8px;height:4px;background:#000;border-radius:2px}
+.tp-receipt{width:110px;height:60px;margin-top:-10px;background:#fff;background-image:radial-gradient(#121212 1px,transparent 1.3px);background-size:4px 4px;box-shadow:0 2px 6px rgba(0,0,0,.15)}
+.tp-row{display:flex;gap:6px}
+.tp-chip{border:2px solid var(--tp-text);border-radius:99px;padding:4px 10px;font-size:12px;font-weight:600;background:var(--tp-card);color:var(--tp-text)}
+.tp-chip.on{border-color:var(--tp-accent);border-width:3px}
+.tp-btn{width:100%;text-align:center;padding:12px;border-radius:12px;background:var(--tp-btn);color:var(--tp-btntext);font-family:var(--tp-font);font-weight:700;font-size:18px}
+.color-in{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600}
+.color-in input{width:100%;height:40px;border:1.5px solid var(--line);border-radius:8px;padding:2px;background:#fff;cursor:pointer}
 @media (max-width:1100px){.split{grid-template-columns:1fr}.preview{position:static}.wrap{grid-template-columns:1fr}.side{border-right:0;border-bottom:1.5px solid var(--line)}}
 </style>
 </head>
@@ -160,6 +196,21 @@ label{display:block}
           </div>
 
           <div class="card" style="margin-top:18px">
+            <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Printer foto (mode 4R berwarna)</b><span class="badge" id="ppBadge">-</span></div>
+            <p class="hint">Dipakai event yang jenis cetaknya "Foto 4R berwarna". Atur ukuran kertas 4x6 / 10x15 cm (dan borderless kalau ada) di pengaturan driver printernya.</p>
+            <div class="grid2">
+              <label class="field"><span>Koneksi</span><select id="ppType">
+                <option value="file">Tes: simpan file saja (tanpa printer)</option>
+                <option value="windows">Windows: printer terpasang (driver)</option>
+                <option value="cups">Linux / Raspberry Pi: CUPS</option></select></label>
+              <label class="field"><span>Nama printer</span><select id="ppName"></select></label>
+            </div>
+            <label class="check" style="margin-top:8px"><input type="checkbox" id="ppBorderless" checked> Tanpa tepi (isi penuh kertas, Windows)</label>
+            <div class="row" style="margin-top:12px"><button id="btnPpTest">Cetak halaman tes</button><button class="primary" id="btnPpSave">Simpan printer foto</button></div>
+            <p class="small" id="ppMsg"></p>
+          </div>
+
+          <div class="card" style="margin-top:18px">
             <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Kertas</b><span class="badge" id="paperBadge">-</span></div>
             <div style="height:16px;border:2px solid var(--ink);border-radius:8px;overflow:hidden;margin-top:12px"><div id="paperBar" style="height:100%;background:var(--ink);width:0"></div></div>
             <p class="small" id="paperInfo" style="margin:8px 0 12px">-</p>
@@ -218,6 +269,10 @@ label{display:block}
 
       <!-- INFO -->
       <section id="tab-info">
+        <div class="out-pick" id="outPick">
+          <button type="button" data-out="thermal"><b>Struk thermal 80mm</b><span>Hitam-putih, gaya struk. Printer thermal ESC/POS.</span></button>
+          <button type="button" data-out="photo"><b>Foto 4R berwarna</b><span>Kertas 10×15 cm, photobooth biasa. Printer foto (Selphy, DNP, Epson, dll).</span></button>
+        </div>
         <div class="grid2">
           <label class="field"><span>Nama event (di Studio)</span><input type="text" data-k="name"></label>
           <label class="field"><span>Nama yang dicetak di struk</span><input type="text" data-k="event_name"><span class="hint">Dipakai di semua template sebagai {event}.</span></label>
@@ -227,6 +282,60 @@ label{display:block}
             <span class="hint">PNG transparan paling bagus. Logo gelap di atas transparan/putih.</span>
           </div>
         </div>
+        <div class="sec">Layar awal kiosk</div>
+        <label class="field" style="max-width:420px"><span>Animasi intro</span>
+          <select id="introStyle">
+            <option value="auto">Otomatis (ikut jenis cetak)</option>
+            <option value="thermal">Printer thermal (struk keluar)</option>
+            <option value="instan">Kamera instan (foto polaroid berkembang)</option>
+            <option value="strip">Photo strip (hitung mundur 3-2-1, strip keluar)</option>
+          </select></label>
+        <div class="field"><span>Foto intro (untuk animasi foto → struk)</span>
+          <div class="row"><img class="logo-prev hidden" id="introPrev" alt="Foto intro" style="height:90px"><label class="btn">Upload foto<input type="file" id="introFile" class="hidden" accept="image/png,image/jpeg"></label><button class="ghost hidden" id="btnIntroDel" type="button">Hapus</button></div>
+          <span class="hint">Mis. foto pasangan pengantin atau suasana event. Kosong = pakai foto tamu terakhir. Teks yang tampil hanya nama event (dan logo).</span>
+        </div>
+
+        <div class="sec">Tema kiosk (warna &amp; font)</div>
+        <div class="row" id="themePresets"></div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:18px;margin-top:12px;align-items:start">
+          <div>
+            <div class="grid4" id="themeColors"></div>
+            <div class="row" style="margin-top:12px">
+              <label class="field" style="width:220px"><span>Font judul</span>
+                <select id="themeFont">
+                  <option value="modern">Modern (Space Grotesk)</option>
+                  <option value="elegan">Elegan (Playfair, serif)</option>
+                  <option value="geometris">Geometris (Josefin Sans)</option>
+                  <option value="tegas">Tegas (Archivo Black)</option>
+                  <option value="poster">Poster (Bebas Neue)</option>
+                </select></label>
+              <button class="ghost" id="btnThemeReset" type="button" style="margin-top:20px">Kembali ke bawaan</button>
+            </div>
+            <p class="hint">Berlaku di semua layar kiosk (tombol, teks, latar, printer di animasi). Struk cetak tetap hitam-putih.</p>
+            <div class="sec" style="margin-top:14px">Motif latar</div>
+            <div class="pat-grid" id="patGrid"></div>
+            <div class="row" style="margin-top:10px;align-items:center;gap:18px">
+              <label class="field" style="width:220px"><span>Kekuatan motif <b id="patStrVal"></b></span>
+                <input type="range" id="patStr" min="4" max="30" step="1"></label>
+              <label class="check" style="margin-top:18px"><input type="checkbox" id="patFloat"> Animasi foto/struk melayang di layar awal</label>
+            </div>
+            <div class="row" style="margin-top:10px;align-items:center;gap:14px">
+              <label class="ghost" style="cursor:pointer">Upload gambar latar<input type="file" id="bgFile" accept="image/png,image/jpeg" hidden></label>
+              <img id="bgPrev" class="hidden" style="height:56px;border-radius:8px;border:1px solid var(--line)" alt="">
+              <button class="ghost hidden" id="btnBgDel" type="button">Hapus gambar</button>
+              <label class="field hidden" id="bgDimWrap" style="width:200px"><span>Pudarkan gambar <b id="bgDimVal"></b></span>
+                <input type="range" id="bgDim" min="0" max="90" step="5"></label>
+            </div>
+          </div>
+          <div class="theme-prev" id="themePrev" aria-label="Preview tema">
+            <div class="tp-name">Nama Event</div>
+            <div class="tp-printer"><i></i></div>
+            <div class="tp-receipt"></div>
+            <div class="tp-row"><span class="tp-chip">Pilihan</span><span class="tp-chip on">Dipilih</span></div>
+            <div class="tp-btn">Mulai</div>
+          </div>
+        </div>
+
         <div class="sec">Fitur tambahan</div>
         <div class="grid2" id="featureChecks">
           <label class="check card"><input type="checkbox" data-f="guestbook"> <span><b>Buku tamu + tanda tangan</b><br><span class="hint">Tamu menulis ucapan &amp; tanda tangan di tablet, ikut tercetak dan tersimpan.</span></span></label>
@@ -235,8 +344,8 @@ label{display:block}
           <label class="check card"><input type="checkbox" data-f="host_copy"> <span><b>Cetak arsip tuan rumah</b><br><span class="hint">Otomatis cetak 1 salinan tambahan berlabel ARSIP.</span></span></label>
         </div>
 
-        <div class="sec">Teks template Sertifikat &amp; Boarding Pass</div>
-        <div class="grid2">
+        <div class="sec thermal-only">Teks template Sertifikat &amp; Boarding Pass</div>
+        <div class="grid2 thermal-only">
           <label class="field"><span>Daftar gelar Sertifikat (satu per baris)</span>
             <textarea id="certTitles" rows="9" style="font-family:'JetBrains Mono',monospace;font-size:13px"></textarea>
             <span class="hint">Format: <span class="mono">GELAR | keterangan kecil</span>. Tamu memilih di layar Review (atau tekan Acak). Kosongkan untuk memakai daftar bawaan.</span></label>
@@ -309,10 +418,15 @@ label{display:block}
             <div id="tplListView">
               <div class="row" style="justify-content:space-between">
                 <div class="sec" style="margin:0">Template yang tampil di kiosk</div>
-                <div class="row"><button id="btnNewBuilder" class="primary">+ Template builder</button><button id="btnNewOverlay">+ Upload frame PNG</button></div>
+                <div class="row thermal-only"><button id="btnNewBuilder" class="primary">+ Template builder</button><button id="btnNewOverlay">+ Upload frame PNG</button></div>
               </div>
               <p class="hint">Centang untuk menampilkan, ★ = terpilih otomatis, panah untuk urutan. Klik nama untuk preview.</p>
               <div class="card" id="tplList" style="padding:6px"></div>
+              <div class="card photo-only" id="frameCard" style="margin-top:14px">
+                <b>Bingkai sendiri (PNG) untuk template "Bingkai sendiri"</b>
+                <p class="hint">Desain di Canva/Photoshop: PNG dengan area <b>transparan</b> sebagai tempat foto. Solo/Duo/Grid 1200×1800 px, Strip 600×1800 px (dicetak 2 strip kembar).</p>
+                <div class="frame-grid" id="photoFrames"></div>
+              </div>
             </div>
 
             <div id="specView" class="hidden">

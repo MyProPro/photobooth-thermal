@@ -14,7 +14,7 @@ let idleTimer = null, resetTimer = null, styleTimer = null;
 let skipCountdown = false, shooting = false;
 
 function freshState() {
-  S = { layout: CFG.defaultLayout || 'strip', copies: 1, style: 'dither', caption: '', showLogo: true,
+  S = { layout: CFG.defaultLayout || 'strip', copies: 1, style: (CFG.styles && CFG.styles[0].id) || 'dither', caption: '', showLogo: true,
         photos: [], lastPrint: null, printed: 0, template: CFG.defaultTemplate, photoVer: 0, tplKey: '',
         poses: [], guestbook: null, certTitle: '', pendingJobs: null };
   if ($('#gbName')) { $('#gbName').value = ''; $('#gbMsg').value = ''; clearSign(); }
@@ -28,6 +28,8 @@ function go(name) {
   $$('.screen').forEach((el) => el.classList.remove('active'));
   $('#s-' + name).classList.add('active');
   document.body.classList.toggle('dark', name === 'camera');
+  document.body.classList.toggle('intro-on', name === 'welcome');
+  if (name === 'welcome') startIntro(); else stopIntro();
   current = name;
   clearInterval(styleTimer); styleTimer = null;
   clearInterval(resetTimer); resetTimer = null;
@@ -135,6 +137,186 @@ async function kioskMode() {
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wakeLock = null; });
 
+// ---------- tema warna & font (dari Studio) ----------
+const THEME_FONTS = {
+  modern: "'Space Grotesk','Inter',sans-serif", elegan: "'PB Playfair',Georgia,serif",
+  geometris: "'PB Josefin',sans-serif", tegas: "'PB Archivo',sans-serif", poster: "'PB Bebas',sans-serif",
+};
+function applyTheme(t) {
+  const r = document.documentElement.style;
+  if (!t || !t.paper) return;
+  const set = (k, v) => { if (v) r.setProperty(k, v); };
+  set('--paper', t.paper); set('--ink', t.text); set('--card', t.card); set('--btn', t.btn);
+  set('--btn-text', t.btn_text); set('--accent', t.accent); set('--printer', t.printer);
+  r.setProperty('--muted', `color-mix(in srgb, ${t.text} 72%, ${t.paper})`);
+  r.setProperty('--line', `color-mix(in srgb, ${t.text} 35%, ${t.paper})`);
+  set('--head-font', THEME_FONTS[t.font]);
+}
+// Motif latar: berlaku walau tema warna masih bawaan.
+function applyBackground(t) {
+  t = t || {};
+  const b = document.body, pat = t.pattern || 'titik';
+  b.className = b.className.replace(/\bpat-\S+/g, '').trim();
+  b.classList.add(pat === 'polos' ? 'pat-off' : 'pat-on', 'pat-' + pat);
+  b.classList.toggle('no-fl', t.floaters === false);
+  document.documentElement.style.setProperty('--pat-alpha', (t.pattern_strength || 12) + '%');
+  const ph = $('#bgPhoto');
+  if (t.bg_image) {
+    ph.style.backgroundImage = `url('/api/theme-bg/${encodeURIComponent(t.bg_image)}')`;
+    document.documentElement.style.setProperty('--bg-dim', (t.bg_dim ?? 55) / 100);
+  }
+  b.classList.toggle('has-photo', !!t.bg_image);
+}
+
+// ---------- layar intro: foto -> dither -> printer -> struk ----------
+let INTRO = null, introTimers = [], introIdx = 0, introOn = false;
+async function loadIntro() {
+  try {
+    INTRO = await api('/api/intro');
+    $('#introName').textContent = INTRO.eventName || '';
+    $('#ipName').textContent = (INTRO.eventName || '').toUpperCase();
+    $('#ipDate').textContent = INTRO.date;
+    $('#introLogo').classList.toggle('hidden', !INTRO.logo);
+    if (INTRO.logo) $('#introLogo').src = INTRO.logo;
+    INTRO.photos.forEach((p) => { new Image().src = p.color; new Image().src = p.dither; });
+  } catch (e) { INTRO = null; }
+}
+function stopIntro() {
+  introOn = false;
+  introTimers.forEach(clearTimeout); introTimers = [];
+}
+function introStyle() {
+  const s = CFG.introStyle || 'auto';
+  return s === 'auto' ? (CFG.output === 'photo' ? 'instan' : 'thermal') : s;
+}
+function introCycle() {
+  if (!introOn) return;
+  const sty = introStyle();
+  $('#introStage').classList.toggle('hidden', sty !== 'thermal');
+  $('#icStage').classList.toggle('hidden', sty !== 'instan');
+  $('#isStage').classList.toggle('hidden', sty !== 'strip');
+  if (sty === 'instan') return introInstant();
+  if (sty === 'strip') return introStrip();
+  const st = $('#introStage');
+  const at = (ms, fn) => introTimers.push(setTimeout(() => { if (introOn) fn(); }, ms));
+  const ph = INTRO && INTRO.photos.length ? INTRO.photos[introIdx++ % INTRO.photos.length] : null;
+  st.className = 'intro-stage';
+  fitIntro();
+  const out = CFG.output === 'photo' && ph ? ph.color : ph && ph.dither;   // mode foto: hasilnya berwarna
+  if (ph) { $('#ipColor').src = ph.color; $('#ipDither').src = out; $('#ipPrint').src = out; }
+  // 1) foto asli + flash, ditahan  2) scan jadi dither  3) masuk printer  4) struk keluar
+  at(250, () => { st.className = 'intro-stage p-in'; });
+  at(3400, () => { st.className = 'intro-stage p-scan'; });
+  at(5400, () => { st.className = 'intro-stage p-feed'; });
+  at(6300, () => { st.className = 'intro-stage p-print'; });
+  at(9200, () => { st.className = 'intro-stage p-hold'; });
+  at(11900, () => { st.className = 'intro-stage p-out'; });
+  at(12700, introCycle);
+}
+const introAt = (ms, fn) => introTimers.push(setTimeout(() => { if (introOn) fn(); }, ms));
+function introPhoto(k = 0) {
+  const ps = INTRO && INTRO.photos.length ? INTRO.photos : null;
+  return ps ? ps[(introIdx + k) % ps.length].color : '';
+}
+// kamera instan: jepret -> flash -> foto keluar dari slot -> warna muncul perlahan
+function introInstant() {
+  const st = $('#icStage');
+  st.className = 'intro-stage ic-stage';
+  fitIntro();
+  $('#icImg').src = introPhoto(); introIdx++;
+  $('#icName').textContent = (INTRO && INTRO.eventName) || '';
+  $('#icDate').textContent = (INTRO && INTRO.date) || '';
+  introAt(300, () => { st.className = 'intro-stage ic-stage p-in'; });
+  introAt(1500, () => { st.className = 'intro-stage ic-stage p-shot'; });
+  introAt(2300, () => { st.className = 'intro-stage ic-stage p-eject'; });
+  introAt(4300, () => { st.className = 'intro-stage ic-stage p-dev'; });
+  introAt(9200, () => { st.className = 'intro-stage ic-stage p-hold'; });
+  introAt(11000, () => { st.className = 'intro-stage ic-stage p-out'; });
+  introAt(11800, introCycle);
+}
+// photo strip: hitung mundur 3-2-1, flash 3x, strip keluar dari slot
+function introStrip() {
+  const st = $('#isStage');
+  st.className = 'intro-stage is-stage p-reset';
+  fitIntro();
+  const ph = [introPhoto(0), introPhoto(1), introPhoto(2)]; introIdx += 3;
+  ['#isS1', '#isS2', '#isS3'].forEach((s, i) => { $(s).src = ph[i]; });
+  $('#isName').textContent = (INTRO && INTRO.eventName) || '';
+  $('#isDate').textContent = (INTRO && INTRO.date) || '';
+  const flash = () => $('#isStage .is-flash').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 550, easing: 'ease-out' });
+  const shot = (i) => { flash(); $('#isView').src = ph[i]; $('#isShot').textContent = i + 1; $('#isCount').textContent = ''; };
+  $('#isView').src = ph[0]; $('#isShot').textContent = 1; $('#isCount').textContent = '';
+  introAt(300, () => { st.className = 'intro-stage is-stage'; });
+  introAt(900, () => { $('#isCount').textContent = '3'; });
+  introAt(1600, () => { $('#isCount').textContent = '2'; });
+  introAt(2300, () => { $('#isCount').textContent = '1'; });
+  introAt(3000, () => shot(0));
+  introAt(3900, () => { $('#isCount').textContent = '1'; $('#isShot').textContent = 2; });
+  introAt(4400, () => shot(1));
+  introAt(5300, () => { $('#isCount').textContent = '1'; $('#isShot').textContent = 3; });
+  introAt(5800, () => shot(2));
+  introAt(6500, () => { st.className = 'intro-stage is-stage p-print'; });
+  introAt(10000, () => { st.className = 'intro-stage is-stage p-hold'; });
+  introAt(11600, () => { st.className = 'intro-stage is-stage p-out'; });
+  introAt(12400, introCycle);
+}
+
+// latar intro: struk mini & polaroid melayang naik
+function buildIntroBg() {
+  const bg = $('#introBg');
+  if (!bg || bg.dataset.ready) return;
+  bg.dataset.ready = '1';
+  const photoIntro = introStyle() !== 'thermal';
+  const kinds = ['receipt', 'polaroid', 'dot', 'receipt', 'polaroid', 'receipt', 'dot', 'polaroid', 'receipt', 'polaroid', 'dot', 'receipt', 'polaroid', 'receipt', 'dot', 'polaroid'];
+  kinds.forEach((k0, i) => {
+    let k = k0;
+    if (photoIntro && k === 'receipt') k = 'strip';
+    const el = document.createElement('div');
+    el.className = 'fl fl-' + k;
+    if (k === 'strip') el.innerHTML = '<i></i><i></i><i></i>';
+    if (k === 'receipt') el.innerHTML = '<i></i><i class="s"></i><b></b><i></i><i class="s"></i>';
+    if (k === 'polaroid') el.innerHTML = '<b></b>';
+    const lane = (i + 0.5) / kinds.length;                    // sebar merata kiri-kanan
+    const scale = k === 'dot' ? 1 + Math.random() * 0.8 : 1 + Math.random() * 0.8;
+    const dur = 22 + Math.random() * 16;
+    el.style.left = `calc(${(lane * 100).toFixed(1)}% - 35px)`;
+    el.style.setProperty('--d', dur.toFixed(1) + 's');
+    el.style.setProperty('--delay', (-Math.random() * dur).toFixed(1) + 's');   // langsung tersebar saat mulai
+    el.style.setProperty('--r0', (Math.random() * 40 - 20).toFixed(0) + 'deg');
+    el.style.setProperty('--r1', (Math.random() * 80 - 40).toFixed(0) + 'deg');
+    el.style.setProperty('--o', (k === 'dot' ? 0.55 : 0.55 + Math.random() * 0.3).toFixed(2));
+    el.style.zoom = scale;
+    bg.appendChild(el);
+  });
+}
+function sizeIntroBg() {
+  const bg = $('#introBg');
+  if (bg) bg.style.setProperty('--travel', (bg.clientHeight + 460) + 'px');
+}
+
+function fitIntro() {
+  buildIntroBg();
+  sizeIntroBg();
+  const box = $('#introFit');
+  if (!box || !box.clientHeight) return;
+  const k = Math.max(0.5, Math.min(box.clientHeight / 700, box.clientWidth / 450, 1.7));
+  ['#introStage', '#icStage', '#isStage'].forEach((s) => { $(s).style.transform = `scale(${k})`; });
+}
+window.addEventListener('resize', () => setTimeout(fitIntro, 60));
+async function startIntro() {
+  setTimeout(fitIntro, 30);
+  if (introOn) return;
+  introOn = true;
+  await loadIntro();
+  introTimers.forEach(clearTimeout); introTimers = [];
+  introCycle();
+}
+// seluruh layar awal bisa disentuh untuk mulai (kecuali tombol operator)
+$('#s-welcome').addEventListener('click', (e) => {
+  if (e.target.closest('#btnUsb') || e.target.closest('#btnStart')) return;
+  $('#btnStart').click();
+});
+
 $('#btnStart').addEventListener('click', async () => {
   kioskMode();
   freshState();
@@ -180,9 +362,25 @@ function startStylePreview() {
   startCamera().then(() => setTimeout(refreshStylePreview, 400));
   styleTimer = setInterval(refreshStylePreview, 2500);
 }
-$$('#styleOptions .opt').forEach((b) => b.addEventListener('click', () => {
+$('#styleOptions').addEventListener('click', (e) => {
+  const b = e.target.closest('.opt');
+  if (!b) return;
   S.style = b.dataset.style; renderOptions(); refreshStylePreview();
-}));
+});
+
+// Mode cetak foto 4R: ganti pilihan gaya & teks yang menyebut "struk".
+function applyOutputMode() {
+  const photo = CFG.output === 'photo';
+  document.body.classList.toggle('mode-photo', photo);
+  $$('[data-photo]').forEach((el) => {
+    if (el.dataset.thermal === undefined) el.dataset.thermal = el.textContent;
+    el.textContent = photo ? el.dataset.photo : el.dataset.thermal;
+  });
+  if (!window.__thermalStyles) window.__thermalStyles = $('#styleOptions').innerHTML;
+  $('#styleOptions').innerHTML = photo && CFG.styles
+    ? CFG.styles.map((s) => `<button class="opt sm" data-style="${s.id}"><b>${s.name}</b><span>${s.desc}</span></button>`).join('')
+    : window.__thermalStyles;
+}
 $('#caption').addEventListener('input', (e) => { S.caption = e.target.value; });
 $('#showLogo').addEventListener('change', (e) => { S.showLogo = e.target.checked; });
 
@@ -518,11 +716,15 @@ async function pollStatus() {
       if (current === 'welcome') { location.reload(); return; }
       pendingReload = true;
     }
-    const low = s.paper && s.paper.low;
+    const low = CFG.output !== 'photo' && s.paper && s.paper.low;
+    const pill = $('#introStatus');
+    const problem = !s.ok ? 'PRINTER BERMASALAH' : (low ? 'KERTAS HAMPIR HABIS' : '');
+    pill.textContent = problem; pill.classList.toggle('hidden', !problem);
     if (s.mode === 'webusb') {
       const d = await PBUSB.paired().catch(() => null);
       $('#btnUsb').classList.toggle('hidden', !!d);
       if (!d) {
+        $('#introStatus').textContent = 'PRINTER USB BELUM DISAMBUNGKAN'; $('#introStatus').classList.remove('hidden');
         $('#statusDot').className = 'dot warn';
         $('#statusText').textContent = PBUSB.supported() ? 'PRINTER USB BELUM DISAMBUNGKAN' : 'BROWSER TIDAK MENDUKUNG USB';
         return;
@@ -578,9 +780,14 @@ fitScreen();
     const c = await api('/api/config');
     CFG = Object.assign(CFG, c);
     S.template = CFG.defaultTemplate;
+    applyOutputMode();
+    applyTheme(CFG.theme);
+    applyBackground(CFG.theme);
     $('#eventName').textContent = c.eventName;
   } catch (e) { console.warn(e); }
   freshState();
+  document.body.classList.add('intro-on');
+  startIntro();
   pollStatus();
   setInterval(pollStatus, 15000);
   // Mode kiosk hanya kalau dibuka dengan ?kiosk=1 (run.bat). Di browser biasa klik kanan tetap bisa.

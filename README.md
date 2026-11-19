@@ -116,6 +116,33 @@ Dither, Halftone, Kontras, Sketsa, **ASCII** (foto tersusun dari huruf & simbol)
 - **Tantangan pose**: pose acak muncul di layar sebelum tiap jepretan dan ikut tercetak.
 - **Cetak arsip tuan rumah**: otomatis mencetak 1 salinan tambahan berlabel *ARSIP TUAN RUMAH*.
 
+## Mode foto 4R berwarna (photobooth biasa)
+Satu sistem bisa untuk dua jenis cetak. Pilih per event di **Studio → Info event → paling atas**:
+- **Struk thermal 80mm** (hitam-putih, printer ESC/POS)
+- **Foto 4R berwarna** (kertas 10×15 cm, 300 dpi, printer foto)
+
+Di mode foto:
+- **Layout**: Solo (1), Duo (2), Grid (4), dan Strip (3 foto, dicetak **2 strip 5×15 cm kembar** dalam satu lembar 4R, tinggal dipotong di tengah).
+- **Gaya foto**: Warna, Cerah, Hitam putih, Sepia, Vintage, Sejuk.
+- **Template**: Klasik putih, Hitam elegan, Polaroid, Roll film, Warna tema event (ikut warna tema kiosk), Sampul majalah, Pernikahan, dan **Bingkai sendiri (PNG)**.
+- **Bingkai sendiri**: Studio → tab Template → upload PNG per layout. Area **transparan** = tempat foto (terdeteksi otomatis). Ukuran: Solo/Duo/Grid 1200×1800 px, Strip 600×1800 px.
+- QR unduh, nomor undian, buku tamu, slideshow tetap jalan. Halaman unduh juga berisi hasil cetak 4R-nya.
+
+**Printer foto** (Studio → Printer & tablet → *Printer foto*):
+- **Windows**: pilih printer foto yang sudah terpasang drivernya (Canon Selphy, DNP, Citizen, Epson, dll). Di *Printing Preferences* driver, set kertas **4x6 / 10x15 cm**, dan **borderless** kalau ada.
+- **Raspberry Pi / Linux**: lewat CUPS (`sudo apt install cups`, tambahkan printer di http://localhost:631).
+- **Tes**: "simpan file saja" (hasil JPG di `output/prints`).
+- Tekan **Cetak halaman tes** untuk cek warna dan tepi kertas.
+- Catatan: mode foto tidak bisa mencetak langsung dari tablet Android (driver printer foto tidak ada di Android). Jalankan server di Windows/Pi; tablet tetap bisa jadi layar kiosk.
+
+## Tema kiosk: warna, font & motif latar (Studio → Info event)
+- **Preset warna**: Krem klasik, Gelap, Navy & emas, Pink pastel, Hijau sage. Setiap warna (latar, teks, kartu, tombol, teks tombol, aksen, printer) bisa diubah dengan color picker.
+- **Font judul**: Modern, Elegan, Geometris, Tegas, Poster. Diambil dari folder `fonts/`, jadi tetap jalan offline.
+- **Motif latar**: Polos, Titik, Garis, Kotak, Diagonal, Gelombang, Zigzag, Konfeti, Hati, Bintang, Bunga, Kamera. Warna motif ikut warna teks, dan kekuatannya bisa diatur.
+- **Gambar latar sendiri** (PNG/JPG) dengan slider pudar, supaya tulisan tetap terbaca.
+- Animasi foto/struk melayang di layar awal bisa dimatikan.
+- Struk cetak tetap hitam-putih. Tema hanya mengubah tampilan layar kiosk.
+
 ## Slideshow TV
 
 Buka **http://localhost:5000/slideshow** (atau `http://<IP-PC>:5000/slideshow` dari PC/TV lain) di layar besar, lalu klik sekali untuk layar penuh.

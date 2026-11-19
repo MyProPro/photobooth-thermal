@@ -66,11 +66,13 @@ async function openEvent(id) {
   ev.custom_templates = ev.custom_templates || [];
   setDirty(false);
   editId = null;
-  selTpl = ev.default_template || 'klasik';
+  ev.photo_frames = ev.photo_frames || {};
+  selTpl = (ev.output === 'photo' ? ev.photo_default_template : ev.default_template) || 'klasik';
   $('#emptyState').classList.add('hidden');
   $('#settings').classList.add('hidden');
   $('#editor').classList.remove('hidden');
   renderInfo();
+  renderOutput();
   renderTemplateList();
   showListView();
   loadEvents();
@@ -161,6 +163,8 @@ function renderInfo() {
   });
   renderDefaultLayout();
   renderLogo();
+  renderIntro();
+  renderTheme();
 }
 function renderDefaultLayout() {
   const s = $('#defaultLayout');
@@ -171,6 +175,7 @@ function renderDefaultLayout() {
 $$('#tab-info [data-k]').forEach((el) => el.addEventListener('input', () => {
   ev[el.dataset.k] = el.value;
   if (el.dataset.k === 'name') $('#evTitle').textContent = el.value;
+  if (el.dataset.k === 'event_name') paintThemePrev();
   setDirty(); schedulePreview();
 }));
 $$('#tab-info [data-s]').forEach((el) => el.addEventListener('input', () => {
@@ -191,6 +196,105 @@ $$('#tab-info [data-b]').forEach((el) => el.addEventListener('input', () => {
 $$('#featureChecks [data-f]').forEach((el) => el.addEventListener('change', () => {
   ev.features[el.dataset.f] = el.checked; setDirty();
 }));
+// ---------------------------------------------------------------- tema kiosk
+const THEME_PRESETS = {
+  krem:  { label: 'Krem klasik', paper: '#F2EFE8', text: '#121212', card: '#FFFFFF', btn: '#121212', btn_text: '#F2EFE8', accent: '#C8410F', printer: '#121212', font: 'modern' },
+  gelap: { label: 'Gelap', paper: '#141414', text: '#F2EFE8', card: '#232323', btn: '#F2EFE8', btn_text: '#141414', accent: '#FF8A5C', printer: '#2E2E2E', font: 'modern' },
+  navy:  { label: 'Navy & emas', paper: '#F7F3EA', text: '#1B2A41', card: '#FFFFFF', btn: '#1B2A41', btn_text: '#F7F3EA', accent: '#B08D57', printer: '#1B2A41', font: 'elegan' },
+  pink:  { label: 'Pink pastel', paper: '#FBEFF1', text: '#3A2A2E', card: '#FFFFFF', btn: '#C9566F', btn_text: '#FFFFFF', accent: '#C9566F', printer: '#3A2A2E', font: 'geometris' },
+  sage:  { label: 'Hijau sage', paper: '#EEF2EA', text: '#1F2A22', card: '#FFFFFF', btn: '#4E6B55', btn_text: '#FFFFFF', accent: '#B8692E', printer: '#1F2A22', font: 'geometris' },
+};
+const THEME_KEYS = [['paper', 'Latar'], ['text', 'Teks'], ['card', 'Kartu'], ['btn', 'Tombol'], ['btn_text', 'Teks tombol'],
+  ['accent', 'Aksen'], ['printer', 'Printer']];
+const THEME_FONT_CSS = { modern: "'Space Grotesk',sans-serif", elegan: "'PB Playfair',Georgia,serif", geometris: "'PB Josefin',sans-serif",
+  tegas: "'PB Archivo',sans-serif", poster: "'PB Bebas',sans-serif" };
+const BG_PATTERNS = {
+  polos: { label: 'Polos', url: '', size: '' },
+  titik: { label: 'Titik', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18'%3E%3Ccircle cx='9' cy='9' r='1.6'/%3E%3C/svg%3E\")", size: '18px 18px' },
+  garis: { label: 'Garis', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Crect y='9' width='20' height='1.6'/%3E%3C/svg%3E\")", size: '20px 20px' },
+  kotak: { label: 'Kotak', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Cpath d='M0 0h28v1.4H0zM0 0h1.4v28H0z'/%3E%3C/svg%3E\")", size: '28px 28px' },
+  diagonal: { label: 'Diagonal', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M-2 18L18 -2l1.2 1.2L-0.8 19.2zM14 18l4-4 1.2 1.2-4 4z'/%3E%3C/svg%3E\")", size: '16px 16px' },
+  gelombang: { label: 'Gelombang', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='24'%3E%3Cpath d='M0 12q12-10 24 0t24 0' fill='none' stroke='black' stroke-width='1.8'/%3E%3C/svg%3E\")", size: '48px 24px' },
+  zigzag: { label: 'Zigzag', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='20'%3E%3Cpath d='M0 14l8-8 8 8 8-8 8 8' fill='none' stroke='black' stroke-width='1.8'/%3E%3C/svg%3E\")", size: '32px 20px' },
+  konfeti: { label: 'Konfeti', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect x='10' y='14' width='10' height='4' transform='rotate(30 15 16)'/%3E%3Ccircle cx='70' cy='20' r='3'/%3E%3Crect x='95' y='60' width='10' height='4' transform='rotate(-40 100 62)'/%3E%3Ccircle cx='30' cy='80' r='2.5'/%3E%3Crect x='55' y='95' width='9' height='4' transform='rotate(70 59 97)'/%3E%3Cpath d='M45 45l4 8 4-8z'/%3E%3Ccircle cx='105' cy='105' r='2'/%3E%3Cpath d='M85 25l3 6 3-6z'/%3E%3C/svg%3E\")", size: '120px 120px' },
+  hati: { label: 'Hati', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56'%3E%3Cpath d='M14 22c-4-4-10-1-8 4 1 3 8 8 8 8s7-5 8-8c2-5-4-8-8-4z'/%3E%3Cpath d='M42 34c-3-3-7-1-6 3 1 2 6 6 6 6s5-4 6-6c1-4-3-6-6-3z'/%3E%3C/svg%3E\")", size: '56px 56px' },
+  bintang: { label: 'Bintang', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Cpath d='M15 6l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L6.4 12.3l6-.7z'/%3E%3Cpath d='M45 36l1.6 3.4 3.7.4-2.8 2.6.8 3.7-3.3-1.9-3.3 1.9.8-3.7-2.8-2.6 3.7-.4z'/%3E%3C/svg%3E\")", size: '60px 60px' },
+  bunga: { label: 'Bunga', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cg transform='translate(16 16)'%3E%3Ccircle r='3'/%3E%3Ccircle cy='-6' r='3.4'/%3E%3Ccircle cy='6' r='3.4'/%3E%3Ccircle cx='-6' r='3.4'/%3E%3Ccircle cx='6' r='3.4'/%3E%3C/g%3E%3Ccircle cx='48' cy='48' r='2.4'/%3E%3C/svg%3E\")", size: '64px 64px' },
+  kamera: { label: 'Kamera', url: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72'%3E%3Cpath d='M10 16h5l2-3h8l2 3h5v14H10z' fill='none' stroke='black' stroke-width='1.6'/%3E%3Ccircle cx='21' cy='23' r='4' fill='none' stroke='black' stroke-width='1.6'/%3E%3Ccircle cx='54' cy='54' r='2'/%3E%3C/svg%3E\")", size: '72px 72px' },
+};
+function curTheme() { return Object.assign({}, THEME_PRESETS.krem, ev.theme || {}); }
+function renderTheme() {
+  const t = curTheme();
+  $('#themePresets').innerHTML = Object.entries(THEME_PRESETS).map(([k, p]) =>
+    `<button type="button" class="ghost" data-preset="${k}" style="gap:8px"><span style="width:16px;height:16px;border-radius:50%;background:${p.paper};box-shadow:inset 0 0 0 5px ${p.btn},0 0 0 1px #0003"></span>${p.label}</button>`).join('');
+  $$('#themePresets [data-preset]').forEach((b) => b.addEventListener('click', () => {
+    const p = Object.assign({}, THEME_PRESETS[b.dataset.preset]); delete p.label;
+    const keep = {}; ['pattern', 'pattern_strength', 'floaters', 'bg_image', 'bg_dim'].forEach((k) => { if (ev.theme && k in ev.theme) keep[k] = ev.theme[k]; });
+    ev.theme = Object.assign(p, keep); setDirty(); renderTheme();
+  }));
+  $('#themeColors').innerHTML = THEME_KEYS.map(([k, l]) => `<label class="color-in">${l}<input type="color" data-t="${k}" value="${t[k]}"></label>`).join('');
+  $$('#themeColors [data-t]').forEach((el) => el.addEventListener('input', () => {
+    ev.theme = Object.assign(curTheme(), { [el.dataset.t]: el.value }); delete ev.theme.label; setDirty(); paintThemePrev();
+  }));
+  $('#themeFont').value = t.font || 'modern';
+  const pat = t.pattern || 'titik';
+  $('#patGrid').innerHTML = Object.entries(BG_PATTERNS).map(([k, p]) =>
+    `<button type="button" class="pat-sw${k === pat ? ' on' : ''}" data-pat="${k}" style="--sw-size:${p.size};--sw-ink:${t.text};background:${t.paper};color:${t.text}"><i></i><span>${p.label}</span></button>`).join('');
+  $$('#patGrid [data-pat]').forEach((b) => b.style.setProperty('--sw-pat', BG_PATTERNS[b.dataset.pat].url || 'none'));
+  $$('#patGrid [data-pat]').forEach((b) => b.addEventListener('click', () => setTheme({ pattern: b.dataset.pat }, true)));
+  $('#patStr').value = t.pattern_strength || 12; $('#patStrVal').textContent = ($('#patStr').value) + '%';
+  $('#patFloat').checked = t.floaters !== false;
+  $('#bgPrev').classList.toggle('hidden', !t.bg_image); $('#btnBgDel').classList.toggle('hidden', !t.bg_image);
+  $('#bgDimWrap').classList.toggle('hidden', !t.bg_image);
+  if (t.bg_image) $('#bgPrev').src = assetUrl(t.bg_image);
+  $('#bgDim').value = t.bg_dim ?? 55; $('#bgDimVal').textContent = $('#bgDim').value + '%';
+  paintThemePrev();
+}
+function setTheme(patch, rerender) {
+  ev.theme = Object.assign(curTheme(), patch); delete ev.theme.label; setDirty();
+  rerender ? renderTheme() : paintThemePrev();
+}
+$('#patStr').addEventListener('input', (e) => { $('#patStrVal').textContent = e.target.value + '%'; setTheme({ pattern_strength: +e.target.value }); });
+$('#patFloat').addEventListener('change', (e) => setTheme({ floaters: e.target.checked }));
+$('#bgDim').addEventListener('input', (e) => { $('#bgDimVal').textContent = e.target.value + '%'; setTheme({ bg_dim: +e.target.value }); });
+$('#bgFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try { setTheme({ bg_image: (await upload(f, 'bg')).file }, true); }
+  catch (err) { alert('Upload gambar gagal: ' + err.message); }
+  e.target.value = '';
+});
+$('#btnBgDel').addEventListener('click', () => setTheme({ bg_image: '' }, true));
+function paintThemePrev() {
+  const t = curTheme(), s = $('#themePrev').style;
+  s.setProperty('--tp-paper', t.paper); s.setProperty('--tp-text', t.text); s.setProperty('--tp-card', t.card);
+  s.setProperty('--tp-btn', t.btn); s.setProperty('--tp-btntext', t.btn_text); s.setProperty('--tp-accent', t.accent);
+  s.setProperty('--tp-printer', t.printer); s.setProperty('--tp-font', THEME_FONT_CSS[t.font] || THEME_FONT_CSS.modern);
+  $('#themePrev .tp-name').textContent = ev.event_name || 'Nama Event';
+  const p = BG_PATTERNS[t.pattern || 'titik'] || BG_PATTERNS.titik;
+  s.setProperty('--tp-pat', p.url || 'none'); s.setProperty('--tp-size', p.size);
+  s.setProperty('--tp-alpha', (t.pattern_strength || 12) / 100 * 1.4);
+  s.backgroundImage = t.bg_image ? `linear-gradient(color-mix(in srgb, ${t.paper} ${t.bg_dim ?? 55}%, transparent), color-mix(in srgb, ${t.paper} ${t.bg_dim ?? 55}%, transparent)), url('${assetUrl(t.bg_image)}')` : '';
+}
+$('#themeFont').addEventListener('change', (e) => {
+  ev.theme = Object.assign(curTheme(), { font: e.target.value }); delete ev.theme.label; setDirty(); paintThemePrev();
+});
+$('#btnThemeReset').addEventListener('click', () => { ev.theme = {}; setDirty(); renderTheme(); });
+
+$('#introStyle').addEventListener('change', (e) => { ev.intro_style = e.target.value; setDirty(); });
+function renderIntro() {
+  $('#introStyle').value = ev.intro_style || 'auto';
+  $('#introPrev').classList.toggle('hidden', !ev.intro_photo);
+  $('#btnIntroDel').classList.toggle('hidden', !ev.intro_photo);
+  if (ev.intro_photo) $('#introPrev').src = assetUrl(ev.intro_photo);
+}
+$('#introFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  try { ev.intro_photo = (await upload(f, 'intro')).file; renderIntro(); setDirty(); }
+  catch (err) { alert('Upload foto gagal: ' + err.message); }
+  e.target.value = '';
+});
+$('#btnIntroDel').addEventListener('click', () => { ev.intro_photo = ''; renderIntro(); setDirty(); });
 function renderLogo() {
   $('#logoPrev').classList.toggle('hidden', !ev.logo);
   $('#btnLogoDel').classList.toggle('hidden', !ev.logo);
@@ -215,7 +319,11 @@ async function upload(file, kind) {
 }
 
 // ---------------------------------------------------------------- daftar template
+const isPhoto = () => !!ev && ev.output === 'photo';
+const TK = () => (isPhoto() ? 'photo_templates' : 'templates');
+const DK = () => (isPhoto() ? 'photo_default_template' : 'default_template');
 function allTemplates() {
+  if (isPhoto()) return META.photoTemplates.map((t) => ({ id: t.id, name: t.name, kind: 'foto' }));
   return [
     ...META.builtins.map((t) => ({ id: t.id, name: t.name, kind: 'bawaan' })),
     ...ev.custom_templates.map((t) => ({ id: 'c:' + t.id, name: t.name, kind: t.kind === 'overlay' ? 'frame' : 'builder', spec: t })),
@@ -223,7 +331,8 @@ function allTemplates() {
 }
 function enabledIds() {
   const all = allTemplates().map((t) => t.id);
-  return (ev.templates && ev.templates.length) ? ev.templates.filter((i) => all.includes(i)) : all;
+  const cur = ev[TK()];
+  return (cur && cur.length) ? cur.filter((i) => all.includes(i)) : all;
 }
 function renderTemplateList() {
   const all = allTemplates();
@@ -238,7 +347,7 @@ function renderTemplateList() {
     row.innerHTML = `<input type="checkbox" ${on ? 'checked' : ''} aria-label="Tampilkan ${esc(t.name)}">
       <div class="name"><b>${esc(t.name)}</b><span class="tag">${t.kind.toUpperCase()}</span></div>
       <div class="row">
-        <button class="ghost" data-act="default" title="Jadikan terpilih otomatis">${ev.default_template === t.id ? '★' : '☆'}</button>
+        <button class="ghost" data-act="default" title="Jadikan terpilih otomatis">${ev[DK()] === t.id ? '★' : '☆'}</button>
         ${t.spec ? '<button class="ghost" data-act="edit">Edit</button>' : ''}
       </div>
       <div class="arrows row">${on ? '<button data-act="up" aria-label="Naik">↑</button><button data-act="down" aria-label="Turun">↓</button>' : ''}</div>`;
@@ -246,25 +355,55 @@ function renderTemplateList() {
       let list = enabledIds();
       list = e.target.checked ? [...list, t.id] : list.filter((x) => x !== t.id);
       if (!list.length) { e.target.checked = true; return; }
-      ev.templates = list;
-      if (!list.includes(ev.default_template)) ev.default_template = list[0];
+      ev[TK()] = list;
+      if (!list.includes(ev[DK()])) ev[DK()] = list[0];
       setDirty(); renderTemplateList();
     });
     row.querySelector('.name').addEventListener('click', () => { selTpl = t.id; renderTemplateList(); schedulePreview(); });
     row.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
       const act = b.dataset.act;
-      if (act === 'default') { ev.default_template = t.id; if (!en.includes(t.id)) ev.templates = [...en, t.id]; }
+      if (act === 'default') { ev[DK()] = t.id; if (!en.includes(t.id)) ev[TK()] = [...en, t.id]; }
       if (act === 'edit') { openSpec(t.spec.id); return; }
       if (act === 'up' || act === 'down') {
         const list = enabledIds(); const i = list.indexOf(t.id); const j = act === 'up' ? i - 1 : i + 1;
         if (j < 0 || j >= list.length) return;
-        [list[i], list[j]] = [list[j], list[i]]; ev.templates = list;
+        [list[i], list[j]] = [list[j], list[i]]; ev[TK()] = list;
       }
       setDirty(); renderTemplateList();
     }));
     box.appendChild(row);
   });
 }
+
+// ---------------------------------------------------------------- jenis cetak (thermal / foto 4R)
+const FRAME_LAYOUTS = [['solo', 'Solo · 1200×1800'], ['duo', 'Duo · 1200×1800'], ['strip', 'Strip · 600×1800'], ['grid', 'Grid · 1200×1800']];
+function renderOutput() {
+  const photo = isPhoto();
+  document.body.classList.toggle('ev-photo', photo);
+  $$('#outPick [data-out]').forEach((b) => b.classList.toggle('on', b.dataset.out === (photo ? 'photo' : 'thermal')));
+  $('#photoFrames').innerHTML = FRAME_LAYOUTS.map(([l, label]) => {
+    const f = ev.photo_frames[l];
+    return `<div class="frame-slot"><b>${label}</b>${f ? `<img src="${assetUrl(f)}" alt="">` : '<div class="empty">belum ada</div>'}
+      <div class="row"><label class="ghost" style="cursor:pointer">Upload<input type="file" accept="image/png" hidden data-frame="${l}"></label>
+      ${f ? `<button class="ghost" type="button" data-unframe="${l}">Hapus</button>` : ''}</div></div>`;
+  }).join('');
+  $$('#photoFrames [data-frame]').forEach((inp) => inp.addEventListener('change', async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const r = await upload(f, 'photoframe');
+      ev.photo_frames[inp.dataset.frame] = r.file; setDirty(); renderOutput(); schedulePreview();
+      if (r.slots) alert(`Bingkai terpasang: ${r.slots} area foto terdeteksi.`);
+    } catch (err) { alert('Upload bingkai gagal: ' + err.message); }
+  }));
+  $$('#photoFrames [data-unframe]').forEach((b) => b.addEventListener('click', () => {
+    delete ev.photo_frames[b.dataset.unframe]; setDirty(); renderOutput(); schedulePreview();
+  }));
+}
+$$('#outPick [data-out]').forEach((b) => b.addEventListener('click', () => {
+  ev.output = b.dataset.out; setDirty();
+  selTpl = (isPhoto() ? ev.photo_default_template : ev.default_template) || 'klasik';
+  showListView(); renderOutput(); renderTemplateList(); schedulePreview();
+}));
 
 // ---------------------------------------------------------------- preset builder
 const blk = (text, font, size, extra = {}) => Object.assign({ text, font, size, spacing: 0, upper: false }, extra);
@@ -520,7 +659,9 @@ async function runPreview() {
       layout: pvLayout, caption: $('#pvCaption').value } });
     if (seq !== pvSeq) return;
     $('#pvImg').src = j.image;
-    $('#pvInfo').textContent = `Tinggi struk ± ${(j.height / 8 / 10).toFixed(1)} cm (203 dpi). Foto contoh: sesi terakhir atau ilustrasi.`;
+    $('#pvInfo').textContent = isPhoto()
+      ? 'Kertas foto 4R (10×15 cm, 300 dpi). Layout Strip = 2 strip 5×15 cm kembar, tinggal dipotong.'
+      : `Tinggi struk ± ${(j.height / 8 / 10).toFixed(1)} cm (203 dpi). Foto contoh: sesi terakhir atau ilustrasi.`;
   } catch (e) {
     $('#pvInfo').textContent = 'Preview gagal: ' + e.message;
   }
@@ -649,6 +790,7 @@ async function openSettings() {
   $('#prPaper').value = String(PR.paper_px); $('#prBright').value = PR.brightness;
   prGroups(); prStatus(PR.status);
   renderPaper(await api('/api/studio/paper'));
+  loadPhotoPrinter().catch((e) => { $('#ppMsg').textContent = 'Gagal memuat: ' + e.message; });
   const k = await api('/api/studio/connect');
   $('#kioskQr').src = k.kiosk_qr; $('#kioskUrl').textContent = k.kiosk;
   $('#httpsToggle').checked = k.https_enabled;
@@ -657,6 +799,41 @@ async function openSettings() {
     : 'Tanpa HTTPS, kamera hanya jalan kalau kiosk dibuka di PC server sendiri. Setelah diubah, restart server.';
 }
 $('#btnSettings').addEventListener('click', openSettings);
+
+// ---------------------------------------------------------------- printer foto
+let PP = null;
+function ppNames() {
+  const t = $('#ppType').value, cur = (PP.printer || {}).name || '';
+  const list = (PP.found && PP.found[t]) || [];
+  const opts = [...new Set([...list, ...(cur ? [cur] : [])])];
+  $('#ppName').innerHTML = t === 'file' ? '<option value="">(tidak perlu)</option>'
+    : (opts.length ? opts.map((n) => `<option ${n === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')
+      : '<option value="">(tidak ada printer terdeteksi)</option>');
+  $('#ppName').disabled = t === 'file';
+}
+function ppStatus(s) {
+  $('#ppBadge').textContent = s.ok ? 'SIAP' : 'MASALAH';
+  $('#ppBadge').style.background = s.ok ? '#2F7D3A' : '#C8410F'; $('#ppBadge').style.color = '#fff';
+  $('#ppMsg').textContent = s.message || '';
+}
+async function loadPhotoPrinter() {
+  PP = await api('/api/studio/photo-printer');
+  const c = PP.printer || {};
+  $('#ppType').value = c.type || 'file';
+  $('#ppBorderless').checked = c.borderless !== false;
+  ppNames(); ppStatus(PP.status);
+}
+const ppBody = () => ({ printer: { type: $('#ppType').value, name: $('#ppName').value, borderless: $('#ppBorderless').checked } });
+$('#ppType').addEventListener('change', ppNames);
+$('#btnPpSave').addEventListener('click', async () => {
+  try { const r = await api('/api/studio/photo-printer', { method: 'PUT', json: ppBody() }); ppStatus(r.status); }
+  catch (e) { alert('Gagal simpan: ' + e.message); }
+});
+$('#btnPpTest').addEventListener('click', async () => {
+  $('#ppMsg').textContent = 'Mencetak halaman tes…';
+  try { const r = await api('/api/studio/photo-printer/test', { json: ppBody() }); $('#ppMsg').textContent = 'Terkirim. Salinan: ' + r.saved; }
+  catch (e) { $('#ppMsg').textContent = 'Gagal: ' + e.message; }
+});
 $('#prType').addEventListener('change', prGroups);
 $('#btnDiscover').addEventListener('click', async () => {
   $('#prMsg').textContent = 'Mencari…'; $('#prMsg').className = 'small';
