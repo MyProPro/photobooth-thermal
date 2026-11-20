@@ -68,7 +68,10 @@ async function openEvent(id) {
   selTpl = (ev.output === 'photo' ? ev.photo_default_template : ev.default_template) || 'klasik';
   $('#emptyState').classList.add('hidden');
   $('#settings').classList.add('hidden');
+  $('#licenseView').classList.add('hidden');
   $('#editor').classList.remove('hidden');
+  $('#btnSettings').classList.remove('sel');
+  $('#btnLicenseNav').classList.remove('sel');
   renderInfo();
   renderOutput();
   renderTemplateList();
@@ -816,7 +819,10 @@ async function openSettings() {
   if (dirty && !confirm('Perubahan event belum disimpan. Tetap pindah?')) return;
   setDirty(false); ev = null;
   $('#editor').classList.add('hidden'); $('#emptyState').classList.add('hidden');
+  $('#licenseView').classList.add('hidden');
   $('#settings').classList.remove('hidden');
+  $('#btnSettings').classList.add('sel');
+  $('#btnLicenseNav').classList.remove('sel');
   loadEvents();
   PR = await api('/api/studio/printer');
   const c = PR.printer || {};
@@ -841,6 +847,19 @@ async function openSettings() {
     : 'Tanpa HTTPS, kamera hanya jalan kalau kiosk dibuka di PC server sendiri. Setelah diubah, restart server.';
 }
 $('#btnSettings').addEventListener('click', openSettings);
+
+async function openLicense() {
+  if (dirty && !confirm('Perubahan event belum disimpan. Tetap pindah?')) return;
+  setDirty(false); ev = null;
+  $('#editor').classList.add('hidden'); $('#emptyState').classList.add('hidden');
+  $('#settings').classList.add('hidden');
+  $('#licenseView').classList.remove('hidden');
+  $('#btnSettings').classList.remove('sel');
+  $('#btnLicenseNav').classList.add('sel');
+  loadEvents();
+  loadLicense();
+}
+$('#btnLicenseNav').addEventListener('click', openLicense);
 
 // ---------------------------------------------------------------- kamera
 async function loadCamera() {
@@ -1089,7 +1108,7 @@ function markOutputLicense() {
   const liv = document.querySelector('[data-f="living_photo"]');
   if (liv) liv.closest('label').classList.toggle('nolic-f', LIC.ok && !(LIC.feat || []).includes('living'));
 }
-$('#licPill').addEventListener('click', () => openSettings().then(() => $('#licCard').scrollIntoView({ behavior: 'smooth' })));
+$('#licPill').addEventListener('click', openLicense);
 $('#btnLicCopy').addEventListener('click', () => {
   const t = $('#licDevice').textContent;
   (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(
