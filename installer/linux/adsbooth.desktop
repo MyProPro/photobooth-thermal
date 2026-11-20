@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=AdsBooth Kiosk
+Comment=Buka layar kiosk adsbooth
+Exec=adsbooth
+Icon=adsbooth
+Categories=Graphics;Photography;
+Terminal=false

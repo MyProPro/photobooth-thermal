@@ -6,8 +6,10 @@ import shutil
 import time
 import uuid
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-EVENTS_DIR = os.path.join(BASE, "events")
+import paths as P
+
+BASE = P.BASE
+EVENTS_DIR = P.EVENTS          # di folder data (tidak tertimpa saat update)
 ACTIVE_FILE = os.path.join(EVENTS_DIR, "active.txt")
 os.makedirs(EVENTS_DIR, exist_ok=True)
 
@@ -32,7 +34,10 @@ DEFAULT = {
     "custom_templates": [],    # [{id, name, kind: builder|overlay, ...}]
     "social": {"username": "", "display": "{event}", "website": "", "bio": "{date_long}"},  # template Profil Sosmed
     "qr_download": True,       # QR unduh foto digital (tamu harus satu Wi-Fi dengan server)
-    "features": {"guestbook": False, "lucky_draw": False, "pose_challenge": False, "host_copy": False},
+    "features": {"guestbook": False, "lucky_draw": False, "pose_challenge": False, "host_copy": False,
+                 "living_photo": False},
+    "living_url": "",          # alamat halaman Living Photo (kosong = bawaan produk / config)
+    "print_lang": "id",        # bahasa teks yang tercetak: id | en
     "cert_titles": [],         # kosong = daftar gelar bawaan (templates.GELAR)
     "boarding": {"from_code": "SNI", "from": "Sini", "to_code": "BHG", "to": "Bahagia"},
 }
@@ -58,11 +63,22 @@ def load(eid):
     out = json.loads(json.dumps(DEFAULT))
     out.update(data)
     out["id"] = eid
-    return out
+    return normalize(out)
+
+
+def normalize(ev):
+    """Bersihkan data lama: layout yang sudah dihapus (mis. 'feed'), nilai tak dikenal."""
+    lay = [x for x in (ev.get("layouts") or []) if x in ALL_LAYOUTS]
+    ev["layouts"] = list(dict.fromkeys(lay)) or list(ALL_LAYOUTS)
+    if ev.get("default_layout") not in ev["layouts"]:
+        ev["default_layout"] = "strip" if "strip" in ev["layouts"] else ev["layouts"][0]
+    if ev.get("print_lang") not in ("id", "en"):
+        ev["print_lang"] = "id"
+    return ev
 
 
 def save(eid, data):
-    data = dict(data)
+    data = normalize(dict(data))
     data.pop("id", None)
     data["updated"] = int(time.time())
     os.makedirs(path(eid), exist_ok=True)

@@ -8,8 +8,10 @@ import os
 import sqlite3
 import threading
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE, "output", "photobooth.db")
+import paths as P
+
+BASE = P.BASE
+DB_PATH = os.path.join(P.OUT, "photobooth.db")
 _lock = threading.Lock()
 
 SCHEMA = """

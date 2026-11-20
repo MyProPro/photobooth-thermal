@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Template Studio — Photobooth</title>
+<title>AdsBooth Studio</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
 <style>
 @font-face{font-family:'PB Playfair';src:url('/fonts/PlayfairDisplay.ttf');font-weight:400 900}
@@ -44,6 +44,12 @@ label{display:block}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
 .grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .card{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:16px}
+.auth{position:fixed;inset:0;z-index:100;background:var(--bg,#F2EFE8);display:flex;align-items:center;justify-content:center}
+.auth.hidden{display:none}
+.auth-card{width:min(92vw,380px);background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:28px;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.08)}
+.auth-title{font:700 24px 'Space Grotesk',sans-serif}
+.auth-card input{font:600 22px Inter,sans-serif;letter-spacing:.3em;text-align:center;padding:12px;border:1.5px solid var(--line);border-radius:12px}
+.auth-card button{justify-content:center;padding:12px;font-size:16px}
 .field{display:flex;flex-direction:column;gap:5px}
 .field > span{font-size:13px;font-weight:600}
 .hint{font-size:12px;color:var(--muted)}
@@ -68,6 +74,14 @@ label{display:block}
 .frame-slot{border:1.5px dashed var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px;align-items:center;text-align:center;background:#FAF8F3}
 .frame-slot img{max-width:100%;max-height:180px;background:repeating-conic-gradient(#ddd 0 25%,#fff 0 50%) 0 0/16px 16px}
 .warn{color:var(--accent);font-weight:600}
+.lic-pill{border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;border:1.5px solid var(--accent);color:var(--accent);background:#fff8f3}
+.lic-pill.ok{border-color:var(--ok);color:var(--ok);background:#f2f8f2}
+.lic-info{margin-top:10px;padding:12px 14px;border-radius:10px;background:#f7f5f0;line-height:1.7;font-size:14px}
+.lic-info .st{display:inline-block;font-weight:700;border-radius:6px;padding:1px 8px;color:#fff;background:var(--accent);margin-right:6px}
+.lic-info .st.ok{background:var(--ok)}
+.lic-dev{margin-top:12px}.lic-dev .row{gap:10px;margin-top:4px}.lic-dev b{font-size:18px}
+.nolic-f{opacity:.55}.nolic-f b::after{content:" · tidak ada di lisensi";font-size:12px;color:var(--accent)}
+.out-pick button.nolic{opacity:.55}.out-pick button.nolic b::after{content:" · tidak ada di lisensi";font-size:12px;color:var(--accent)}
 .okc{color:var(--ok);font-weight:600}
 .savebar{position:fixed;right:24px;bottom:20px;display:flex;gap:10px;align-items:center;background:#fff;border:1.5px solid var(--ink);border-radius:14px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:10}
 .empty{padding:60px 20px;text-align:center;color:var(--muted)}
@@ -110,8 +124,9 @@ body.ev-photo .thermal-only{display:none!important}
 <body>
 <header class="top">
   <div class="left">
-    <h1 style="font-size:22px">Template Studio</h1>
+    <h1 style="font-size:22px">AdsBooth Studio</h1>
     <span class="badge" id="activeBadge"><span class="dot"></span><span id="activeText">-</span></span>
+    <button type="button" class="lic-pill hidden" id="licPill"></button>
   </div>
   <div class="row">
     <a class="btn" href="/slideshow" target="_blank" rel="noopener">Slideshow TV ↗</a>
@@ -196,6 +211,30 @@ body.ev-photo .thermal-only{display:none!important}
           </div>
 
           <div class="card" style="margin-top:18px">
+            <b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Kamera</b>
+            <p class="hint">Untuk webcam eksternal (mis. EMEET S600): isi sebagian nama kameranya, kiosk otomatis memakai kamera itu. Kosongkan untuk kamera bawaan.</p>
+            <div class="grid2">
+              <label class="field"><span>Nama kamera (sebagian, mis. EMEET)</span><input type="text" id="camLabel" placeholder="EMEET"></label>
+              <label class="field"><span>Resolusi</span><select id="camRes">
+                <option value="720">720p (ringan, Raspberry Pi / tablet lama)</option>
+                <option value="1080">1080p (disarankan)</option>
+                <option value="4k">4K (paling tajam, PC/mini PC + USB 3)</option>
+                <option value="1080+4k">1080p preview + foto 4K (ringan &amp; tajam)</option></select></label>
+              <label class="field"><span>Tampilkan hasil foto setelah jepret</span><select id="camReview">
+                <option value="0">Tidak</option><option value="500">0,5 detik</option><option value="1000">1 detik</option>
+                <option value="1500">1,5 detik</option><option value="2000">2 detik</option></select></label>
+              <label class="field" id="camHiresWrap"><span>Batas waktu pindah ke 4K <span class="hint">(lewat = pakai 1080p)</span></span><select id="camHiresTimeout">
+                <option value="1000">1 detik</option><option value="1500">1,5 detik</option><option value="2000">2 detik</option><option value="3000">3 detik</option></select></label>
+              <label class="field"><span>Kamera bawaan tablet (kalau nama kosong)</span><select id="camFacing">
+                <option value="user">Depan</option><option value="environment">Belakang</option></select></label>
+              <label class="check" style="margin-top:26px"><input type="checkbox" id="camMirror"> Mirror (seperti cermin)</label>
+            </div>
+            <div class="row" style="margin-top:12px"><button id="btnCamDetect" type="button">Deteksi kamera di perangkat ini</button><button class="primary" id="btnCamSave" type="button">Simpan kamera</button></div>
+            <div class="row" id="camList" style="margin-top:10px;gap:8px;flex-wrap:wrap"></div>
+            <p class="small" id="camMsg"></p>
+          </div>
+
+          <div class="card" style="margin-top:18px">
             <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Printer foto (mode 4R berwarna)</b><span class="badge" id="ppBadge">-</span></div>
             <p class="hint">Dipakai event yang jenis cetaknya "Foto 4R berwarna". Atur ukuran kertas 4x6 / 10x15 cm (dan borderless kalau ada) di pengaturan driver printernya.</p>
             <div class="grid2">
@@ -220,6 +259,41 @@ body.ev-photo .thermal-only{display:none!important}
               <button class="accent" id="btnPaperReset" style="margin-top:20px">Ganti roll baru (reset)</button>
             </div>
             <p class="hint">Perkiraan dari panjang struk yang dicetak. Kiosk menampilkan "KERTAS HAMPIR HABIS" saat sisa ≤ 3 m.</p>
+          </div>
+
+          <div class="card" style="margin-top:18px" id="licCard">
+            <b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Lisensi</b>
+            <div id="licInfo" class="lic-info">Memuat…</div>
+            <div class="lic-dev">
+              <span class="hint">ID perangkat (kirim ke penjual untuk aktivasi)</span>
+              <div class="row"><b class="mono" id="licDevice">-</b><button type="button" class="ghost" id="btnLicCopy">Salin</button></div>
+            </div>
+            <label class="field" style="margin-top:10px"><span>Kode lisensi</span>
+              <textarea id="licToken" rows="3" spellcheck="false" placeholder="AB1.xxxxx.xxxxx" style="font-family:'JetBrains Mono',monospace;font-size:12px"></textarea></label>
+            <div class="row" style="margin-top:10px">
+              <button class="primary" type="button" id="btnLicSave">Aktifkan</button>
+              <label class="btn ghost" style="cursor:pointer">Buka file .lic<input type="file" id="licFile" accept=".lic,.txt" hidden></label>
+              <button class="danger" type="button" id="btnLicRemove">Hapus lisensi</button>
+            </div>
+            <p class="small" id="licMsg"></p>
+          </div>
+
+          <div class="card" style="margin-top:18px">
+            <b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Keamanan Studio</b>
+            <p class="hint">PIN dibutuhkan untuk membuka Studio. Simpan baik-baik; kalau lupa, reset dari perangkat ini lewat Command Prompt: <span class="mono">adsbooth --set-pin 1234</span> (versi terinstal) atau <span class="mono">python app.py --set-pin 1234</span>.</p>
+            <div class="grid2">
+              <label class="field"><span>PIN lama</span><input type="password" id="secOld" inputmode="numeric" maxlength="12" autocomplete="off"></label>
+              <label class="field"><span>PIN baru (4-12 angka)</span><input type="password" id="secNew" inputmode="numeric" maxlength="12" autocomplete="off"></label>
+            </div>
+            <div class="row" style="margin-top:10px"><button id="btnSecPin" type="button">Ganti PIN</button><button class="ghost" id="btnLogout" type="button">Keluar dari Studio</button></div>
+            <label class="check" style="margin-top:12px"><input type="checkbox" id="secLocal"> Studio hanya bisa dibuka dari perangkat ini (tablet/HP lain di Wi-Fi tidak bisa membuka Studio)</label>
+            <p class="small" id="secMsg"></p>
+          </div>
+
+          <div class="card" style="margin-top:18px">
+            <b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Tentang</b>
+            <div class="small" id="aboutInfo" style="line-height:1.7;margin-top:8px">-</div>
+            <div class="row" style="margin-top:10px"><a class="btn" id="btnLog" href="/api/studio/log">Unduh log (untuk support)</a></div>
           </div>
 
           <div class="card" style="margin-top:18px">
@@ -277,6 +351,7 @@ body.ev-photo .thermal-only{display:none!important}
           <label class="field"><span>Nama event (di Studio)</span><input type="text" data-k="name"></label>
           <label class="field"><span>Nama yang dicetak di struk</span><input type="text" data-k="event_name"><span class="hint">Dipakai di semua template sebagai {event}.</span></label>
           <label class="field"><span>Teks penutup (footer)</span><input type="text" data-k="footer"></label>
+          <label class="field"><span>Bahasa teks cetak</span><select data-k="print_lang"><option value="id">Bahasa Indonesia</option><option value="en">English</option></select><span class="hint">Teks bawaan di struk/foto (judul template, tanggal, undian, buku tamu). Nama event, footer &amp; caption tetap seperti yang diketik.</span></label>
           <div class="field"><span>Logo</span>
             <div class="row"><img class="logo-prev hidden" id="logoPrev" alt="Logo event"><label class="btn">Upload logo<input type="file" id="logoFile" class="hidden" accept="image/png,image/jpeg"></label><button class="ghost hidden" id="btnLogoDel">Hapus logo</button></div>
             <span class="hint">PNG transparan paling bagus. Logo gelap di atas transparan/putih.</span>
@@ -342,7 +417,10 @@ body.ev-photo .thermal-only{display:none!important}
           <label class="check card"><input type="checkbox" data-f="lucky_draw"> <span><b>Nomor undian</b><br><span class="hint">Setiap struk dapat nomor undian. Undi di tab Buku tamu &amp; undian.</span></span></label>
           <label class="check card"><input type="checkbox" data-f="pose_challenge"> <span><b>Tantangan pose</b><br><span class="hint">Pose acak muncul sebelum tiap jepretan, ikut tercetak.</span></span></label>
           <label class="check card"><input type="checkbox" data-f="host_copy"> <span><b>Cetak arsip tuan rumah</b><br><span class="hint">Otomatis cetak 1 salinan tambahan berlabel ARSIP.</span></span></label>
+          <label class="check card"><input type="checkbox" data-f="living_photo"> <span><b>QR video (Living Photo)</b><br><span class="hint">QR unik di bawah struk. Tamu scan, pilih video dari HP-nya sekali, lalu video diputar tiap kali di-scan. Video tetap di HP tamu.</span></span></label>
         </div>
+        <label class="field" style="margin-top:10px"><span>Alamat halaman Living Photo <span class="hint">(kosong = alamat bawaan)</span></span>
+          <input type="text" data-k="living_url" id="livingUrl" placeholder="alamat bawaan"></label>
 
         <div class="sec thermal-only">Teks template Sertifikat &amp; Boarding Pass</div>
         <div class="grid2 thermal-only">
@@ -368,7 +446,7 @@ body.ev-photo .thermal-only{display:none!important}
         <div class="row" id="layoutChecks"></div>
         <label class="field" style="max-width:260px;margin-top:12px"><span>Layout terpilih otomatis</span><select data-k="default_layout" id="defaultLayout"></select></label>
 
-        <div class="sec">Template Sosial Media (Instagram, Threads, X, Facebook, YouTube)</div>
+        <div class="sec">Template Profil Sosial (Social Profile, Text Feed, Micro Profile, Social Page, Video Channel)</div>
         <p class="hint" style="margin-top:-6px">Dipakai bersama oleh kelima template sosial media. Angka followers, like, views, subscriber diacak setiap cetak. Avatar = logo event (atau foto pertama kalau tidak ada logo).</p>
         <div class="grid2">
           <label class="field"><span>Username</span><input type="text" data-s="username" placeholder="mis. themulia.bali"></label>
@@ -460,5 +538,16 @@ body.ev-photo .thermal-only{display:none!important}
 
 <script src="/static/webusb.js"></script>
 <script src="/static/studio.js"></script>
+<!-- layar PIN Studio -->
+<div class="auth hidden" id="auth">
+  <form class="auth-card" id="authForm" autocomplete="off">
+    <b class="auth-title" id="authTitle">Masuk AdsBooth Studio</b>
+    <p class="hint" id="authHint">Masukkan PIN Studio.</p>
+    <input type="password" id="authPin" inputmode="numeric" maxlength="12" placeholder="PIN" autofocus>
+    <input type="password" id="authPin2" inputmode="numeric" maxlength="12" placeholder="Ulangi PIN" class="hidden">
+    <button class="primary" type="submit" id="authBtn">Masuk</button>
+    <p class="small warn" id="authMsg"></p>
+  </form>
+</div>
 </body>
 </html>

@@ -1,4 +1,4 @@
-"""Thermal Photobooth 80mm — server Flask.
+"""AdsBooth (struk thermal 80mm & foto 4R) — server Flask.
 
 Jalankan:  python app.py
   Kiosk  : http://localhost:5000
@@ -6,37 +6,71 @@ Jalankan:  python app.py
 """
 import base64
 import functools
+import hashlib
+import hmac
 import io
 import json
+import logging
+import logging.handlers
 import os
+import secrets
+import sys
+import random
 import socket
 import threading
 import time
 import uuid
 
-from flask import Flask, abort, jsonify, request, send_file, send_from_directory
+from datetime import timedelta
+
+from flask import Flask, abort, jsonify, request, send_file, send_from_directory, session
 from PIL import Image
 
+import paths as P
 import db as DB
 import events as EV
+import licensing as LIC
 import photo as PH
 import templates as TPL
 from imaging import LAYOUTS, append_extras, compose_receipt, host_copy, stylize_sample
 from printer import TYPES as PRINTER_TYPES, PaperCounter, ThermalPrinter, discover as discover_printers
 from printer import PHOTO_TYPES, PhotoPrinter, list_photo_printers
 from samples import _illustration, sample_photos
+from version import APP_NAME, LIVING_BASE_URL, VERSION
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(BASE, "output")
+BASE = P.BASE          # folder program (kode, static, fonts) - boleh ditimpa saat update
+DATA = P.DATA          # folder data (config, event, foto, database, log) - tidak tersentuh update
+OUT = P.OUT
 os.makedirs(os.path.join(OUT, "sessions"), exist_ok=True)
 
 
+def setup_logging():
+    """Log ke layar + file berputar di <data>/logs/photobooth.log (maks 5 x 1 MB)."""
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    root = logging.getLogger()
+    if any(isinstance(h, logging.handlers.RotatingFileHandler) for h in root.handlers):
+        return
+    root.setLevel(logging.INFO)
+    fh = logging.handlers.RotatingFileHandler(os.path.join(P.LOGS, "photobooth.log"), maxBytes=1_000_000,
+                                              backupCount=5, encoding="utf-8")
+    fh.setFormatter(fmt)
+    root.addHandler(fh)
+    sh = logging.StreamHandler()
+    sh.setFormatter(fmt)
+    root.addHandler(sh)
+    logging.getLogger("waitress.queue").setLevel(logging.ERROR)
+
+
+setup_logging()
+log = logging.getLogger("photobooth")
+
+
 def load_config():
-    path = os.path.join(BASE, "config.json")
-    if not os.path.exists(path):  # perangkat baru (hasil git clone): buat dari contoh
+    path = P.CONFIG
+    if not os.path.exists(path):  # perangkat baru / instalasi baru: buat dari contoh
         import shutil
         shutil.copyfile(os.path.join(BASE, "config.example.json"), path)
-        print("config.json dibuat dari config.example.json")
+        log.info("config.json dibuat dari config.example.json di %s", DATA)
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
@@ -71,8 +105,28 @@ def db_safe(fn, *a):
     except Exception as e:  # noqa: BLE001
         app.logger.warning("SQLite: %s", e)
 
-app = Flask(__name__, static_folder="static", static_url_path="/static")
-app.config["MAX_CONTENT_LENGTH"] = 40 * 1024 * 1024
+app = Flask(__name__, static_folder=os.path.join(BASE, "static"), static_url_path="/static")
+app.config["MAX_CONTENT_LENGTH"] = 60 * 1024 * 1024
+
+
+def _secret_key():
+    """Kunci sesi Studio, dibuat sekali per perangkat (disimpan di folder data)."""
+    try:
+        with open(P.SECRET, "rb") as f:
+            k = f.read()
+        if len(k) >= 32:
+            return k
+    except OSError:
+        pass
+    k = secrets.token_bytes(48)
+    with open(P.SECRET, "wb") as f:
+        f.write(k)
+    return k
+
+
+app.secret_key = _secret_key()
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+                  SESSION_COOKIE_NAME="pb_studio", PERMANENT_SESSION_LIFETIME=timedelta(hours=12))
 
 
 # ---------- helper ----------
@@ -112,6 +166,42 @@ def to_data_url(img, fmt="PNG"):
     return f"data:image/{fmt.lower()};base64," + base64.b64encode(buf.getvalue()).decode()
 
 
+_LUCKY_LOCK = threading.Lock()
+_LUCKY_RES = {}   # nomor undian yang sedang ditampilkan di preview: {"eid:nomor": waktu}
+
+
+def pick_lucky(ev, prefer=None, reserve=True):
+    """Nomor undian ACAK 4 digit (0001-9999), unik per event.
+    prefer = nomor yang sudah tampil di preview tamu (dipakai lagi kalau masih kosong)."""
+    eid = ev.get("id", "")
+    with _LUCKY_LOCK:
+        now = time.time()
+        for k in [k for k, t in _LUCKY_RES.items() if now - t > 1800]:
+            del _LUCKY_RES[k]
+        used = {m.get("lucky") for m in sessions(eid) if m.get("lucky")}
+        held = {k.split(":", 1)[1] for k in _LUCKY_RES if k.startswith(eid + ":")}
+        p = str(prefer or "")
+        if p.isdigit() and len(p) == 4 and p != "0000" and p not in used:
+            val = p
+        else:
+            free = [f"{n:04d}" for n in range(1, 10000) if f"{n:04d}" not in used and f"{n:04d}" not in held]
+            val = random.choice(free) if free else f"{random.randint(1, 9999):04d}"
+        if reserve:
+            _LUCKY_RES[f"{eid}:{val}"] = now
+        else:
+            _LUCKY_RES.pop(f"{eid}:{val}", None)
+        return val
+
+
+def peek_number():
+    """Nomor yang AKAN didapat cetakan berikutnya (untuk preview, tidak menaikkan counter)."""
+    path = os.path.join(OUT, "counter.txt")
+    try:
+        return int(open(path).read().strip() or 0) + 1
+    except (OSError, ValueError):
+        return 1
+
+
 def next_number():
     path = os.path.join(OUT, "counter.txt")
     with _counter_lock:
@@ -140,7 +230,7 @@ def current_event():
                "templates": CFG.get("templates") or [],
                "social": CFG.get("social") or EV.DEFAULT["social"],
                "default_template": CFG.get("default_template", "klasik")})
-    return ev, BASE
+    return ev, DATA
 
 
 def template_list(ev, layout=None):
@@ -162,8 +252,32 @@ def template_list(ev, layout=None):
     return out
 
 
-def render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_override=None, ph_cache=None,
-                   lucky=None):
+def print_lang(ev):
+    """Bahasa teks yang tercetak (per event): 'id' atau 'en'."""
+    return "en" if str(ev.get("print_lang") or "").lower() == "en" else "id"
+
+
+def render_receipt(*a, **kw):
+    """Render hasil cetak; versi coba (belum berlisensi) diberi tanda DEMO."""
+    img = _render_receipt(*a, **kw)
+    return LIC.watermark(img) if LIC.status()["demo"] else img
+
+
+def license_block(ev):
+    """None kalau boleh cetak; kalau tidak, pesan alasannya (lisensi habis / paket tidak mencakup mode ini)."""
+    s = LIC.status()
+    if not s["ok"]:
+        return s.get("message") or "Perangkat ini belum berlisensi."
+    need = "photo" if is_photo(ev) else "thermal"
+    if need not in s["feat"]:
+        return ("Paket lisensi tidak mencakup mode foto 4R." if need == "photo"
+                else "Paket lisensi tidak mencakup mode struk thermal.")
+    return None
+
+
+def _render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_override=None, ph_cache=None,
+                    lucky=None):
+    TPL.set_lang(print_lang(ev))   # dipakai template, blok tambahan & arsip di thread ini
     event_name = p.get("event_name") if p.get("event_name") is not None and str(p.get("event_name")).strip() else (ev.get("event_name") or "NAMA EVENT")
     footer = p.get("footer") if p.get("footer") is not None else ev.get("footer", "TERIMA KASIH")
     brightness = float(p.get("brightness") if p.get("brightness") is not None else CFG.get("brightness", 1.0))
@@ -219,29 +333,45 @@ def cert_titles(ev):
 
 def template_opts(ev, p):
     b = ev.get("boarding") or {}
-    return {"cert_titles": cert_titles(ev), "cert_title": (p.get("certTitle") or "")[:80],
+    return {"lang": print_lang(ev), "cert_titles": cert_titles(ev), "cert_title": (p.get("certTitle") or "")[:80],
             "board_from_code": b.get("from_code"), "board_from": b.get("from"),
             "board_to_code": b.get("to_code"), "board_to": b.get("to"),
             "newspaper_name": (p.get("newspaper_name") or p.get("koran_title") or "")[:50]}
 
 
 POSES = [
-    "Pura-pura kaget", "Gaya boyband / girlband", "Semua lihat ke kiri", "Muka paling serius",
-    "Peluk teman di sebelah", "Pose superhero", "Ketawa paling lebar", "Pura-pura jadi patung",
-    "Tunjuk kamera bareng-bareng", "Gaya model majalah", "Muka ngantuk", "Pose love dengan tangan",
-    "Lompat (kalau berani)", "Pura-pura bisik-bisik", "Gaya foto KTP", "Salam metal",
-    "Pose dadah ke kamera", "Pura-pura nangis bahagia",
+    "Act surprised", "Boyband / girlband pose", "Everyone look left", "Most serious face",
+    "Hug the person next to you", "Superhero pose", "Biggest laugh", "Freeze like a statue",
+    "Everyone point at the camera", "Magazine model pose", "Sleepy face", "Make a heart with your hands",
+    "Jump (if you dare)", "Pretend to whisper", "Passport photo face", "Rock on!",
+    "Wave at the camera", "Happy tears",
 ]
 
 
 def features(ev):
     f = ev.get("features") or {}
-    return {k: bool(f.get(k)) for k in ("guestbook", "lucky_draw", "pose_challenge", "host_copy")}
+    out = {k: bool(f.get(k)) for k in ("guestbook", "lucky_draw", "pose_challenge", "host_copy", "living_photo")}
+    if out["living_photo"] and "living" not in LIC.status()["feat"]:
+        out["living_photo"] = False          # Living Photo = fitur paket Lengkap / add-on
+    return out
 
 
-def extras_from_payload(p, ev, lucky=None):
+LIVING_DEFAULT = LIVING_BASE_URL     # bawaan produk (version.py)
+
+
+def living_url(ev, code):
+    """Link QR Living Photo: halaman statis (GitHub Pages) + kode unik cetakan di bagian #."""
+    base = (ev.get("living_url") or CFG.get("living_base_url") or LIVING_DEFAULT).strip()
+    if not base.endswith("/") and "#" not in base:
+        base += "/"
+    return f"{base}#{code}"
+
+
+def extras_from_payload(p, ev, lucky=None, code=None):
     ft = features(ev)
     ex = {}
+    if ft["living_photo"]:
+        ex["living"] = living_url(ev, code or "preview")
     if ft["pose_challenge"]:
         ex["poses"] = [str(x)[:60] for x in (p.get("poses") or []) if x]
     if ft["lucky_draw"]:
@@ -257,11 +387,13 @@ def extras_from_payload(p, ev, lucky=None):
     return ex
 
 
-def receipt_from_payload(p, qr_url=None, number=None, lucky=None, with_extras=True):
+def receipt_from_payload(p, qr_url=None, number=None, lucky=None, with_extras=True, code=None):
     ev, asset_dir = current_event()
     photos = [decode_image(x) for x in p.get("photos", [])]
+    if is_photo(ev) and features(ev)["living_photo"]:
+        qr_url = living_url(ev, code or "preview")     # foto 4R: QR video di pojok kanan bawah
     img = render_receipt(photos, p, ev, asset_dir, qr_url, number, lucky=lucky)
-    ex = extras_from_payload(p, ev, lucky) if with_extras else {}
+    ex = extras_from_payload(p, ev, lucky, code) if with_extras else {}
     if ex and not is_photo(ev):   # mode foto: buku tamu tetap tersimpan, tidak ikut dicetak
         img = append_extras(img, ex, int(CFG.get("paper_px", 576)))
     return img, photos, ex
@@ -293,7 +425,8 @@ def api_config():
     layouts = [l for l in ev.get("layouts") or EV.ALL_LAYOUTS if l in LAYOUTS] or ["strip"]
     return jsonify({
         "eventId": ev.get("id", ""),
-        "eventVersion": f"{ev.get('id', '')}:{ev.get('updated', 0)}",
+        "eventVersion": f"{ev.get('id', '')}:{ev.get('updated', 0)}:{LIC.status()['stamp']}",
+        "license": dict(LIC.public_summary(), blocked=license_block(ev)),
         "eventName": ev.get("event_name") or "NAMA EVENT",
         "footer": ev.get("footer", "TERIMA KASIH"),
         "social": ev.get("social") or {},
@@ -308,10 +441,15 @@ def api_config():
         "qr": qr_on(ev),
         "dummyCamera": bool(CFG.get("dummy_camera", False)),
         "cameraFacing": CFG.get("camera_facing", "user"),
+        "cameraLabel": CFG.get("camera_label", ""),
+        "cameraRes": CFG.get("camera_resolution", "1080"),
+        "shotReviewMs": int(CFG.get("shot_review_ms", 1000)),
+        "hiresTimeoutMs": int(CFG.get("hires_timeout_ms", 1500)),
         "features": features(ev),
         "printerMode": printer_for(ev).mode,
         "output": "photo" if is_photo(ev) else "thermal",
         "introStyle": ev.get("intro_style") or "auto",
+        "version": VERSION,
         "styles": ([{"id": s[0], "name": s[1], "desc": s[2]} for s in PH.STYLES] if is_photo(ev) else None),
         "renderWorkers": int(CFG.get("render_workers", 3)),
         "certTitles": cert_titles(ev),
@@ -371,7 +509,7 @@ def api_intro():
     logo = ev.get("logo")
     return jsonify({
         "eventName": ev.get("event_name") or "",
-        "logo": f"/api/studio/events/{ev['id']}/asset/{logo}" if (logo and ev.get("id")) else None,
+        "logo": f"/api/event-asset/{logo}" if (logo and ev.get("id")) else None,
         "date": time.strftime("%d.%m.%Y"),
         "photos": [{"color": f"/api/intro/{i}.jpg?v={ev.get('updated', 0)}-{INTRO_STYLE}",
                     "dither": f"/api/intro/{i}.png?v={ev.get('updated', 0)}-{INTRO_STYLE}"} for i in range(n)],
@@ -421,7 +559,7 @@ def ImageOps_fit(img, size):  # noqa: N802
 def api_status():
     ev, _ = current_event()
     st = printer_for(ev).status()
-    st["eventVersion"] = f"{ev.get('id', '')}:{ev.get('updated', 0)}"
+    st["eventVersion"] = f"{ev.get('id', '')}:{ev.get('updated', 0)}:{LIC.status()['stamp']}"
     st["paper"] = paper_info()
     return jsonify(st)
 
@@ -452,8 +590,11 @@ def api_stylize():
 @app.post("/api/preview")
 def api_preview():
     p = request.get_json(force=True)
-    img, _, _ = receipt_from_payload(p, qr_url=preview_qr(), number=None)
-    return jsonify({"image": preview_url(img)})
+    ev, _ = current_event()
+    n = peek_number()
+    lucky = pick_lucky(ev, p.get("lucky")) if features(ev)["lucky_draw"] else None
+    img, _, _ = receipt_from_payload(p, qr_url=preview_qr(), number=n, lucky=lucky)
+    return jsonify({"image": preview_url(img), "lucky": lucky})
 
 
 @app.post("/api/templates")
@@ -507,14 +648,17 @@ def api_templates_render():
 @app.post("/api/print")
 def api_print():
     p = request.get_json(force=True)
+    ev, _ = current_event()
+    blocked = license_block(ev)
+    if blocked:
+        return jsonify({"ok": False, "error": blocked, "license": True}), 403
     sid = uuid.uuid4().hex[:10]
     number = next_number()
-    ev, _ = current_event()
     ft = features(ev)
-    lucky = f"{number:04d}" if ft["lucky_draw"] else None
+    lucky = pick_lucky(ev, p.get("lucky"), reserve=False) if ft["lucky_draw"] else None
     qr = f"{base_url()}/d/{sid}" if qr_on(ev) else None
     try:
-        img, photos, ex = receipt_from_payload(p, qr_url=qr, number=number, lucky=lucky)
+        img, photos, ex = receipt_from_payload(p, qr_url=qr, number=number, lucky=lucky, code=sid)
         folder = os.path.join(OUT, "sessions", sid)
         os.makedirs(folder, exist_ok=True)
         for i, ph in enumerate(photos, 1):
@@ -527,6 +671,7 @@ def api_print():
             gb["signature"].convert("RGBA").save(os.path.join(folder, "ttd.png"))
         meta = {"id": sid, "event": ev.get("id", ""), "number": number, "time": int(time.time()),
                 "template": p.get("template"), "layout": p.get("layout"), "lucky": lucky,
+                "living": ex.get("living"),
                 "poses": ex.get("poses") or [], "caption": p.get("caption", ""),
                 "guestbook": {"name": gb.get("name", ""), "message": gb.get("message", ""),
                               "signature": gb.get("signature") is not None} if gb else None}
@@ -563,6 +708,8 @@ def api_print():
 
 @app.post("/api/reprint/<sid>")
 def api_reprint(sid):
+    if not LIC.status()["ok"]:
+        return jsonify({"ok": False, "error": LIC.status().get("message"), "license": True}), 403
     path = os.path.join(OUT, "sessions", os.path.basename(sid), "struk.png")
     if not os.path.exists(path):
         abort(404)
@@ -578,16 +725,213 @@ def api_reprint(sid):
     return jsonify({"ok": True, "jobs": [base64.b64encode(j).decode() for j in jobs]})
 
 
-# ---------- Template Studio ----------
+# ---------- AdsBooth Studio ----------
+
+# PIN Studio disimpan sebagai hash (PBKDF2), bukan teks biasa.
+def hash_pin(pin):
+    salt = secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac("sha256", str(pin).encode(), salt.encode(), 200_000).hex()
+    return f"pbkdf2${200_000}${salt}${h}"
+
+
+def check_pin(pin):
+    stored = str(CFG.get("studio_pin_hash") or "")
+    try:
+        _, it, salt, h = stored.split("$")
+        got = hashlib.pbkdf2_hmac("sha256", str(pin).encode(), salt.encode(), int(it)).hex()
+        return hmac.compare_digest(got, h)
+    except ValueError:
+        return False
+
+
+def pin_is_set():
+    return bool(CFG.get("studio_pin_hash"))
+
+
+def _migrate_plain_pin():
+    """PIN lama di config.json ("studio_pin": "1234") -> diubah jadi hash."""
+    old = str(CFG.get("studio_pin") or "")
+    if old and not pin_is_set():
+        CFG["studio_pin_hash"] = hash_pin(old)
+    if "studio_pin" in CFG:
+        CFG.pop("studio_pin", None)
+        if old:
+            save_config()
+
+
+def is_local_request():
+    return (request.remote_addr or "") in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
+
+_FAILS = {}          # ip -> [jumlah gagal, terkunci sampai]
+_FAILS_LOCK = threading.Lock()
+
+
+def _locked(ip):
+    with _FAILS_LOCK:
+        n, until = _FAILS.get(ip, (0, 0))
+        return until > time.time()
+
+
+def _register_fail(ip):
+    with _FAILS_LOCK:
+        n, until = _FAILS.get(ip, (0, 0))
+        n += 1
+        _FAILS[ip] = (0, time.time() + 300) if n >= 5 else (n, until)   # 5x salah = kunci 5 menit
+    log.warning("PIN Studio salah dari %s", ip)
+
+
+def studio_allowed():
+    """(boleh, kode_http, pesan)"""
+    if CFG.get("studio_local_only") and not is_local_request():
+        return False, 403, "Studio hanya bisa dibuka dari perangkat ini (pengaturan keamanan)."
+    if not pin_is_set():
+        return False, 403, "Buat PIN Studio dulu."
+    if session.get("studio") and session.get("pin_ver") == CFG.get("studio_pin_hash", "")[-12:]:
+        return True, 200, ""
+    hdr = request.headers.get("X-Studio-Pin", "")        # untuk skrip/otomasi
+    if hdr and not _locked(request.remote_addr) and check_pin(hdr):
+        return True, 200, ""
+    return False, 401, "Masukkan PIN Studio."
+
 
 def studio_auth(fn):
     @functools.wraps(fn)
     def wrap(*a, **kw):
-        pin = str(CFG.get("studio_pin", "") or "")
-        if pin and request.headers.get("X-Studio-Pin", request.args.get("pin", "")) != pin:
-            return jsonify({"ok": False, "error": "PIN salah"}), 401
+        ok, code, msg = studio_allowed()
+        if not ok:
+            return jsonify({"ok": False, "error": msg, "needSetup": not pin_is_set(),
+                            "localOnly": bool(CFG.get("studio_local_only"))}), code
         return fn(*a, **kw)
     return wrap
+
+
+@app.get("/api/studio/session")
+def studio_session():
+    ok, code, msg = studio_allowed()
+    return jsonify({"loggedIn": ok, "needSetup": not pin_is_set(), "local": is_local_request(),
+                    "localOnly": bool(CFG.get("studio_local_only")), "message": msg, "version": VERSION})
+
+
+def _login():
+    session.permanent = True
+    session["studio"] = True
+    session["pin_ver"] = CFG.get("studio_pin_hash", "")[-12:]
+
+
+@app.post("/api/studio/setup-pin")
+def studio_setup_pin():
+    """PIN pertama: hanya dari perangkat yang menjalankan server."""
+    if pin_is_set():
+        return jsonify({"ok": False, "error": "PIN sudah dibuat. Masuk dengan PIN."}), 400
+    if not is_local_request():
+        return jsonify({"ok": False, "error": "PIN pertama hanya bisa dibuat dari perangkat ini (localhost)."}), 403
+    pin = str((request.get_json(force=True) or {}).get("pin", ""))
+    if not (pin.isdigit() and 4 <= len(pin) <= 12):
+        return jsonify({"ok": False, "error": "PIN harus 4-12 angka."}), 400
+    CFG["studio_pin_hash"] = hash_pin(pin)
+    save_config()
+    _login()
+    log.info("PIN Studio dibuat")
+    return jsonify({"ok": True})
+
+
+@app.post("/api/studio/login")
+def studio_login():
+    ip = request.remote_addr or ""
+    if CFG.get("studio_local_only") and not is_local_request():
+        return jsonify({"ok": False, "error": "Studio hanya bisa dibuka dari perangkat ini."}), 403
+    if _locked(ip):
+        return jsonify({"ok": False, "error": "Terlalu banyak PIN salah. Coba lagi 5 menit lagi."}), 429
+    pin = str((request.get_json(force=True) or {}).get("pin", ""))
+    if not pin_is_set() or not check_pin(pin):
+        _register_fail(ip)
+        return jsonify({"ok": False, "error": "PIN salah."}), 401
+    with _FAILS_LOCK:
+        _FAILS.pop(ip, None)
+    _login()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/studio/logout")
+def studio_logout():
+    session.clear()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/studio/security")
+@studio_auth
+def studio_security_get():
+    return jsonify({"localOnly": bool(CFG.get("studio_local_only"))})
+
+
+@app.put("/api/studio/security")
+@studio_auth
+def studio_security_save():
+    p = request.get_json(force=True) or {}
+    if "localOnly" in p:
+        if p["localOnly"] and not is_local_request():
+            return jsonify({"ok": False, "error": "Aktifkan dari perangkat ini supaya Anda tidak terkunci."}), 400
+        CFG["studio_local_only"] = bool(p["localOnly"])
+    if p.get("newPin") is not None:
+        if not check_pin(str(p.get("oldPin", ""))):
+            return jsonify({"ok": False, "error": "PIN lama salah."}), 400
+        pin = str(p["newPin"])
+        if not (pin.isdigit() and 4 <= len(pin) <= 12):
+            return jsonify({"ok": False, "error": "PIN baru harus 4-12 angka."}), 400
+        CFG["studio_pin_hash"] = hash_pin(pin)
+        _login()                                    # sesi lain otomatis keluar (pin_ver berubah)
+        log.info("PIN Studio diganti")
+    save_config()
+    return jsonify({"ok": True, "localOnly": bool(CFG.get("studio_local_only"))})
+
+
+@app.get("/api/studio/about")
+@studio_auth
+def studio_about():
+    import platform
+    return jsonify({"app": APP_NAME, "version": VERSION, "dataDir": DATA, "programDir": BASE, "mode": P.MODE,
+                    "python": platform.python_version(), "os": f"{platform.system()} {platform.release()}",
+                    "server": SERVER_NAME, "livingDefault": CFG.get("living_base_url") or LIVING_DEFAULT})
+
+
+@app.get("/api/studio/license")
+@studio_auth
+def studio_license():
+    s = dict(LIC.status(force=True))
+    ev, _ = current_event()
+    s["blocked"] = license_block(ev)
+    return jsonify(s)
+
+
+@app.post("/api/studio/license")
+@studio_auth
+def studio_license_install():
+    token = (request.get_json(force=True) or {}).get("token", "")
+    try:
+        data = LIC.install(token)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    app.logger.info("lisensi dipasang: %s %s", data.get("lic"), data.get("plan"))
+    return jsonify({"ok": True})
+
+
+@app.delete("/api/studio/license")
+@studio_auth
+def studio_license_remove():
+    LIC.remove()
+    app.logger.info("lisensi dihapus dari perangkat")
+    return jsonify({"ok": True})
+
+
+@app.get("/api/studio/log")
+@studio_auth
+def studio_log():
+    path = os.path.join(P.LOGS, "photobooth.log")
+    if not os.path.exists(path):
+        abort(404)
+    return send_file(path, as_attachment=True, download_name=f"adsbooth-log-{time.strftime('%Y%m%d-%H%M')}.txt",
+                     mimetype="text/plain")
 
 
 def need_event(eid):
@@ -597,6 +941,8 @@ def need_event(eid):
 
 @app.get("/studio")
 def studio_page():
+    if CFG.get("studio_local_only") and not is_local_request():
+        return ("<h2 style='font-family:sans-serif;padding:40px'>Studio hanya bisa dibuka dari perangkat photobooth ini.</h2>", 403)
     return send_from_directory(os.path.join(BASE, "static"), "studio.html")
 
 
@@ -710,7 +1056,20 @@ def studio_upload(eid):
     return jsonify(resp)
 
 
+@app.get("/api/event-asset/<fname>")
+def event_asset_public(fname):
+    """Aset event AKTIF untuk layar kiosk (tanpa PIN). Hanya file yang memang dipakai event (logo dll.)."""
+    ev, asset_dir = current_event()
+    fname = os.path.basename(fname)
+    used = {ev.get("logo"), ev.get("intro_photo"), (ev.get("theme") or {}).get("bg_image")}
+    used |= set((ev.get("photo_frames") or {}).values())
+    if not ev.get("id") or fname not in used:
+        abort(404)
+    return send_from_directory(asset_dir, fname)
+
+
 @app.get("/api/studio/events/<eid>/asset/<fname>")
+@studio_auth
 def studio_asset(eid, fname):
     need_event(eid)
     return send_from_directory(EV.path(eid), os.path.basename(fname))
@@ -727,17 +1086,27 @@ def studio_preview():
     layout = p.get("layout") if p.get("layout") in LAYOUTS else "strip"
     spec = p.get("spec")
     tid = p.get("template") or ("c:" + spec["id"] if spec else "klasik")
+    ft = features(ev)
     if is_photo(ev):
         n = {"solo": 1, "duo": 2, "strip": 3, "grid": 4}[layout]
+        qr = living_url(ev, "preview") if ft["living_photo"] else preview_qr(ev)
         img = render_receipt(sample_photos(9)[:n], {"layout": layout, "template": tid, "showLogo": True,
                                                      "caption": p.get("caption", "Selamat ya!"), "style": "warna"},
-                             ev, EV.path(eid), preview_qr(ev), number=127, lucky="0127" if features(ev)["lucky_draw"] else None)
+                             ev, EV.path(eid), qr, number=127, lucky="0127" if ft["lucky_draw"] else None)
         img.thumbnail((800, 1200))
         return jsonify({"image": to_data_url(img, "JPEG"), "height": img.height})
     img = render_receipt(sample_photos(9), {"layout": layout, "template": tid,
                                             "caption": p.get("caption", "Happy birthday!"),
                                             "showLogo": True, "style": p.get("style", "dither")},
                          ev, EV.path(eid), preview_qr(ev), number=127, spec_override=spec)
+    # fitur yang ikut tercetak di bawah struk (contoh): nomor undian & QR video
+    ex = {}
+    if ft["lucky_draw"]:
+        ex["lucky"] = "0127"
+    if ft["living_photo"]:
+        ex["living"] = living_url(ev, "preview")
+    if ex:
+        img = append_extras(img, ex, int(CFG.get("paper_px", 576)))
     return jsonify({"image": to_data_url(img), "height": img.height})
 
 
@@ -748,10 +1117,10 @@ PRINTER_KEYS = ["type", "name", "vendor_id", "product_id", "out_ep", "host", "po
 
 
 def save_config():
-    tmp = os.path.join(BASE, "config.json.tmp")
+    tmp = P.CONFIG + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(CFG, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, os.path.join(BASE, "config.json"))
+    os.replace(tmp, P.CONFIG)
 
 
 def printer_from_body(p):
@@ -791,7 +1160,7 @@ def studio_printer_test():
         path = ThermalPrinter(printer_from_body(p), OUT).print_image(img, sink=jobs)
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(e) or e.__class__.__name__}), 500
-    return jsonify({"ok": True, "saved": os.path.relpath(path, BASE), "image": to_data_url(img),
+    return jsonify({"ok": True, "saved": os.path.relpath(path, DATA), "image": to_data_url(img),
                     "jobs": [base64.b64encode(j).decode() for j in jobs]})
 
 
@@ -807,6 +1176,32 @@ def studio_printer_save():
     save_config()
     PRINTER.configure(CFG["printer"])
     return jsonify({"ok": True, "status": PRINTER.status()})
+
+
+@app.get("/api/studio/camera")
+@studio_auth
+def studio_camera_get():
+    return jsonify({"camera": {"label": CFG.get("camera_label", ""), "resolution": CFG.get("camera_resolution", "1080"),
+                               "facing": CFG.get("camera_facing", "user"), "mirror": bool(CFG.get("mirror", True)),
+                               "review_ms": int(CFG.get("shot_review_ms", 1000)),
+                               "hires_timeout_ms": int(CFG.get("hires_timeout_ms", 1500))}})
+
+
+@app.put("/api/studio/camera")
+@studio_auth
+def studio_camera_save():
+    c = request.get_json(force=True).get("camera") or {}
+    CFG["camera_label"] = str(c.get("label", "")).strip()[:80]
+    CFG["camera_resolution"] = c.get("resolution") if c.get("resolution") in ("720", "1080", "4k", "1080+4k") else "1080"
+    try:
+        CFG["shot_review_ms"] = max(0, min(3000, int(c.get("review_ms", 1000))))
+        CFG["hires_timeout_ms"] = max(500, min(5000, int(c.get("hires_timeout_ms", 1500))))
+    except (TypeError, ValueError):
+        pass
+    CFG["camera_facing"] = "environment" if c.get("facing") == "environment" else "user"
+    CFG["mirror"] = bool(c.get("mirror", True))
+    save_config()
+    return jsonify({"ok": True})
 
 
 @app.get("/api/studio/photo-printer")
@@ -838,7 +1233,7 @@ def studio_photo_printer_test():
         return jsonify({"ok": False, "error": str(e) or e.__class__.__name__}), 500
     small = img.copy()
     small.thumbnail((400, 600))
-    return jsonify({"ok": True, "saved": os.path.relpath(path, BASE), "image": to_data_url(small, "JPEG")})
+    return jsonify({"ok": True, "saved": os.path.relpath(path, DATA), "image": to_data_url(small, "JPEG")})
 
 
 @app.get("/api/studio/connect")
@@ -1002,7 +1397,7 @@ def studio_export(eid):
     w.writerows([tuple(r) for r in rows])
     from flask import Response
     return Response(buf.getvalue(), mimetype="text/csv",
-                    headers={"Content-Disposition": f"attachment; filename=photobooth-{eid}.csv"})
+                    headers={"Content-Disposition": f"attachment; filename=adsbooth-{eid}.csv"})
 
 
 @app.get("/api/theme-bg/<fname>")
@@ -1057,7 +1452,7 @@ def download_page(sid):
     sid = os.path.basename(sid)
     folder = os.path.join(OUT, "sessions", sid)
     if not os.path.isdir(folder):
-        return "<h2 style='font-family:sans-serif'>Foto tidak ditemukan.</h2>", 404
+        return "<h2 style='font-family:sans-serif'>Photo not found.</h2>", 404
     ev, _ = current_event()
     title = ev.get("event_name", "")
     files = sorted(f for f in os.listdir(folder) if f.startswith("foto_"))
@@ -1065,13 +1460,13 @@ def download_page(sid):
         files.insert(0, "hasil_cetak.jpg")
     items = "".join(
         f"<a href='/d/{sid}/{f}' download><img src='/d/{sid}/{f}' alt='{f}'></a>" for f in files)
-    return f"""<!doctype html><html lang="id"><meta charset="utf-8">
+    return f"""<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Foto kamu — {title}</title>
+<title>Your photos — {title}</title>
 <style>body{{margin:0;font-family:system-ui,sans-serif;background:#F2EFE8;color:#121212;padding:20px}}
 h1{{font-size:24px}}img{{width:100%;border-radius:12px;margin:0 0 12px;display:block}}
 p{{color:#3F3B36}}</style>
-<h1>{title} · Photobooth</h1><p>Tekan lama / ketuk foto untuk menyimpan.</p>{items}</html>"""
+<h1>{title} · AdsBooth</h1><p>Long-press / tap a photo to save it.</p>{items}</html>"""
 
 
 @app.get("/d/<sid>/<fname>")
@@ -1090,13 +1485,13 @@ def ensure_cert(ip):
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.x509.oid import NameOID
 
-    folder = os.path.join(BASE, "certs")
+    folder = P.CERTS
     os.makedirs(folder, exist_ok=True)
     cert, key, stamp = (os.path.join(folder, n) for n in ("cert.pem", "key.pem", "ip.txt"))
     if os.path.exists(cert) and os.path.exists(key) and os.path.exists(stamp) and open(stamp).read() == ip:
         return cert, key
     k = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Photobooth Lokal")])
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "AdsBooth Lokal")])
     san = [x509.DNSName("localhost"), x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]
     try:
         san.append(x509.IPAddress(ipaddress.ip_address(ip)))
@@ -1118,15 +1513,31 @@ def ensure_cert(ip):
     return cert, key
 
 
-if __name__ == "__main__":
+SERVER_NAME = "flask-dev"
+_migrate_plain_pin()
+
+
+def main():
+    if "--set-pin" in sys.argv:                     # mis. untuk Raspberry Pi tanpa layar: python app.py --set-pin 1234
+        pin = sys.argv[sys.argv.index("--set-pin") + 1] if len(sys.argv) > sys.argv.index("--set-pin") + 1 else ""
+        if not (pin.isdigit() and 4 <= len(pin) <= 12):
+            print("PIN harus 4-12 angka. Contoh: python app.py --set-pin 1234")
+            sys.exit(1)
+        CFG["studio_pin_hash"] = hash_pin(pin)
+        save_config()
+        print("PIN Studio disimpan.")
+        return
+    global SERVER_NAME
     from werkzeug.serving import make_server
 
     port = int(CFG.get("port", 5000))
     ip = lan_ip()
     https = CFG.get("https") or {}
     print("=" * 60)
+    print(f" {APP_NAME} v{VERSION}")
     print(f" Kiosk  : http://localhost:{port}        Studio: http://localhost:{port}/studio")
     print(f" Jaringan: http://{ip}:{port}")
+    print(f" Data   : {DATA}  ({P.MODE})")
     if https.get("enabled"):
         hport = int(https.get("port", 5443))
         cert, key = ensure_cert(ip)
@@ -1134,5 +1545,18 @@ if __name__ == "__main__":
         srv = make_server("0.0.0.0", hport, app, threaded=True, ssl_context=(cert, key))
         threading.Thread(target=srv.serve_forever, daemon=True).start()
     print(f" QR tamu: {base_url()}")
+    if not pin_is_set():
+        print(f" PIN Studio belum dibuat: buka http://localhost:{port}/studio di perangkat ini.")
     print("=" * 60)
-    app.run(host="0.0.0.0", port=port, threaded=True)
+    log.info("%s v%s mulai (data: %s, mode: %s)", APP_NAME, VERSION, DATA, P.MODE)
+    try:
+        from waitress import serve
+        SERVER_NAME = "waitress"
+        serve(app, host="0.0.0.0", port=port, threads=12, channel_timeout=120, ident=None)
+    except ImportError:
+        log.warning("waitress belum terpasang (pip install waitress) - pakai server bawaan Flask")
+        app.run(host="0.0.0.0", port=port, threaded=True)
+
+
+if __name__ == "__main__":
+    main()

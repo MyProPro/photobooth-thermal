@@ -1,0 +1,13 @@
+Package: adsbooth
+Version: @VERSION@
+Section: graphics
+Priority: optional
+Architecture: @ARCH@
+Installed-Size: @SIZE@
+Depends: libc6, curl
+Recommends: cups, unclutter, google-chrome-stable | chromium-browser | chromium
+Maintainer: AdsBooth <support@example.com>
+Description: AdsBooth kiosk (struk thermal 80mm & foto 4R)
+ Kiosk adsbooth layar sentuh dengan Studio untuk mengatur event,
+ template, printer, dan lisensi. Setelah instal, jalankan sebagai user
+ desktop (bukan root):  adsbooth-setup

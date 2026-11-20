@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e0e0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex">
+<title>Living Photo</title>
+<style>
+  :root{--bg:#0e0e0f;--fg:#f4f1ea;--muted:#a9a49b;--accent:#ff8a5c;--card:#1b1b1d}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+    padding:calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));text-align:center}
+  .screen.on{display:flex}
+  h1{font-size:30px;line-height:1.15;letter-spacing:-.01em}
+  p{color:var(--muted);max-width:360px}
+  .logo{width:74px;height:74px;border-radius:22px;background:var(--accent);display:grid;place-items:center;color:#111;margin-bottom:4px}
+  .btn{appearance:none;border:0;border-radius:16px;padding:17px 26px;font-family:inherit;font-weight:600;font-size:18px;cursor:pointer;width:100%;max-width:340px}
+  .btn.primary{background:var(--fg);color:#111}
+  .btn.ghost{background:transparent;color:var(--fg);border:1.5px solid #3a3a3d}
+  .btn:active{transform:scale(.97)}
+  .note{font-size:13px;color:var(--muted);max-width:340px}
+  .warn{background:#3a2516;color:#ffcfb4;border-radius:14px;padding:14px 16px;font-size:14px;max-width:360px;text-align:left}
+  .pick-prev{width:100%;max-width:340px;aspect-ratio:9/16;max-height:52vh;border-radius:18px;background:#000;object-fit:contain}
+  .pill{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  /* pemutar penuh layar */
+  #play{padding:0;background:#000}
+  #player{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+  .hud{position:absolute;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom));display:flex;justify-content:center;gap:10px;pointer-events:none}
+  .hud button{pointer-events:auto;border:0;border-radius:999px;padding:12px 18px;background:rgba(20,20,22,.72);color:#fff;font-family:inherit;font-weight:600;font-size:15px;
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  .tag{position:absolute;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.14em;
+    color:rgba(255,255,255,.75);background:rgba(20,20,22,.55);padding:6px 10px;border-radius:999px;text-transform:uppercase;white-space:nowrap}
+  .spin{width:34px;height:34px;border-radius:50%;border:3px solid #333;border-top-color:var(--fg);animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- tanpa kode -->
+<section class="screen" id="noCode">
+  <div class="logo"><svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+  <h1>Living Photo</h1>
+  <p>Scan the QR code on your photobooth print with your phone camera to play its video.</p>
+</section>
+
+<!-- QR contoh dari layar preview -->
+<section class="screen" id="isPreview">
+  <div class="logo"><svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+  <span class="pill">Living Photo</span>
+  <h1>This is a preview</h1>
+  <p>This QR is only a sample on the screen. Print your photo, then scan the QR code on your printed photo to link your video.</p>
+</section>
+
+<!-- memuat -->
+<section class="screen on" id="loading"><div class="spin"></div></section>
+
+<!-- belum ada video: pilih -->
+<section class="screen" id="setup">
+  <div class="logo"><svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+  <span class="pill">Living Photo</span>
+  <h1>Bring your print to life</h1>
+  <p>Choose a video from this phone. It will be linked to this print and play every time you scan its QR code.</p>
+  <div class="warn hidden" id="inApp"></div>
+  <button class="btn primary" id="btnPick" type="button">Choose a video</button>
+  <input type="file" id="file" accept="video/*" hidden>
+  <p class="note">Your video stays on this phone only. Nothing is uploaded.</p>
+</section>
+
+<!-- konfirmasi -->
+<section class="screen" id="confirm">
+  <span class="pill">Preview</span>
+  <video class="pick-prev" id="prev" playsinline muted loop autoplay></video>
+  <p id="prevInfo"></p>
+  <button class="btn primary" id="btnLink" type="button">Link this video</button>
+  <button class="btn ghost" id="btnAgain" type="button">Choose another</button>
+  <p class="note">Once linked, this print's video can't be changed.</p>
+</section>
+
+<!-- error -->
+<section class="screen" id="error">
+  <h1>Something went wrong</h1>
+  <p id="errMsg"></p>
+  <button class="btn ghost" id="btnRetry" type="button">Try again</button>
+</section>
+
+<!-- putar -->
+<section class="screen" id="play">
+  <video id="player" playsinline autoplay muted loop></video>
+  <span class="tag">Living Photo · on this phone</span>
+  <div class="hud">
+    <button id="btnSound" type="button">🔊 Tap for sound</button>
+    <button id="btnReplay" type="button">↺ Replay</button>
+  </div>
+</section>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const show = (id) => document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
+  // kode unik cetakan ada di bagian # (tidak dikirim ke server mana pun)
+  const code = decodeURIComponent((location.hash || '').slice(1)).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+  const MAX_MB = 300;
+
+  // ---------- penyimpanan lokal (IndexedDB) ----------
+  function db() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('living-photo', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('clips', { keyPath: 'code' });
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+  }
+  async function getClip(c) {
+    const d = await db();
+    return new Promise((res, rej) => {
+      const q = d.transaction('clips').objectStore('clips').get(c);
+      q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error);
+    });
+  }
+  async function addClip(rec) {
+    const d = await db();
+    return new Promise((res, rej) => {
+      const t = d.transaction('clips', 'readwrite');
+      t.objectStore('clips').add(rec);          // add = gagal kalau sudah ada (terkunci)
+      t.oncomplete = () => res(); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error);
+    });
+  }
+
+  // ---------- browser di dalam aplikasi lain ----------
+  const ua = navigator.userAgent || '';
+  const inApp = /Instagram|FBAN|FBAV|FB_IAB|Line\/|WhatsApp|Telegram|MicroMessenger|TikTok|Snapchat/i.test(ua);
+  if (inApp) {
+    const ios = /iPhone|iPad|iPod/.test(ua);
+    $('#inApp').textContent = `You opened this inside another app. Please scan the QR with your phone's own Camera app so it opens in ${ios ? 'Safari' : 'Chrome'} — otherwise your video won't be found next time.`;
+    $('#inApp').classList.remove('hidden');
+  } else { $('#inApp').remove(); }
+
+  // ---------- putar ----------
+  let url = null;
+  function play(rec) {
+    if (url) URL.revokeObjectURL(url);
+    url = URL.createObjectURL(rec.blob);
+    const v = $('#player');
+    v.src = url; v.muted = true;
+    show('play');
+    v.play().catch(() => {});
+  }
+  // suara + layar penuh (address bar tersembunyi). Android: fullscreen biasa, iPhone: pemutar video bawaan.
+  function goFull(v) {
+    try {
+      if (v.requestFullscreen) return v.requestFullscreen({ navigationUI: 'hide' }).catch(() => iosFull(v));
+      if (v.webkitRequestFullscreen) return v.webkitRequestFullscreen();
+      iosFull(v);
+    } catch (e) { iosFull(v); }
+  }
+  function iosFull(v) { if (v.webkitEnterFullscreen) { try { v.webkitEnterFullscreen(); } catch (e) {} } }
+  function soundOn() {
+    const v = $('#player'); v.muted = false; v.play().catch(() => {});
+    $('#btnSound').textContent = '🔇 Mute';
+    goFull(v);
+  }
+  $('#btnSound').addEventListener('click', () => {
+    const v = $('#player');
+    if (v.muted) soundOn();
+    else { v.muted = true; $('#btnSound').textContent = '🔊 Tap for sound'; }
+  });
+  $('#player').addEventListener('click', () => { if ($('#player').muted) soundOn(); else goFull($('#player')); });
+  // keluar dari layar penuh: video tetap jalan
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach((ev) => document.addEventListener(ev, () => { $('#player').play().catch(() => {}); }));
+  $('#player').addEventListener('webkitendfullscreen', () => { $('#player').play().catch(() => {}); });
+  $('#btnReplay').addEventListener('click', () => { const v = $('#player'); v.currentTime = 0; v.play().catch(() => {}); });
+
+  // ---------- pilih & kunci ----------
+  let picked = null;
+  $('#btnPick').addEventListener('click', () => $('#file').click());
+  $('#btnAgain').addEventListener('click', () => $('#file').click());
+  $('#file').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    if (!/^video\//.test(f.type) && !/\.(mp4|mov|m4v|webm|3gp)$/i.test(f.name)) return fail('Please choose a video file.');
+    const mb = f.size / 1048576;
+    picked = f;
+    $('#prev').src = URL.createObjectURL(f);
+    $('#prevInfo').textContent = `${f.name || 'Video'} · ${mb.toFixed(1)} MB` + (mb > MAX_MB ? ' — large videos may not save. Shorter clips work best.' : '');
+    show('confirm');
+  });
+  $('#btnLink').addEventListener('click', async () => {
+    if (!picked) return;
+    $('#btnLink').disabled = true; $('#btnLink').textContent = 'Saving…';
+    try {
+      const blob = new Blob([await picked.arrayBuffer()], { type: picked.type || 'video/mp4' });
+      await addClip({ code, blob, name: picked.name, size: picked.size, created: Date.now() });
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+      $('#prev').pause(); $('#prev').removeAttribute('src');
+      play(await getClip(code));
+    } catch (err) {
+      const existing = await getClip(code).catch(() => null);
+      if (existing) return play(existing);       // sudah terkunci sebelumnya
+      fail(/quota|space|exceed/i.test(String(err && (err.name + err.message)))
+        ? 'Not enough storage on this phone for this video. Try a shorter clip.'
+        : 'Could not save the video on this phone. Please try again.');
+    } finally { $('#btnLink').disabled = false; $('#btnLink').textContent = 'Link this video'; }
+  });
+
+  function fail(msg) { $('#errMsg').textContent = msg; show('error'); }
+  $('#btnRetry').addEventListener('click', () => start());
+
+  async function start() {
+    if (!code) return show('noCode');
+    if (code === 'preview') return show('isPreview');
+    if (!('indexedDB' in window)) return fail('This browser cannot store videos. Open the link in Safari or Chrome.');
+    try {
+      const rec = await getClip(code);
+      if (rec) play(rec); else show('setup');
+    } catch (e) { fail('This browser blocked local storage (private mode?). Open the link in a normal Safari/Chrome tab.'); }
+  }
+  window.addEventListener('hashchange', () => location.reload());
+  start();
+})();
+</script>
+<style>.hidden{display:none!important}</style>
+</body>
+</html>

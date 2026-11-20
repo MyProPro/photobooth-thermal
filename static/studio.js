@@ -1,4 +1,4 @@
-// Template Studio — kelola event & template custom
+// AdsBooth Studio — kelola event & template custom
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -21,10 +21,8 @@ async function api(path, opts = {}) {
   if (pin) headers['X-Studio-Pin'] = pin;
   if (opts.json !== undefined) { headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.json); }
   const r = await fetch(path, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers, body: opts.body });
-  if (r.status === 401) {
-    const p = prompt('PIN Studio:');
-    if (p === null) throw new Error('PIN dibutuhkan');
-    sessionStorage.setItem('studioPin', p);
+  if (r.status === 401) {            // sesi habis -> minta PIN lagi, lalu ulangi permintaan
+    await showAuth(false);
     return api(path, opts);
   }
   const j = await r.json().catch(() => ({}));
@@ -142,7 +140,7 @@ function renderInfo() {
   ev.social = Object.assign({ username: '', display: '{event}', website: '', bio: '{date_long}' }, ev.social || {});
   $$('#tab-info [data-s]').forEach((el) => { el.value = ev.social[el.dataset.s] ?? ''; });
   $('#qrToggle').checked = ev.qr_download !== false;
-  ev.features = Object.assign({ guestbook: false, lucky_draw: false, pose_challenge: false, host_copy: false }, ev.features || {});
+  ev.features = Object.assign({ guestbook: false, lucky_draw: false, pose_challenge: false, host_copy: false, living_photo: false }, ev.features || {});
   $$('#featureChecks [data-f]').forEach((el) => { el.checked = !!ev.features[el.dataset.f]; });
   $('#certTitles').value = (ev.cert_titles && ev.cert_titles.length ? ev.cert_titles : META.certTitles).join('\n');
   ev.boarding = Object.assign({ from_code: 'SNI', from: 'Sini', to_code: 'BHG', to: 'Bahagia' }, ev.boarding || {});
@@ -194,7 +192,7 @@ $$('#tab-info [data-b]').forEach((el) => el.addEventListener('input', () => {
   ev.boarding[el.dataset.b] = el.value; setDirty(); schedulePreview();
 }));
 $$('#featureChecks [data-f]').forEach((el) => el.addEventListener('change', () => {
-  ev.features[el.dataset.f] = el.checked; setDirty();
+  ev.features[el.dataset.f] = el.checked; setDirty(); schedulePreview();
 }));
 // ---------------------------------------------------------------- tema kiosk
 const THEME_PRESETS = {
@@ -381,6 +379,7 @@ function renderOutput() {
   const photo = isPhoto();
   document.body.classList.toggle('ev-photo', photo);
   $$('#outPick [data-out]').forEach((b) => b.classList.toggle('on', b.dataset.out === (photo ? 'photo' : 'thermal')));
+  markOutputLicense();
   $('#photoFrames').innerHTML = FRAME_LAYOUTS.map(([l, label]) => {
     const f = ev.photo_frames[l];
     return `<div class="frame-slot"><b>${label}</b>${f ? `<img src="${assetUrl(f)}" alt="">` : '<div class="empty">belum ada</div>'}
@@ -790,6 +789,9 @@ async function openSettings() {
   $('#prPaper').value = String(PR.paper_px); $('#prBright').value = PR.brightness;
   prGroups(); prStatus(PR.status);
   renderPaper(await api('/api/studio/paper'));
+  loadCamera().catch((e) => { $('#camMsg').textContent = 'Gagal memuat: ' + e.message; });
+  loadLicense();
+  loadSecurity().catch((e) => { $('#secMsg').textContent = 'Gagal memuat: ' + e.message; });
   loadPhotoPrinter().catch((e) => { $('#ppMsg').textContent = 'Gagal memuat: ' + e.message; });
   const k = await api('/api/studio/connect');
   $('#kioskQr').src = k.kiosk_qr; $('#kioskUrl').textContent = k.kiosk;
@@ -799,6 +801,40 @@ async function openSettings() {
     : 'Tanpa HTTPS, kamera hanya jalan kalau kiosk dibuka di PC server sendiri. Setelah diubah, restart server.';
 }
 $('#btnSettings').addEventListener('click', openSettings);
+
+// ---------------------------------------------------------------- kamera
+async function loadCamera() {
+  const c = (await api('/api/studio/camera')).camera || {};
+  $('#camLabel').value = c.label || ''; $('#camRes').value = c.resolution || '1080';
+  $('#camFacing').value = c.facing || 'user'; $('#camMirror').checked = c.mirror !== false;
+  $('#camReview').value = String(c.review_ms ?? 1000); $('#camHiresTimeout').value = String(c.hires_timeout_ms || 1500);
+  camHiresToggle();
+}
+function camHiresToggle() { $('#camHiresWrap').classList.toggle('hidden', $('#camRes').value !== '1080+4k'); }
+$('#camRes').addEventListener('change', camHiresToggle);
+$('#btnCamSave').addEventListener('click', async () => {
+  try {
+    await api('/api/studio/camera', { method: 'PUT', json: { camera: {
+      label: $('#camLabel').value, resolution: $('#camRes').value, facing: $('#camFacing').value, mirror: $('#camMirror').checked,
+      review_ms: +$('#camReview').value, hires_timeout_ms: +$('#camHiresTimeout').value } } });
+    $('#camMsg').textContent = 'Tersimpan. Muat ulang (Ctrl+F5) layar kiosk supaya kamera baru dipakai.';
+  } catch (e) { $('#camMsg').textContent = 'Gagal simpan: ' + e.message; }
+});
+$('#btnCamDetect').addEventListener('click', async () => {
+  $('#camMsg').textContent = 'Meminta izin kamera…';
+  try {
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    tmp.getTracks().forEach((t) => t.stop());
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
+    $('#camList').innerHTML = cams.length ? cams.map((d, i) => `<button type="button" class="ghost" data-cam="${esc(d.label || 'Kamera ' + (i + 1))}">${esc(d.label || 'Kamera ' + (i + 1))}</button>`).join('')
+      : '<span class="hint">Tidak ada kamera terdeteksi.</span>';
+    $$('#camList [data-cam]').forEach((b) => b.addEventListener('click', () => {
+      $('#camLabel').value = b.dataset.cam.replace(/\s*\([0-9a-f]{4}:[0-9a-f]{4}\)\s*$/i, '');
+      $('#camMsg').textContent = 'Dipilih: ' + $('#camLabel').value + '. Tekan "Simpan kamera".';
+    }));
+    $('#camMsg').textContent = cams.length + ' kamera ditemukan. Klik salah satu untuk memilih. (Deteksi ini hanya melihat kamera di perangkat tempat Studio dibuka.)';
+  } catch (e) { $('#camMsg').textContent = 'Tidak bisa mengakses kamera: ' + e.message + ' (butuh localhost atau HTTPS)'; }
+});
 
 // ---------------------------------------------------------------- printer foto
 let PP = null;
@@ -874,8 +910,147 @@ $('#httpsToggle').addEventListener('change', async (e) => {
   $('#httpsHint').className = 'hint warn';
 });
 
+// ---------------------------------------------------------------- PIN Studio
+function showAuth(setup, msg) {
+  return new Promise((resolve) => {
+    $('#auth').classList.remove('hidden');
+    $('#authTitle').textContent = setup ? 'Buat PIN AdsBooth Studio' : 'Masuk AdsBooth Studio';
+    $('#authHint').textContent = msg || (setup
+      ? 'Pertama kali: buat PIN 4-12 angka untuk mengunci Studio. Simpan baik-baik.'
+      : 'Masukkan PIN Studio.');
+    $('#authPin2').classList.toggle('hidden', !setup);
+    $('#authBtn').textContent = setup ? 'Simpan PIN' : 'Masuk';
+    $('#authMsg').textContent = '';
+    $('#authPin').value = ''; $('#authPin2').value = '';
+    setTimeout(() => $('#authPin').focus(), 50);
+    $('#authForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const pin = $('#authPin').value.trim();
+      if (setup && pin !== $('#authPin2').value.trim()) { $('#authMsg').textContent = 'PIN tidak sama.'; return; }
+      try {
+        const r = await fetch(setup ? '/api/studio/setup-pin' : '/api/studio/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) { $('#authMsg').textContent = j.error || 'Gagal'; return; }
+        $('#auth').classList.add('hidden');
+        resolve();
+      } catch (err) { $('#authMsg').textContent = 'Server tidak terhubung.'; }
+    };
+  });
+}
+async function ensureLogin() {
+  const s = await (await fetch('/api/studio/session')).json();
+  if (s.loggedIn) return true;
+  if (s.localOnly && !s.local) {
+    document.body.innerHTML = '<p style="padding:40px;font:16px Inter,sans-serif">Studio hanya bisa dibuka dari perangkat photobooth ini.</p>';
+    return false;
+  }
+  if (s.needSetup) {
+    if (!s.local) {
+      document.body.innerHTML = '<p style="padding:40px;font:16px Inter,sans-serif;max-width:560px">PIN Studio belum dibuat. Untuk keamanan, buka Studio pertama kali dari perangkat yang menjalankan photobooth: <b>http://localhost:5000/studio</b></p>';
+      return false;
+    }
+    await showAuth(true);
+  } else {
+    await showAuth(false);
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------- keamanan & tentang
+async function loadSecurity() {
+  const s = await api('/api/studio/security');
+  $('#secLocal').checked = !!s.localOnly;
+  const a = await api('/api/studio/about');
+  if (a.livingDefault && $('#livingUrl')) $('#livingUrl').placeholder = a.livingDefault;
+  $('#aboutInfo').innerHTML = `<b>${esc(a.app)} v${esc(a.version)}</b><br>Folder data: <span class="mono">${esc(a.dataDir)}</span> (${esc(a.mode)})<br>`
+    + `Folder program: <span class="mono">${esc(a.programDir)}</span><br>${esc(a.os)} · Python ${esc(a.python)} · server ${esc(a.server)}`;
+}
+$('#btnSecPin').addEventListener('click', async () => {
+  try {
+    await api('/api/studio/security', { method: 'PUT', json: { oldPin: $('#secOld').value, newPin: $('#secNew').value } });
+    $('#secOld').value = ''; $('#secNew').value = '';
+    $('#secMsg').textContent = 'PIN berhasil diganti.';
+  } catch (e) { $('#secMsg').textContent = e.message; }
+});
+$('#secLocal').addEventListener('change', async (e) => {
+  try {
+    await api('/api/studio/security', { method: 'PUT', json: { localOnly: e.target.checked } });
+    $('#secMsg').textContent = e.target.checked ? 'Studio sekarang hanya bisa dibuka dari perangkat ini.' : 'Studio bisa dibuka dari perangkat lain di jaringan (tetap pakai PIN).';
+  } catch (err) { e.target.checked = !e.target.checked; $('#secMsg').textContent = err.message; }
+});
+$('#btnLogout').addEventListener('click', async () => {
+  await fetch('/api/studio/logout', { method: 'POST' });
+  location.reload();
+});
+
+// ---------------------------------------------------------------- lisensi
+let LIC = null;
+const LIC_LABEL = { active: 'Aktif', grace: 'Masa tenggang', trial: 'Versi coba', expired: 'Habis', trial_over: 'Masa coba habis', clock: 'Jam salah' };
+const FEAT_NAME = { thermal: 'Struk thermal', photo: 'Foto 4R', living: 'Living Photo' };
+const fmtDate = (t) => new Date(t * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+async function loadLicense() {
+  try { LIC = await api('/api/studio/license'); } catch (e) { $('#licInfo').textContent = 'Gagal memuat: ' + e.message; return; }
+  const s = LIC, good = s.state === 'active' || s.state === 'grace';
+  $('#licDevice').textContent = s.deviceId;
+  let h = `<span class="st ${s.state === 'active' ? 'ok' : ''}">${esc(LIC_LABEL[s.state] || s.state)}</span>`;
+  if (good) {
+    h += `Paket <b>${esc(s.planName || s.plan)}</b> · ${esc((s.feat || []).map((f) => FEAT_NAME[f] || f).join(', '))}<br>`;
+    if (s.customer) h += `Atas nama: <b>${esc(s.customer)}</b><br>`;
+    h += s.expires ? `Berlaku sampai <b>${fmtDate(s.expires)}</b>${s.state === 'active' ? ` (sisa ${s.daysLeft} hari)` : ''}` : 'Berlaku selamanya';
+    if (s.licenseId) h += ` · <span class="mono">${esc(s.licenseId)}</span>`;
+  } else if (s.state === 'trial') {
+    h += `Semua fitur bisa dicoba, hasil cetak diberi tanda DEMO. Sisa <b>${s.trialDaysLeft} hari</b>.`;
+  }
+  if (s.message && s.state !== 'trial') h += `<br><span class="warn">${esc(s.message)}</span>`;
+  if (s.blocked && s.ok) h += `<br><span class="warn">${esc(s.blocked)}</span>`;
+  if (s.error) h += `<br><span class="warn">Kode tersimpan tidak bisa dipakai: ${esc(s.error)}</span>`;
+  if (!s.keyReady) h += '<br><span class="warn">Kunci publik belum diisi (jalankan license_admin.py init di PC penjual).</span>';
+  $('#licInfo').innerHTML = h;
+  $('#btnLicRemove').classList.toggle('hidden', !s.licenseId && !s.error);
+  const pill = $('#licPill');
+  const warn = !good || s.state === 'grace' || (s.state === 'active' && s.daysLeft !== null && s.daysLeft <= 5);
+  pill.classList.toggle('hidden', s.state === 'active' && !warn);
+  pill.classList.toggle('ok', !warn);
+  pill.textContent = s.state === 'trial' ? `VERSI COBA · ${s.trialDaysLeft} hari`
+    : s.state === 'active' ? `Lisensi habis ${s.daysLeft} hari lagi` : (LIC_LABEL[s.state] || s.state).toUpperCase();
+  markOutputLicense();
+}
+function markOutputLicense() {
+  if (!LIC) return;
+  $$('#outPick [data-out]').forEach((b) => b.classList.toggle('nolic', LIC.ok && !(LIC.feat || []).includes(b.dataset.out)));
+  const liv = document.querySelector('[data-f="living_photo"]');
+  if (liv) liv.closest('label').classList.toggle('nolic-f', LIC.ok && !(LIC.feat || []).includes('living'));
+}
+$('#licPill').addEventListener('click', () => openSettings().then(() => $('#licCard').scrollIntoView({ behavior: 'smooth' })));
+$('#btnLicCopy').addEventListener('click', () => {
+  const t = $('#licDevice').textContent;
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(
+    () => { $('#licMsg').textContent = 'ID perangkat disalin.'; },
+    () => { prompt('Salin ID perangkat:', t); });
+});
+$('#licFile').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  $('#licToken').value = (await f.text()).trim(); e.target.value = '';
+});
+$('#btnLicSave').addEventListener('click', async () => {
+  const token = $('#licToken').value.trim();
+  if (!token) { $('#licMsg').textContent = 'Tempel kode lisensi dulu.'; return; }
+  try {
+    await api('/api/studio/license', { json: { token } });
+    $('#licToken').value = ''; $('#licMsg').textContent = 'Lisensi aktif. Kiosk menyesuaikan otomatis saat kembali ke layar awal.';
+    loadLicense();
+  } catch (e) { $('#licMsg').textContent = e.message; }
+});
+$('#btnLicRemove').addEventListener('click', async () => {
+  if (!confirm('Hapus lisensi dari perangkat ini?')) return;
+  try { await api('/api/studio/license', { method: 'DELETE' }); $('#licMsg').textContent = 'Lisensi dihapus.'; loadLicense(); }
+  catch (e) { $('#licMsg').textContent = e.message; }
+});
+
 // ---------------------------------------------------------------- init
 (async function init() {
+  if (!(await ensureLogin())) return;
   try {
     META = await api('/api/studio/meta');
   } catch (e) {
@@ -885,6 +1060,7 @@ $('#httpsToggle').addEventListener('change', async (e) => {
   $('#pvLayouts').innerHTML = META.layouts.map((l) => `<button data-l="${l}">${LAYOUT_NAMES[l].split(' ')[0]}</button>`).join('');
   $$('#pvLayouts button').forEach((b) => b.addEventListener('click', () => setLayout(b.dataset.l)));
   setLayout('strip');
+  loadLicense();
   await loadEvents();
   const first = ACTIVE || (EVENTS[0] && EVENTS[0].id);
   if (first) openEvent(first);

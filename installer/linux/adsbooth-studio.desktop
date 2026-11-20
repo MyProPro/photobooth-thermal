@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=AdsBooth Studio
+Comment=Atur event, template, printer & lisensi
+Exec=adsbooth --studio
+Icon=adsbooth
+Categories=Graphics;Photography;
+Terminal=false

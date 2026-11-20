@@ -265,7 +265,7 @@ def _print_windows(img, name, borderless=True):
         k = max(pw / im.width, ph / im.height)
         w, h = int(im.width * k), int(im.height * k)
         x, y = ox + (pw - w) // 2, oy + (ph - h) // 2
-        hdc.StartDoc("Photobooth")
+        hdc.StartDoc("AdsBooth")
         hdc.StartPage()
         ImageWin.Dib(im).draw(hdc.GetHandleOutput(), (x, y, x + w, y + h))
         hdc.EndPage()

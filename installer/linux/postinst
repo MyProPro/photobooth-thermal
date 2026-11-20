@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+  command -v udevadm >/dev/null && { udevadm control --reload-rules || true; udevadm trigger || true; }
+  command -v systemctl >/dev/null && systemctl daemon-reload || true
+  # update versi: restart server yang sudah jalan
+  if command -v systemctl >/dev/null; then
+    for u in $(systemctl list-units --plain --no-legend 'adsbooth@*.service' 2>/dev/null | awk '{print $1}'); do
+      systemctl restart "$u" || true
+    done
+  fi
+  echo
+  echo "AdsBooth terpasang. Jalankan sekali sebagai user desktop (bukan root):"
+  echo "    adsbooth-setup"
+fi
+exit 0

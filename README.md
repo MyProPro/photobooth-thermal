@@ -1,6 +1,6 @@
-# Thermal Photobooth 80mm
+# AdsBooth — photobooth struk thermal 80mm & foto 4R
 
-Photobooth dengan cetak instan ke printer thermal 80mm (ESC/POS).
+AdsBooth: photobooth dengan cetak instan ke printer thermal 80mm (ESC/POS).
 Python (Flask) + halaman kiosk di browser + Pillow (dithering) + python-escpos.
 
 ```
@@ -55,6 +55,7 @@ Kalau pakai domain/tunnel, isi `public_base_url`. Matikan dengan `"qr_download":
 
 - `event_name`: judul di struk & layar.
 - `logo_path`: mis. `"assets/logo.png"` (PNG hitam di atas putih/transparan paling bagus).
+- **Bahasa teks cetak** (Studio → Info event): `Bahasa Indonesia` atau `English`. Mengubah teks bawaan yang tercetak (judul template, tanggal/bulan, nomor undian, buku tamu, tantangan pose, label arsip). Nama event, footer, caption, dan template custom tetap seperti yang diketik.
 - `footer`, `max_copies`, `countdown_seconds`, `reset_seconds` (layar Selesai), `idle_seconds` (balik ke awal kalau ditinggal), `mirror` (foto dicerminkan seperti preview).
 
 Font: otomatis pakai Arial/Consolas di Windows. Mau font lain? Taruh `fonts/regular.ttf`, `fonts/bold.ttf`, `fonts/mono.ttf`.
@@ -135,6 +136,30 @@ Di mode foto:
 - Tekan **Cetak halaman tes** untuk cek warna dan tepi kertas.
 - Catatan: mode foto tidak bisa mencetak langsung dari tablet Android (driver printer foto tidak ada di Android). Jalankan server di Windows/Pi; tablet tetap bisa jadi layar kiosk.
 
+## QR video (Living Photo)
+Setiap cetakan mendapat **QR unik** di bagian bawah struk (mode foto 4R: pojok kanan bawah).
+1. Tamu scan QR pakai **kamera bawaan HP**, lalu halaman terbuka di Safari/Chrome.
+2. Scan pertama: tamu **memilih video dari galeri HP-nya**, lalu video terkunci ke cetakan itu (tidak bisa diganti).
+3. Scan berikutnya: **video langsung diputar** dari HP itu sendiri. Video tidak pernah di-upload ke mana pun.
+
+Aktifkan per event: **Studio → Info event → Fitur tambahan → QR video (Living Photo)**.
+
+**Hosting halaman (sekali saja):** halaman pemutarnya ada di folder `docs/v/` dan di-host gratis lewat GitHub Pages.
+1. Push repo ke GitHub (lihat bagian Git di bawah).
+2. Di GitHub: repo → **Settings → Pages** → Source: *Deploy from a branch* → Branch `main`, folder `/docs` → Save.
+3. Tunggu ±1 menit. Halaman aktif di `https://mypropro.github.io/photobooth-thermal/v/` (repo harus *public* untuk GitHub Pages gratis).
+4. Pakai domain/hosting sendiri? Upload isi folder `docs/v/` ke hosting **HTTPS**, lalu isi alamatnya:
+   - bawaan produk (semua instalasi): `LIVING_BASE_URL` di `version.py`;
+   - per mesin: `"living_base_url"` di `config.json`;
+   - per event: Studio → kolom "Alamat halaman Living Photo".
+   Urutan prioritas: event → config.json → version.py.
+
+Catatan:
+- Tamu harus scan dengan **kamera bawaan**, bukan scanner di dalam WhatsApp/Instagram/LINE (penyimpanannya terpisah, halaman akan memberi peringatan).
+- Video diputar tanpa suara dulu (aturan browser HP), tap **"Tap for sound"** untuk suara.
+- iPhone/Safari bisa menghapus data situs yang 7 hari tidak dibuka. Kalau terhapus, tamu cukup memilih video lagi.
+- Video pendek (10–60 detik) paling aman. Video sangat besar bisa gagal disimpan, terutama di iPhone.
+
 ## Tema kiosk: warna, font & motif latar (Studio → Info event)
 - **Preset warna**: Krem klasik, Gelap, Navy & emas, Pink pastel, Hijau sage. Setiap warna (latar, teks, kartu, tombol, teks tombol, aksen, printer) bisa diubah dengan color picker.
 - **Font judul**: Modern, Elegan, Geometris, Tegas, Poster. Diambil dari folder `fonts/`, jadi tetap jalan offline.
@@ -153,7 +178,7 @@ Foto event aktif tampil bergantian; foto baru langsung muncul dengan label *FOTO
 Studio → *Printer & tablet* → *Kertas*: isi panjang roll (default 50 m). Setiap cetak dihitung otomatis.
 Kiosk menampilkan *KERTAS HAMPIR HABIS* saat sisa ≤ 3 m (`paper_warn_m`). Setelah ganti roll klik *Ganti roll baru (reset)*.
 
-## Template Studio (banyak event)
+## AdsBooth Studio (banyak event)
 
 Buka **http://localhost:5000/studio** (dari PC yang sama, atau `http://<IP-PC>:5000/studio` dari laptop lain di jaringan yang sama).
 
@@ -168,19 +193,23 @@ Buka **http://localhost:5000/studio** (dari PC yang sama, atau `http://<IP-PC>:5
 Data tersimpan di folder `events/<id>/` (event.json + logo/frame). Hapus event = dipindah ke `events/_trash/`.
 Tanpa event aktif, kiosk memakai pengaturan di `config.json`.
 
-Kunci Studio dengan PIN: isi `"studio_pin": "1234"` di `config.json`.
+**PIN Studio wajib.** Saat Studio dibuka pertama kali dari perangkat yang menjalankan photobooth (`http://localhost:5000/studio`),
+akan muncul layar **Buat PIN** (4-12 angka). PIN disimpan dalam bentuk hash, bukan teks biasa.
+- Ganti PIN / keluar / "Studio hanya bisa dibuka dari perangkat ini": Studio → Printer & tablet → **Keamanan Studio**.
+- 5x PIN salah = dikunci 5 menit.
+- Lupa PIN / perangkat tanpa layar: jalankan `python app.py --set-pin 1234` di perangkat itu.
 
-## Template Sosial Media
+## Template Profil Sosial
 
-Lima template meniru tata letak halaman profil (ikon digambar generik, tanpa logo resmi), semua mendukung 1–4 foto:
+Lima template bergaya halaman profil sosial generik (ikon digambar sendiri, tanpa nama atau logo merek apa pun), semua mendukung 1–4 foto:
 
 | id | nama | isi |
 |---|---|---|
-| `sosmed` | Instagram Profil | avatar + Posts/Followers/Following, tombol Follow/Message, grid foto |
-| `threads` | Threads Profil | nama besar, avatar kanan, followers, satu thread berisi foto |
-| `xprofil` | X Profil | banner, avatar, Following/Followers, tab Posts, satu post berisi foto |
-| `facebook` | Facebook Profil | foto sampul, Add friend, satu postingan dengan Like/Comment/Share |
-| `youtube` | YouTube Channel | banner, Subscribe, daftar thumbnail video + durasi |
+| `sosmed` | Social Profile | avatar + Posts/Followers/Following, tombol Follow/Message, grid foto |
+| `threads` | Text Feed | nama besar, avatar kanan, followers, satu postingan berisi foto |
+| `xprofil` | Micro Profile | banner, avatar, Following/Followers, tab Posts, satu post berisi foto |
+| `facebook` | Social Page | foto sampul, Add friend, satu postingan dengan Like/Comment/Share |
+| `youtube` | Video Channel | banner, Subscribe, daftar thumbnail video + durasi |
 
 Username, nama tampilan, website, dan bio diatur per event di **Studio → Info event → Template Sosial Media**
 (tanpa event: blok `"social"` di config.json). Avatar = logo event, atau foto pertama kalau tidak ada logo.
@@ -261,6 +290,105 @@ Perintah berguna:
 
 Tips Pi 4: centang 6–10 template per event di Studio supaya layar Pilih Template cepat; gunakan microSD A1/A2 atau SSD USB 3.
 Layar Pilih Template menampilkan template satu per satu begitu siap (`render_workers` di config.json, default 3).
+
+## PC Ubuntu (mini PC / PC lama, mis. Intel i3)
+Cocok untuk PC yang tidak kuat Windows 11. Pakai **Ubuntu Desktop 22.04 / 24.04 LTS**.
+1. Install Ubuntu, sambungkan internet, salin folder `thermal-photobooth` ke home (mis. `~/thermal-photobooth`).
+2. Buka Terminal di folder itu, lalu jalankan sekali:
+   ```bash
+   bash install-autostart.sh
+   ```
+   Skrip memasang Python, **Google Chrome** (bukan Chromium snap), CUPS untuk printer foto, izin printer thermal USB,
+   server otomatis saat boot, kiosk layar penuh saat login, dan mematikan layar-mati/kunci layar.
+3. **Settings → Users → Automatic Login** = ON, lalu `sudo reboot`.
+4. Studio: `http://localhost:5000/studio` (atau dari laptop lain: `http://IP-PC:5000/studio`).
+   - Printer thermal USB: Printer & tablet → "Raspberry Pi / Linux (USB, /dev/usb/lp0)" → Cetak tes.
+   - Printer foto 4R: tambahkan dulu di CUPS (`http://localhost:631`), lalu pilih "Linux / Raspberry Pi: CUPS".
+   - Kamera EMEET: Printer & tablet → Kamera → Deteksi kamera → pilih → Simpan. PC lama: pakai **1080p**.
+
+Log server: `journalctl -u photobooth -f` · Restart: `sudo systemctl restart photobooth`.
+
+## Lisensi (offline, per perangkat)
+
+> Panduan lengkap untuk penjual (alur pelanggan, perpanjangan, masalah umum, rilis versi): **[PANDUAN-PENJUAL.md](PANDUAN-PENJUAL.md)**.
+
+Setiap perangkat punya **ID perangkat** (mis. `AB-7KQ2-M9XD-4HTA-PZ3C`), terlihat di **Studio → ⚙ Printer & tablet → Lisensi**
+dan di layar kunci kiosk. Kode lisensi hanya berlaku untuk ID itu.
+
+| Status | Kiosk | Hasil cetak |
+|---|---|---|
+| Versi coba (7 hari pertama) | jalan, badge DEMO | ada tanda DEMO |
+| Aktif | normal | normal |
+| Masa tenggang (3 hari setelah habis) | normal, peringatan di Studio | normal |
+| Habis / masa coba habis | terkunci (layar "Device not activated") | tidak bisa cetak |
+
+Paket: `thermal` (struk), `photo` (foto 4R), `complete` (struk + foto 4R + Living Photo).
+Living Photo bisa juga ditambahkan sebagai add-on (`--add living`).
+
+**Khusus penjual (di PC sendiri, bukan di perangkat pelanggan):**
+
+```bash
+python license_admin.py init          # sekali saja: buat kunci, kunci publik otomatis masuk licensing.py
+python license_admin.py issue --device AB-XXXX-XXXX-XXXX-XXXX --plan complete --name "Studio Ceria" --days 30
+python license_admin.py issue --device AB-... --plan thermal --until 2027-01-31 --add living --out ceria.lic
+python license_admin.py verify <kode>
+```
+
+- Kunci privat ada di `%USERPROFILE%\.adsbooth-license\` (Linux: `~/.adsbooth-license/`). **Backup folder itu.**
+  Jangan di-commit, jangan dikirim. Kalau hilang, semua perangkat harus diupdate dengan kunci publik baru.
+- Setelah `init`, commit perubahan `licensing.py` (isinya kunci publik, aman dibagikan).
+- Semua kode yang diterbitkan tercatat di `issued.csv` di folder kunci.
+- Langganan bulanan: terbitkan kode baru tiap periode (`--days 30`). Pelanggan tempel di Studio, langsung aktif.
+- Jam PC mundur dideteksi (perangkat terkunci). Kode lisensi yang baru diterbitkan otomatis memulihkannya.
+- `license_admin.py` tidak perlu ikut dikirim ke pelanggan (dibuang saat membuat installer).
+
+## Membuat installer (untuk dijual)
+
+> Langkah rilis lengkap: [PANDUAN-PENJUAL.md](PANDUAN-PENJUAL.md#5-membuat-installer--rilis-versi-baru).
+
+Installer berisi program yang sudah **dikompilasi** (Nuitka): pelanggan tidak menerima file `.py`,
+tidak perlu memasang Python, dan `license_admin.py` tidak ikut.
+
+**Sebelum build pertama:** `python license_admin.py init` (kunci publik harus sudah terisi di `licensing.py`).
+Naikkan `VERSION` di `version.py` setiap rilis.
+
+### Windows → `dist\AdsBooth-Setup-<versi>.exe`
+1. Pasang [Inno Setup 6](https://jrsoftware.org/isdl.php) (gratis).
+2. Dobel klik `installer\build-windows.bat`. Kompilasi pertama 10-20 menit (Nuitka mengunduh compiler C sekali).
+
+Hasil instalasi di PC pelanggan:
+- Program di `C:\Program Files\AdsBooth`, data (config, event, foto tamu, lisensi) di `C:\ProgramData\AdsBooth`.
+  Update = jalankan installer versi baru; data tidak tersentuh. Uninstall juga tidak menghapus data.
+- Menu Start: **AdsBooth Kiosk**, **AdsBooth Studio**, **Hentikan AdsBooth**, **Folder data**.
+- Pilihan saat instal: ikon desktop, kiosk otomatis saat Windows menyala, izin firewall untuk tablet.
+- Browser kiosk: Chrome kalau ada, kalau tidak Microsoft Edge (selalu ada di Windows 10/11).
+- Installer belum ditandatangani (code signing), jadi Windows SmartScreen akan menampilkan
+  "Windows protected your PC" → klik **More info → Run anyway**.
+
+### Ubuntu → `dist/adsbooth_<versi>_amd64.deb`
+Build di Ubuntu 22.04 (hasilnya jalan di 22.04 & 24.04): `bash installer/build-linux.sh`
+
+Di PC pelanggan:
+```bash
+sudo apt install ./adsbooth_1.0.0_amd64.deb
+adsbooth-setup        # sebagai user desktop: server otomatis, kiosk otomatis, izin printer
+```
+Program di `/opt/adsbooth`, data di `~/.local/share/adsbooth`, server: `systemctl status adsbooth@<user>`.
+
+### Perintah program terinstal
+`adsbooth` (server + kiosk) · `adsbooth --studio` · `adsbooth --server` · `adsbooth --browser` ·
+`adsbooth --set-pin 1234` · `adsbooth --version`
+
+## Folder data & versi
+Program dan data dipisah supaya update tidak menimpa data:
+- **Folder program**: kode, `static/`, `fonts/` (boleh ditimpa saat update).
+- **Folder data**: `config.json`, `events/`, `output/` (foto tamu, database), `certs/`, `logs/`.
+  - Instalasi baru: Windows `C:\ProgramData\AdsBooth`, Linux `~/.local/share/adsbooth`.
+  - **Mode portabel** (seperti sebelumnya): kalau di folder program sudah ada `config.json`/`events`/`output`, data tetap di folder program.
+  - Bisa dipaksa ke folder lain dengan variabel `PHOTOBOOTH_DATA`.
+- Lokasi folder data, versi aplikasi, dan tombol **Unduh log** ada di Studio → Printer & tablet → **Tentang**.
+- Log: `logs/photobooth.log` (otomatis berputar, maks 5 file × 1 MB).
+- Server memakai **Waitress** (stabil untuk jalan seharian); otomatis terpasang dari `requirements.txt`.
 
 ## Data & database
 

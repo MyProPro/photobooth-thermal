@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+command -v systemctl >/dev/null && systemctl daemon-reload || true
+# data (event, foto tamu, lisensi) di ~/.local/share/adsbooth sengaja TIDAK dihapus
+exit 0

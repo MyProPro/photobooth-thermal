@@ -11,3 +11,15 @@ output/
 # pengaturan & event per perangkat (tidak ikut Git supaya pull tidak menimpa)
 config.json
 events/
+logs/
+.secret_key
+portable.txt
+
+# lisensi per perangkat (folder data mode portable)
+license.key
+.license_state
+*.lic
+
+# hasil build installer
+build/
+dist/

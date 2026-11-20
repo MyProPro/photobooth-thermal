@@ -1,5 +1,5 @@
 @echo off
-REM Jalankan server photobooth + buka Chrome mode kiosk
+REM Jalankan server AdsBooth (dari kode sumber) + buka Chrome mode kiosk
 cd /d "%~dp0"
 if not exist .venv (
   python -m venv .venv
@@ -9,7 +9,7 @@ if not exist .venv (
   call .venv\Scripts\activate
   pip install -q -r requirements.txt
 )
-start "photobooth-server" cmd /k python app.py
+start "adsbooth-server" cmd /k python app.py
 timeout /t 3 /nobreak >nul
 set CHROME="C:\Program Files\Google\Chrome\Application\chrome.exe"
 if not exist %CHROME% set CHROME="C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"

@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<title>Photobooth</title>
+<title>AdsBooth</title>
 <link rel="manifest" href="/static/manifest.webmanifest">
 <meta name="theme-color" content="#121212">
 <meta name="mobile-web-app-capable" content="yes">
@@ -18,8 +18,8 @@
 <div id="bgPat" aria-hidden="true"></div>
 <div id="app">
   <header class="topbar">
-    <span class="mono b"><span id="eventName">NAMA EVENT</span> · PHOTOBOOTH</span>
-    <span class="mono" id="stepLabel"><span class="dot" id="statusDot"></span><span id="statusText">MEMERIKSA PRINTER…</span></span>
+    <span class="mono b"><span id="eventName">EVENT NAME</span> · PHOTOBOOTH</span>
+    <span class="mono" id="stepLabel"><span class="dot" id="statusDot"></span><span id="statusText">CHECKING PRINTER…</span></span>
   </header>
 
   <!-- 1. Sambutan -->
@@ -28,7 +28,7 @@
     <span class="intro-status hidden" id="introStatus"></span>
     <header class="intro-head">
       <img id="introLogo" class="intro-logo hidden" alt="">
-      <h1 id="introName">NAMA EVENT</h1>
+      <h1 id="introName">EVENT NAME</h1>
     </header>
 
     <div class="intro-fit" id="introFit">
@@ -38,7 +38,7 @@
       <span class="ip-lip"></span>
       <div class="ip-out">
         <div class="ip-receipt">
-          <b class="ip-r-name" id="ipName">NAMA EVENT</b>
+          <b class="ip-r-name" id="ipName">EVENT NAME</b>
           <span class="ip-r-dash"></span>
           <img id="ipPrint" alt="">
           <span class="ip-r-dash"></span>
@@ -66,168 +66,204 @@
     </div>
     </div>
 
-    <button class="intro-cta" id="btnStart" type="button" aria-label="Mulai foto">
+    <button class="intro-cta" id="btnStart" type="button" aria-label="Start">
       <span class="ring"></span>
       <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.6"></circle></svg>
     </button>
-    <button class="btn ghost small-btn hidden" id="btnUsb" type="button" style="align-self:center">Sambungkan printer USB</button>
+    <button class="btn ghost small-btn hidden" id="btnUsb" type="button" style="align-self:center">Connect USB printer</button>
   </section>
 
   <!-- 2. Layout -->
   <section class="screen" id="s-layout">
-    <h1 data-photo="Pilih layout foto">Pilih layout struk</h1>
-    <p class="lead" data-photo="Dicetak berwarna di kertas foto 4R (10×15 cm).">Semua dicetak di kertas 80mm, hitam-putih.</p>
+    <div class="grow"></div>
     <div class="grid3 grid-layouts" id="layoutOptions">
-      <button class="opt" data-layout="solo"><div class="thumb solo"><i></i></div><b>Solo</b><span>1 foto besar</span></button>
-      <button class="opt" data-layout="duo"><div class="thumb duo"><i></i><i></i></div><b>Duo</b><span>2 foto</span></button>
-      <button class="opt" data-layout="strip"><div class="thumb strip"><i></i><i></i><i></i></div><b>Strip</b><span data-photo="3 foto · 2 strip">3 foto</span></button>
-      <button class="opt" data-layout="grid"><div class="thumb grid"><i></i><i></i><i></i><i></i></div><b>Grid</b><span>4 foto</span></button>
+      <button class="opt" data-layout="solo"><div class="thumb solo"><i></i></div><b>Solo</b><span>1 big photo</span></button>
+      <button class="opt" data-layout="duo"><div class="thumb duo"><i></i><i></i></div><b>Duo</b><span>2 photos</span></button>
+      <button class="opt" data-layout="strip"><div class="thumb strip"><i></i><i></i><i></i></div><b>Strip</b><span data-photo="3 photos · 2 strips">3 photos</span></button>
+      <button class="opt" data-layout="grid"><div class="thumb grid"><i></i><i></i><i></i><i></i></div><b>Grid</b><span>4 photos</span></button>
     </div>
     <div class="grow"></div>
-    <div class="nav"><button class="btn ghost" data-go="welcome">Kembali</button><button class="btn primary" data-go="style">Lanjut →</button></div>
+    <div class="nav"><button class="btn ghost btn-back" data-go="welcome" aria-label="Back"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button></div>
   </section>
 
   <!-- 3. Gaya -->
   <section class="screen" id="s-style">
-    <h1 data-photo="Gaya foto">Gaya cetak</h1>
-    <p class="lead" data-photo="Pilih nuansa warna fotomu.">Printer thermal hanya mencetak hitam. Pilih cara foto diubah jadi titik-titik.</p>
-    <div class="preview-box"><img id="stylePreview" alt="Contoh hasil cetak"><span class="tag mono" id="styleTag">PREVIEW · DITHER</span></div>
+    <h1 data-photo="Photo style">Print style</h1>
+    <p class="lead" data-photo="Pick a color mood for your photo.">Thermal printers only print black. Pick how your photo turns into dots.</p>
+    <div class="preview-box" hidden><img id="stylePreview" alt="Print preview"><span class="tag mono" id="styleTag">PREVIEW · DITHER</span></div>
     <div class="grid4 style-grid" id="styleOptions">
-      <button class="opt sm" data-style="dither"><b>Dither</b><span>Detail halus, paling mirip foto</span></button>
-      <button class="opt sm" data-style="halftone"><b>Halftone</b><span>Titik besar ala koran</span></button>
-      <button class="opt sm" data-style="kontras"><b>Kontras</b><span>Hitam pekat, siluet tegas</span></button>
-      <button class="opt sm" data-style="sketsa"><b>Sketsa</b><span>Garis seperti gambar pensil</span></button>
-      <button class="opt sm" data-style="ascii"><b>ASCII</b><span>Foto tersusun dari huruf &amp; simbol</span></button>
-      <button class="opt sm" data-style="mewarnai"><b>Mewarnai</b><span>Garis luar, bisa diwarnai</span></button>
+      <button class="opt sm" data-style="dither"><b>Dither</b><span>Fine detail, closest to a photo</span></button>
+      <button class="opt sm" data-style="halftone"><b>Halftone</b><span>Big newspaper-style dots</span></button>
+      <button class="opt sm" data-style="kontras"><b>Contrast</b><span>Deep black, bold silhouette</span></button>
+      <button class="opt sm" data-style="sketsa"><b>Sketch</b><span>Lines like a pencil drawing</span></button>
     </div>
+    <!-- pesan & opsi logo disembunyikan (pesan kosong, logo selalu tampil) -->
+    <div hidden>
     <label class="field" for="caption"><b>Pesan di bawah foto</b> <span class="muted">(opsional, maks 40 huruf)</span></label>
     <input id="caption" type="text" maxlength="40" placeholder="Tulis pesan singkat…" autocomplete="off">
     <label class="check"><input type="checkbox" id="showLogo" checked> <span data-photo="Tampilkan logo event di hasil cetak">Tampilkan logo event di atas struk</span></label>
+    </div>
     <div class="grow"></div>
-    <div class="nav"><button class="btn ghost" data-go="layout">Kembali</button><button class="btn primary" id="btnShoot">Siap foto</button></div>
+    <div class="nav"><button class="btn ghost btn-back" data-go="layout" aria-label="Back"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><button class="btn primary" id="btnShoot" hidden>Ready</button></div>
   </section>
 
   <!-- 4. Kamera -->
   <section class="screen dark" id="s-camera">
     <div class="row-between">
-      <span class="mono">↑ LIHAT KE KAMERA DI ATAS LAYAR</span>
-      <span class="chip mono" id="shotLabel">FOTO 1 DARI 3</span>
+      <span class="mono">↑ LOOK AT THE CAMERA ABOVE THE SCREEN</span>
+      <span class="chip mono" id="shotLabel">PHOTO 1 OF 3</span>
     </div>
+    <div class="vf-wrap" id="vfWrap">
     <div class="viewfinder">
       <video id="video" autoplay playsinline muted></video>
-      <img id="dummyView" class="hidden" alt="Foto contoh (mode tanpa kamera)">
-      <span id="dummyBadge" class="dummy-badge mono hidden">MODE DUMMY · TANPA KAMERA</span>
+      <img id="dummyView" class="hidden" alt="Sample photo (no camera mode)">
+      <span id="dummyBadge" class="dummy-badge mono hidden">DEMO MODE · NO CAMERA</span>
       <div class="count" id="count"></div>
+      <img id="shotReview" class="shot-review hidden" alt="">
       <div class="flash" id="flash"></div>
-      <div class="pose-box hidden" id="poseBox"><span class="mono">TANTANGAN POSE</span><b id="poseText"></b></div>
+      <button class="ready-btn hidden" id="btnReady" type="button" aria-label="Ready">
+        <span class="rb-circle"><span class="rb-ring"></span>
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.6"></circle></svg></span>
+        <b>Ready?</b>
+        <span class="rb-sub" id="readySub">Tap, then look at the camera</span>
+        <span class="rb-dots" id="readyDots"></span>
+      </button>
+      <div class="pose-box hidden" id="poseBox"><span class="mono">POSE CHALLENGE</span><b id="poseText"></b></div>
+    </div>
     </div>
     <div class="row-between">
       <div class="thumbs" id="thumbs"></div>
-      <button class="shutter" id="btnShutter" aria-label="Jepret sekarang"><span></span></button>
+      <button class="shutter" id="btnShutter" aria-label="Shoot now"><span></span></button>
     </div>
-    <div class="grow"></div>
-    <button class="btn ghost light small-btn" id="btnCancel">Batal</button>
+    <button class="btn ghost light small-btn" id="btnCancel">Cancel</button>
   </section>
 
   <!-- 4b. Pilih template -->
   <section class="screen" id="s-template">
-    <h1>Pilih template</h1>
-    <p class="lead">Sudah pakai fotomu. Geser ke bawah untuk lihat semua.</p>
-    <div class="tpl-list" id="tplList"></div>
-    <div class="nav"><button class="btn ghost" id="btnTplRetake">Ulang foto</button><button class="btn primary" id="btnTplNext">Lanjut →</button></div>
+    <h1>Choose a template</h1>
+    <p class="lead">Swipe to browse, tap to choose.</p>
+    <div class="tpl-stage" id="tplStage">
+      <button class="tpl-arrow prev" id="tplPrev" type="button" aria-label="Previous template"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="tpl-list carousel" id="tplList"></div>
+      <button class="tpl-arrow next" id="tplNext" type="button" aria-label="Next template"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
+    </div>
+    <div class="tpl-meta"><b id="tplName"></b><span class="mono" id="tplCount"></span></div>
+    <div class="nav"><button class="btn ghost" id="btnTplRetake">Retake</button><button class="btn primary" id="btnTplNext" hidden>Next →</button></div>
   </section>
 
   <!-- 5. Review -->
   <section class="screen" id="s-review">
-    <h1>Sudah oke?</h1>
-    <p class="lead">Yang kamu lihat di sini sama persis dengan hasil cetak.</p>
+    <h1>Looks good?</h1>
+    <p class="lead">What you see here is exactly what gets printed.</p>
     <div class="review">
-      <div class="paper"><img id="receiptPreview" alt="Preview struk"><div class="loading mono" id="previewLoading">MEMBUAT PREVIEW…</div></div>
+      <div class="paper"><img id="receiptPreview" alt="Print preview"><div class="loading mono" id="previewLoading">CREATING PREVIEW…</div></div>
       <div class="col review-col">
         <div id="shotList" class="col gap"></div>
-        <button class="btn ghost tpl-change" data-go="template">Ganti template</button>
-        <div class="cert-pick hidden" id="certPick"><b>Pilih gelar sertifikat</b><div class="chips" id="certChips"></div></div>
+        <button class="btn ghost tpl-change" data-go="template">Change template</button>
+        <div class="cert-pick hidden" id="certPick"><b>Pick a certificate title</b><div class="chips" id="certChips"></div></div>
         <details class="edit-panel" id="editPanel">
-          <summary class="btn ghost edit-toggle">✏️ Sesuaikan Teks &amp; Kecerahan</summary>
+          <summary class="btn ghost edit-toggle">✏️ Edit text &amp; brightness</summary>
           <div class="card compact edit-form">
-            <label class="field hidden" id="fieldKoranTitle"><span>Nama Koran (Header)</span><input type="text" id="editKoranTitle" maxlength="35" placeholder="Kabar Booth"></label>
-            <label class="field" id="fieldEventName"><span>Nama Event</span><input type="text" id="editEventName" maxlength="40" placeholder="NAMA EVENT"></label>
-            <label class="field" id="fieldCaption"><span id="labelCaption">Pesan di Bawah Foto</span><input type="text" id="editCaption" maxlength="50" placeholder="Tulis pesan / judul…"></label>
-            <label class="field" id="fieldFooter"><span>Teks Penutup</span><input type="text" id="editFooter" maxlength="60" placeholder="TERIMA KASIH"></label>
+            <label class="field hidden" id="fieldKoranTitle"><span>Newspaper name (header)</span><input type="text" id="editKoranTitle" maxlength="35" placeholder="Kabar Booth"></label>
+            <label class="field" id="fieldEventName"><span>Event name</span><input type="text" id="editEventName" maxlength="40" placeholder="EVENT NAME"></label>
+            <label class="field" id="fieldCaption"><span id="labelCaption">Caption under photo</span><input type="text" id="editCaption" maxlength="50" placeholder="Write a message / title…"></label>
+            <label class="field" id="fieldFooter"><span>Closing text</span><input type="text" id="editFooter" maxlength="60" placeholder="THANK YOU"></label>
             <div class="row-between" id="fieldSocial" style="gap:10px">
               <label class="field" style="flex:1"><span>Username</span><input type="text" id="editUsername" maxlength="30" placeholder="@username"></label>
               <label class="field" style="flex:1"><span>Website</span><input type="text" id="editWebsite" maxlength="50" placeholder="www.website.com"></label>
             </div>
             <label class="field" id="fieldBrightness">
-              <div class="row-between"><span>Kecerahan Cetak</span><b id="valBright">100%</b></div>
+              <div class="row-between"><span>Print brightness</span><b id="valBright">100%</b></div>
               <input type="range" id="editBrightness" min="0.6" max="1.4" step="0.05" value="1.0" class="range-slider">
             </label>
-            <button type="button" class="btn ghost small-btn" id="btnResetEdit" style="align-self:flex-end">Reset ke Default</button>
+            <button type="button" class="btn ghost small-btn" id="btnResetEdit" style="align-self:flex-end">Reset to default</button>
           </div>
         </details>
         <div class="grow"></div>
         <div class="card compact row-between">
-          <div><b class="h3">Jumlah cetak</b><div class="muted">Maks <span id="maxCopies">2</span> <span data-photo="lembar">struk</span></div></div>
+          <div><b class="h3">Copies</b><div class="muted">Max <span id="maxCopies">2</span> <span data-photo="prints">prints</span></div></div>
           <div class="stepper">
-            <button class="round" id="copyDec" aria-label="Kurangi jumlah cetak">−</button>
+            <button class="round" id="copyDec" aria-label="Fewer copies">−</button>
             <span id="copies">1</span>
-            <button class="round dark" id="copyInc" aria-label="Tambah jumlah cetak">+</button>
+            <button class="round dark" id="copyInc" aria-label="More copies">+</button>
           </div>
         </div>
-        <button class="btn accent xl" id="btnPrint">Cetak sekarang</button>
-        <button class="btn ghost" id="btnRetakeAll">Ulang semua foto</button>
+        <button class="btn accent xl" id="btnPrint">Print now</button>
+        <button class="btn ghost" id="btnRetakeAll">Retake all photos</button>
       </div>
     </div>
   </section>
 
   <!-- 5b. Buku tamu -->
   <section class="screen" id="s-guestbook">
-    <h1>Tulis ucapan</h1>
-    <p class="lead" data-photo="Tersimpan di buku tamu event.">Ikut tercetak di struk dan tersimpan di buku tamu.</p>
-    <label class="field" for="gbName"><b>Nama</b></label>
-    <input id="gbName" class="gb-input" type="text" maxlength="40" placeholder="Nama kamu" autocomplete="off">
-    <label class="field" for="gbMsg"><b>Ucapan</b> <span class="muted">(maks 160 huruf)</span></label>
-    <textarea id="gbMsg" class="gb-input" maxlength="160" rows="3" placeholder="Tulis ucapan singkat…"></textarea>
-    <div class="row-between"><b class="field">Tanda tangan</b><button class="btn ghost small-btn" id="gbClear" type="button">Hapus</button></div>
-    <canvas id="gbSign" class="sign-pad" aria-label="Kotak tanda tangan"></canvas>
+    <h1>Leave a message</h1>
+    <p class="lead" data-photo="Saved to the event guestbook.">Printed on your receipt and saved to the guestbook.</p>
+    <label class="field" for="gbName"><b>Name</b></label>
+    <input id="gbName" class="gb-input" type="text" maxlength="40" placeholder="Your name" autocomplete="off">
+    <label class="field" for="gbMsg"><b>Message</b> <span class="muted">(max 160 characters)</span></label>
+    <textarea id="gbMsg" class="gb-input" maxlength="160" rows="3" placeholder="Write a short message…"></textarea>
+    <div class="row-between"><b class="field">Signature</b><button class="btn ghost small-btn" id="gbClear" type="button">Clear</button></div>
+    <canvas id="gbSign" class="sign-pad" aria-label="Signature pad"></canvas>
     <div class="grow"></div>
-    <div class="nav"><button class="btn ghost" id="gbSkip">Lewati</button><button class="btn accent" id="gbPrint" style="flex:1">Cetak sekarang</button></div>
+    <div class="nav"><button class="btn ghost" id="gbSkip">Skip</button><button class="btn accent" id="gbPrint" style="flex:1">Print now</button></div>
   </section>
 
   <!-- 6. Mencetak -->
   <section class="screen" id="s-printing">
-    <h1 class="center">Sedang mencetak…</h1>
-    <p class="lead center" id="printStatus">Mohon tunggu sebentar</p>
+    <h1 class="center">Printing…</h1>
+    <p class="lead center" id="printStatus">Please wait a moment</p>
     <div class="printer-art"><div class="printer"><div class="leds"><i></i><i></i></div><div class="mouth"></div></div><div class="paper-out" id="paperOut"></div></div>
-    <div class="row-between mono"><span>PROGRES</span><b id="pct">0%</b></div>
+    <div class="row-between mono"><span>PROGRESS</span><b id="pct">0%</b></div>
     <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div id="bar"></div></div>
-    <div class="warn">⚠ Jangan tarik kertasnya. Tunggu sampai terpotong otomatis.</div>
+    <div class="warn">⚠ Don’t pull the paper. Wait until it’s cut automatically.</div>
     <div id="printError" class="error hidden">
-      <b>Gagal mencetak.</b> <span id="printErrorMsg"></span>
-      <button class="btn ghost hidden" id="btnUsbErr" type="button">Sambungkan printer USB</button>
-      <div class="nav"><button class="btn ghost" data-go="review">Kembali</button><button class="btn primary" id="btnRetryPrint">Coba lagi</button></div>
+      <b>Printing failed.</b> <span id="printErrorMsg"></span>
+      <button class="btn ghost hidden" id="btnUsbErr" type="button">Connect USB printer</button>
+      <div class="nav"><button class="btn ghost btn-back" data-go="review" aria-label="Back"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button><button class="btn primary" id="btnRetryPrint">Try again</button></div>
     </div>
   </section>
 
   <!-- 7. Selesai -->
   <section class="screen" id="s-done">
     <div class="check-circle">✓</div>
-    <h1 class="center" data-photo="Ambil fotomu!">Ambil strukmu!</h1>
-    <p class="lead center">Ada di slot printer di bawah layar ↓</p>
-    <div class="lucky-box hidden" id="luckyBox"><span class="mono">NOMOR UNDIAN KAMU</span><b id="luckyNum">0000</b><span data-photo="Simpan fotonya untuk undian doorprize!">Simpan struknya untuk undian doorprize!</span></div>
+    <h1 class="center" data-photo="Grab your photo!">Grab your print!</h1>
+    <p class="lead center">It’s in the printer slot below the screen ↓</p>
+    <div class="lucky-box hidden" id="luckyBox"><span class="mono">YOUR LUCKY NUMBER</span><b id="luckyNum">0000</b><span data-photo="Keep your photo for the lucky draw!">Keep your print for the lucky draw!</span></div>
     <div class="card qr-card" id="qrCard">
-      <img id="qrImg" alt="Kode QR untuk mengunduh foto">
-      <div><b class="h3" data-photo="Mau versi digitalnya?">Mau versi digital berwarna?</b><p class="muted">Scan QR ini pakai kamera HP (sambung ke Wi-Fi yang sama) untuk unduh fotonya.</p></div>
+      <img id="qrImg" alt="QR code to download your photos">
+      <div><b class="h3" data-photo="Want the digital copy?">Want the full-color digital copy?</b><p class="muted">Scan this QR with your phone camera (on the same Wi-Fi) to download your photos.</p></div>
     </div>
     <div class="grow"></div>
-    <div class="nav"><button class="btn ghost" id="btnReprint">Cetak lagi</button><button class="btn primary" id="btnFinish">Selesai</button></div>
-    <div class="mono muted center">KEMBALI KE AWAL DALAM <span id="resetSecs">15</span> DETIK</div>
+    <div class="nav"><button class="btn ghost" id="btnReprint">Print again</button><button class="btn primary" id="btnFinish">Done</button></div>
+    <div class="mono muted center">BACK TO START IN <span id="resetSecs">15</span> SECONDS</div>
   </section>
+</div>
+
+<!-- keyboard layar (popup) -->
+<div class="vk hidden" id="vk" aria-hidden="true">
+  <div class="vk-sheet" role="dialog" aria-label="Keyboard">
+    <div class="vk-head">
+      <span class="vk-label mono" id="vkLabel">TEXT</span>
+      <span class="vk-count mono" id="vkCount">0/40</span>
+    </div>
+    <div class="vk-display" id="vkDisplay"><span id="vkText"></span><i class="vk-caret"></i><span class="vk-ph" id="vkPh"></span></div>
+    <div class="vk-keys" id="vkKeys"></div>
+  </div>
 </div>
 
 <video id="video2" autoplay playsinline muted class="hidden"></video>
 <canvas id="cap" class="hidden"></canvas>
 <script src="/static/webusb.js"></script>
 <script src="/static/app.js"></script>
+<div id="licLock" class="lic-lock hidden" role="alertdialog" aria-live="assertive">
+  <div class="lic-box">
+    <div class="lic-ico" aria-hidden="true">🔒</div>
+    <h2 id="licTitle">Device not activated</h2>
+    <p id="licText">Please contact your provider to activate this photobooth.</p>
+    <p class="lic-id">Device ID<br><b class="mono" id="licId">-</b></p>
+    <a class="lic-studio" href="/studio">Open Studio</a>
+  </div>
+</div>
+<span id="demoBadge" class="demo-badge hidden">DEMO</span>
 </body>
 </html>

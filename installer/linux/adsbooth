@@ -1,0 +1,3 @@
+#!/bin/sh
+# Pembungkus: program asli (hasil kompilasi) ada di /opt/adsbooth
+exec /opt/adsbooth/adsbooth "$@"

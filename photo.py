@@ -17,12 +17,12 @@ BULAN = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Ag
          "September", "Oktober", "November", "Desember"]
 
 STYLES = [
-    ("warna", "Warna", "Warna asli, natural"),
-    ("cerah", "Cerah", "Warna lebih hidup & terang"),
-    ("bw", "Hitam putih", "Klasik, kontras lembut"),
-    ("sepia", "Sepia", "Cokelat hangat ala foto lama"),
-    ("vintage", "Vintage", "Pudar, hangat, sedikit butir"),
-    ("dingin", "Sejuk", "Nuansa biru, bersih"),
+    ("warna", "Color", "True, natural color"),
+    ("cerah", "Vivid", "Brighter, livelier colors"),
+    ("bw", "Black & white", "Classic, soft contrast"),
+    ("sepia", "Sepia", "Warm brown, old-photo look"),
+    ("vintage", "Vintage", "Faded, warm, a little grain"),
+    ("dingin", "Cool", "Blue tint, clean"),
 ]
 STYLE_IDS = [s[0] for s in STYLES]
 
@@ -170,7 +170,7 @@ def footer_block(c, canvas, top, ink, sub, name_font="serifb", accent=None):
         f2 = fit_font(d, c.caption, "hand", c.px(56), usable)
         text_c(d, W / 2, y, c.caption, f2, accent or ink)
         y += f2.size + c.px(10)
-    meta = c.date + (f"  ·  UNDIAN #{c.lucky}" if c.lucky else "")
+    meta = c.date + ((f"  ·  {'DRAW' if T.get_lang() == 'en' else 'UNDIAN'} #{c.lucky}") if c.lucky else "")
     text_c(d, W / 2, y, meta, T.F("mono", c.px(26)), sub)
     if qr_s:
         put_qr(c, canvas, W - c.px(60) - qr_s, H - c.px(50) - qr_s, qr_s)
@@ -278,7 +278,7 @@ def t_tema(c):
         f2 = fit_font(d, c.caption, "hand", c.px(60), c.W - 2 * m - c.px(200))
         text_c(d, c.W / 2, y, c.caption, f2, accent)
         y += f2.size + c.px(10)
-    text_c(d, c.W / 2, y, c.date + (f" · UNDIAN #{c.lucky}" if c.lucky else ""), T.F("mono", c.px(26)), ink)
+    text_c(d, c.W / 2, y, c.date + ((f" · {'DRAW' if T.get_lang() == 'en' else 'UNDIAN'} #{c.lucky}") if c.lucky else ""), T.F("mono", c.px(26)), ink)
     d.rectangle([0, c.H - c.px(18), c.W, c.H], fill=accent)
     if c.qr:
         s = c.px(140)
@@ -300,7 +300,7 @@ def t_majalah(c):
     f = fit_font(d, mast, "bebas", c.px(250), c.W - 2 * m)
     text_c(d, c.W / 2, m * 0.6, mast, f, (255, 255, 255))
     y = m * 0.6 + f.size * 0.92
-    text_c(d, c.W / 2, y, f"EDISI SPESIAL · {c.date.upper()}", T.F("monob", c.px(26)), (255, 214, 0))
+    text_c(d, c.W / 2, y, T.tr(f"EDISI SPESIAL · {c.date.upper()}"), T.F("monob", c.px(26)), (255, 214, 0))
     # foto kecil (sisa foto) di kanan bawah
     rest = c.photos[1:] if len(c.photos) > 1 else []
     if rest:
@@ -317,10 +317,10 @@ def t_majalah(c):
     f2 = fit_font(d, c.event.upper(), "black", c.px(84), c.W - 2 * m)
     d.text((m, by), c.event.upper(), font=f2, fill=(255, 255, 255))
     by += f2.size + c.px(14)
-    line = c.caption or "Tampil memukau malam ini"
+    line = c.caption or T.tr("Tampil memukau malam ini")
     d.text((m, by), line, font=fit_font(d, line, "serifb", c.px(48), c.W - 2 * m - c.px(170)), fill=(255, 214, 0))
     by += c.px(64)
-    d.text((m, by), "SENYUM 100% · GAYA MAKSIMAL" + (f" · #{c.lucky}" if c.lucky else ""),
+    d.text((m, by), T.tr("SENYUM 100% · GAYA MAKSIMAL") + (f" · #{c.lucky}" if c.lucky else ""),
            font=T.F("monob", c.px(24)), fill=(255, 255, 255))
     if c.qr:
         s = c.px(140)
@@ -377,21 +377,21 @@ def t_bingkai(c, frame_path=None):
 
 
 TEMPLATES = [
-    ("klasik", "Klasik putih", t_klasik),
-    ("gelap", "Hitam elegan", t_gelap),
+    ("klasik", "Classic white", t_klasik),
+    ("gelap", "Elegant black", t_gelap),
     ("polaroid", "Polaroid", t_polaroid),
-    ("film", "Roll film", t_film),
-    ("tema", "Warna tema event", t_tema),
-    ("majalah", "Sampul majalah", t_majalah),
-    ("wedding", "Pernikahan", t_wedding),
-    ("bingkai", "Bingkai sendiri (PNG)", t_bingkai),
+    ("film", "Film roll", t_film),
+    ("tema", "Event colors", t_tema),
+    ("majalah", "Magazine cover", t_majalah),
+    ("wedding", "Wedding", t_wedding),
+    ("bingkai", "Custom frame (PNG)", t_bingkai),
 ]
 BY_ID = {t[0]: t for t in TEMPLATES}
 
 
 def date_str(now=None):
     n = now or datetime.now()
-    return f"{n.day} {BULAN[n.month]} {n.year}"
+    return f"{n.day} {T.month_name(n.month)} {n.year}"
 
 
 def compose_photo(photos, layout="strip", style="warna", caption="", show_logo=True, event_name="",
@@ -415,7 +415,7 @@ def compose_photo(photos, layout="strip", style="warna", caption="", show_logo=T
         import qrcode
         qr = qrcode.make(qr_url, border=1).convert("RGB")
     W = STRIP_W if layout == "strip" else W4R
-    c = Ctx(styled, layout, W, H4R, event_name or "NAMA EVENT", footer, caption or "", date_str(now), logo, qr,
+    c = Ctx(styled, layout, W, H4R, event_name or T.tr("NAMA EVENT"), T.tr(footer), caption or "", date_str(now), logo, qr,
             theme or {}, lucky, number)
     tid = template if template in BY_ID else "klasik"
     if tid == "bingkai":

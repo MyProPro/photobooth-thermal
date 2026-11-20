@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Slideshow — Photobooth</title>
+<title>Slideshow — AdsBooth</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;700&display=swap">
 <style>
 html,body{margin:0;height:100%;background:#0d0d0d;color:#F2EFE8;font-family:'Space Grotesk',system-ui,sans-serif;overflow:hidden;cursor:none}
@@ -26,7 +26,7 @@ html,body{margin:0;height:100%;background:#0d0d0d;color:#F2EFE8;font-family:'Spa
 </head>
 <body>
 <div class="stage" id="stage">
-  <div class="photo" id="photo"><img id="imgA" alt=""><img id="imgB" alt=""><span class="new" id="newTag">FOTO BARU!</span></div>
+  <div class="photo" id="photo"><img id="imgA" alt=""><img id="imgB" alt=""><span class="new" id="newTag">NEW PHOTO!</span></div>
   <div class="side">
     <div class="struk"><img id="struk" alt="Struk"></div>
     <div class="info">
@@ -36,7 +36,7 @@ html,body{margin:0;height:100%;background:#0d0d0d;color:#F2EFE8;font-family:'Spa
     </div>
   </div>
 </div>
-<div class="empty hidden" id="empty" style="display:none"><b id="emptyEvent">Photobooth</b><span class="meta">FOTO AKAN MUNCUL DI SINI</span></div>
+<div class="empty hidden" id="empty" style="display:none"><b id="emptyEvent">AdsBooth</b><span class="meta">FOTO AKAN MUNCUL DI SINI</span></div>
 <script>
 const $ = (s) => document.querySelector(s);
 let items = [], seen = new Set(), queue = [], idx = 0, showA = true, first = true;
@@ -45,7 +45,7 @@ const SLIDE_MS = 5000;
 async function poll() {
   try {
     const r = await fetch('/api/slideshow?limit=60'); const j = await r.json();
-    $('#event').textContent = j.event; $('#emptyEvent').textContent = j.event || 'Photobooth';
+    $('#event').textContent = j.event; $('#emptyEvent').textContent = j.event || 'AdsBooth';
     const fresh = j.items.filter((m) => !seen.has(m.id));
     fresh.forEach((m) => seen.add(m.id));
     items = j.items;
@@ -64,7 +64,7 @@ function slide() {
   show.onload = () => { show.classList.add('on'); hide.classList.remove('on'); };
   show.src = src; showA = !showA;
   $('#struk').src = m.struk;
-  $('#meta').textContent = `NO. ${String(m.number || '').padStart(4, '0')} · ${new Date(m.time * 1000).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+  $('#meta').textContent = `NO. ${String(m.number || '').padStart(4, '0')} · ${new Date(m.time * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
   $('#cap').textContent = m.caption || '';
   $('#newTag').classList.toggle('on', isNew);
 }

@@ -7,8 +7,10 @@ import random
 
 from PIL import Image, ImageDraw, ImageFilter
 
-BASE = os.path.dirname(os.path.abspath(__file__))
-SESS = os.path.join(BASE, "output", "sessions")
+import paths as P
+
+BASE = P.BASE
+SESS = os.path.join(P.OUT, "sessions")
 
 
 # ---------- ilustrasi contoh (dipakai kalau belum ada foto) ----------

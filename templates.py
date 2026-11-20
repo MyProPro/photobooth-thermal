@@ -19,6 +19,202 @@ HARI = ["SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU", "MINGGU"]
 BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli",
          "Agustus", "September", "Oktober", "November", "Desember"]
 
+# ---------------------------------------------------------------- bahasa cetak
+# Teks template ditulis dalam Bahasa Indonesia. Kalau event memilih bahasa cetak
+# English, Paper menerjemahkan teks lewat tabel di bawah (per thread, aman untuk
+# server multi-thread). Teks buatan user (nama event, caption, template custom)
+# tidak ikut diterjemahkan kecuali sama persis dengan teks bawaan.
+import re as _re
+import threading as _threading
+
+_TL = _threading.local()
+PRINT_LANGS = [("id", "Bahasa Indonesia"), ("en", "English")]
+
+DAYS_EN = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+MONTHS_EN = ["January", "February", "March", "April", "May", "June", "July",
+             "August", "September", "October", "November", "December"]
+
+
+def set_lang(lang):
+    _TL.lang = "en" if str(lang or "").lower().startswith("en") else "id"
+
+
+def get_lang():
+    return getattr(_TL, "lang", "id")
+
+
+def month_name(m):
+    """m: 1..12"""
+    return (MONTHS_EN if get_lang() == "en" else BULAN)[m - 1]
+
+
+def day_name(wd):
+    """wd: 0=Senin .. 6=Minggu"""
+    return (DAYS_EN if get_lang() == "en" else HARI)[wd]
+
+
+EN = {
+    # umum
+    "NAMA EVENT": "EVENT NAME", "TERIMA KASIH": "THANK YOU",
+    "Scan untuk unduh": "Scan to download", "versi digital": "the digital", "berwarna.": "color copy.",
+    "scan untuk versi digital": "scan for the digital copy", "unduh versi digital": "download digital copy",
+    "SOLO · 1 FOTO": "SOLO · 1 PHOTO", "DUO · 2 FOTO": "DUO · 2 PHOTOS", "STRIP · 3 FOTO": "STRIP · 3 PHOTOS",
+    "GRID · 4 FOTO": "GRID · 4 PHOTOS", "FEED · 9 FOTO": "FEED · 9 PHOTOS",
+    "MOMEN BAHAGIA": "HAPPY MOMENTS",
+    # tiket / pass
+    "TANGGAL": "DATE", "JAM": "TIME", "SOBEK DI SINI": "TEAR HERE", "NAMA": "NAME",
+    # koran
+    "Kabar Booth": "Booth News", "HARGA: 1 SENYUM": "PRICE: 1 SMILE",
+    "TAMU INI TERTANGKAP KAMERA SEDANG BAHAGIA": "GUEST CAUGHT ON CAMERA BEING HAPPY",
+    "Foto: dok. Photobooth": "Photo: Photobooth archive", "BERSAMBUNG KE HAL. 2 >": "CONTINUED ON P. 2 >",
+    "Baca edisi digital": "Read the digital", "(foto berwarna)": "edition (in color)", "di HP kamu.": "on your phone.",
+    # majalah
+    "JUGA DI EDISI INI": "ALSO IN THIS ISSUE", "HARGA: GRATIS": "PRICE: FREE",
+    # struk belanja
+    "Jl. Kenangan No. 1": "1 Memory Lane", "NO. TRX": "TRX NO.", "KASIR": "CASHIER", "GRATIS": "FREE",
+    "1 x SENYUM LEBAR": "1 x BIG SMILE", "1 x TAWA LEPAS": "1 x GOOD LAUGH", "1 x KERTAS STRUK": "1 x RECEIPT PAPER",
+    "BAHAGIA": "HAPPY", "TUNAI": "CASH", "KENANGAN": "MEMORIES", "KEMBALI": "CHANGE",
+    "BARANG YANG SUDAH DIFOTO": "ITEMS ALREADY PHOTOGRAPHED", "TIDAK DAPAT DITUKAR": "CANNOT BE EXCHANGED",
+    # profil sosial
+    "www.websitekamu.com": "www.yourwebsite.com",
+    # kalender
+    "MIN": "SUN", "SEN": "MON", "SEL": "TUE", "RAB": "WED", "KAM": "THU", "JUM": "FRI", "SAB": "SAT",
+    # ramalan
+    "RAMALAN": "FORTUNE", "REZEKI": "LUCK", "JODOH": "LOVE", "KARIER": "CAREER",
+    "Warna keberuntungan: hitam (kata printer)": "Lucky color: black (says the printer)",
+    "Hari ini senyummu jadi alasan orang lain ikut bahagia.": "Today your smile is the reason someone else is happy.",
+    "Rezeki datang dari arah tak terduga. Mungkin dari doorprize.": "Luck comes from unexpected places. Maybe the door prize.",
+    "Seseorang diam-diam menyimpan fotomu. Itu kamu, barusan.": "Someone is secretly keeping your photo. That was you, just now.",
+    "Kesabaranmu akan segera dibalas dengan makanan enak.": "Your patience will soon be rewarded with good food.",
+    "Bintangmu terang malam ini. Lampu booth-nya juga.": "Your star shines bright tonight. So do the booth lights.",
+    "Hal baik datang bertiga: kamu, foto ini, dan struknya.": "Good things come in threes: you, this photo and the receipt.",
+    "Jangan lupa minum air putih, lalu pose lagi.": "Remember to drink water, then pose again.",
+    "Liburan sudah memanggil. Jawab teleponnya.": "A vacation is calling. Pick up the phone.",
+    "Kamu akan bertemu orang baru yang menyenangkan hari ini.": "You will meet someone delightful today.",
+    "Pose berikutnya akan jadi foto terbaikmu tahun ini.": "Your next pose will be your best photo this year.",
+    # boarding
+    "Sini": "Here", "Bahagia": "Happy", "TAMU ISTIMEWA": "VIP GUEST",
+    # sertifikat
+    "SERTIFIKAT": "CERTIFICATE", "Dengan ini menyatakan bahwa": "This is to certify that",
+    "Pemegang sertifikat ini": "The holder of this certificate",
+    "telah resmi dinyatakan sebagai": "has officially been declared",
+    "RESMI": "OFFICIAL", "Ketua Panitia Senyum": "Chair, Smile Committee",
+    "CAKEP MAKSIMAL | tanpa filter, tanpa editan": "MAXIMUM GORGEOUS | no filter, no edits",
+    "CANTIK 95% | 5% sisanya ketinggalan di rumah": "95% BEAUTIFUL | the other 5% was left at home",
+    "GANTENG 95% | 5% lagi masih loading": "95% HANDSOME | the other 5% is still loading",
+    "JELEK 3% | 97% sisanya kece parah": "3% UGLY | the other 97% is stunning",
+    "AURA +1000 | terdeteksi dari jarak 5 meter": "AURA +1000 | detected from 5 meters away",
+    "MAIN CHARACTER | yang lain cuma figuran": "MAIN CHARACTER | everyone else is an extra",
+    "SPEK IDAMAN MERTUA | sopan, wangi, fotogenik": "IN-LAW APPROVED | polite, fragrant, photogenic",
+    "BUKAN KALENG-KALENG | kualitas ekspor": "THE REAL DEAL | export quality",
+    "SLAY TOTAL | no debat": "TOTAL SLAY | no debate",
+    "GLOW UP BERHASIL | versi terbaik hari ini": "GLOW UP COMPLETE | today's best version",
+    "SENYUM 100% ORI | bukan KW": "100% GENUINE SMILE | not a knockoff",
+    "VIBES JUARA | satu ruangan ikut bahagia": "CHAMPION VIBES | the whole room is happy",
+    "PALING FOTOGENIK | kamera pun naksir": "MOST PHOTOGENIC | even the camera has a crush",
+    "KEREN TAPI SANTUY | low effort, high result": "COOL BUT CHILL | low effort, high result",
+    # resep
+    "Spesialis Senyum": "Smile Specialist", "Pro  :": "For  :", "Tamu istimewa": "Special guest",
+    "Tgl  :": "Date :", "Obat tidak perlu ditebus. Gratis.": "No need to pay for this medicine. It's free.",
+    "Senyum lebar": "Big smile", "3x sehari sesudah makan": "3x a day after meals",
+    "Tertawa lepas": "Hearty laugh", "sesuai kebutuhan": "as needed",
+    "Foto bareng teman": "Photo with friends", "min. 1x per acara": "at least 1x per event",
+    "Pelukan hangat": "Warm hug", "2x sehari": "2x a day",
+    "Liburan": "Vacation", "1x sebulan, jangan ditunda": "1x a month, don't postpone",
+    "Air putih": "Water", "8 gelas sehari": "8 glasses a day",
+    "Tidur cukup": "Enough sleep", "tiap malam": "every night",
+    "Dengar lagu favorit": "Favorite song", "sebelum tidur": "before bed",
+    # tes kecocokan
+    "LAB PHOTOBOOTH": "PHOTOBOOTH LAB", "HASIL TES KECOCOKAN": "COMPATIBILITY TEST RESULT",
+    "TINGKAT KECOCOKAN": "COMPATIBILITY LEVEL", "PEMERIKSAAN": "TEST", "HASIL": "RESULT",
+    "Selera humor": "Sense of humor", "Selera makan": "Food taste", "Kekompakan pose": "Pose sync",
+    "Level bucin": "Lovey-dovey level", "KESIMPULAN:": "CONCLUSION:",
+    "Sangat cocok. Segera foto lagi.": "A perfect match. Take another photo soon.",
+    "Cocok banget, tinggal tentukan tanggal.": "So compatible, just pick a date.",
+    "Kompak! Pertahankan.": "In sync! Keep it up.", "Chemistry di atas rata-rata.": "Above-average chemistry.",
+    "Satu frekuensi. Langka!": "Same wavelength. Rare!",
+    # kartu pos
+    "KARTU POS": "POSTCARD", "Untuk:": "To:", "Pesan:": "Message:", "Dari:": "From:",
+    # komik
+    "Eh, kameranya udah nyala?": "Wait, is the camera on?", "Senyum! Satu, dua...": "Smile! One, two...",
+    "Ini dicetak di struk?!": "This prints on a receipt?!", "Pose andalan, go!": "Signature pose, go!",
+    "Satu lagi, satu lagi!": "One more, one more!", "Siapa yang kedip?": "Who blinked?",
+    "Fix ini masuk feed.": "This is going on my feed.", "Kok aku paling kece?": "Why do I look the best?",
+    "Gaya bebas!": "Freestyle!", "Jangan lupa bahagia.": "Don't forget to be happy.",
+    "Mana fotografernya?": "Where's the photographer?", "Cekrek!": "Click!", "TAMAT": "THE END",
+    # hari (kalender)
+    "Senin": "Monday", "Selasa": "Tuesday", "Rabu": "Wednesday", "Kamis": "Thursday",
+    "Jumat": "Friday", "Sabtu": "Saturday", "Minggu": "Sunday",
+    # blok tambahan (imaging.py)
+    "BUKU TAMU": "GUESTBOOK", "TANTANGAN POSE": "POSE CHALLENGE", "NOMOR UNDIAN": "LUCKY NUMBER",
+    "Simpan struk ini untuk undian doorprize": "Keep this receipt for the door prize draw",
+    "ARSIP TUAN RUMAH": "HOST COPY",
+    "Scan untuk putar": "Scan to play", "video kamu": "your video",
+    "VERSI DEMO - BELUM BERLISENSI": "DEMO VERSION - UNLICENSED",
+    "Scan pakai kamera HP lalu pilih video sekali. Video diputar tiap kali di-scan, tersimpan di HP kamu saja.":
+        "Scan with your phone camera and pick a video once. It plays on every scan, saved on your phone only.",
+    # foto 4R (photo.py)
+    "Tampil memukau malam ini": "Stunning tonight", "SENYUM 100% · GAYA MAKSIMAL": "100% SMILE · MAXIMUM STYLE",
+}
+
+# teks yang berisi data (nama event, nomor, tanggal): (pola, ganti)
+EN_RX = [(_re.compile(a), b) for a, b in [
+    (r"^EDISI SPESIAL · (.*)$", r"SPECIAL EDITION · \1"),
+    (r"^EDISI NO\. (.*)$", r"ISSUE NO. \1"),
+    (r"^EDISI #(.*)$", r"ISSUE #\1"),
+    (r"^Laporan langsung dari booth foto (.*)$", r"Live report from the \1 photo booth"),
+    (r"^Sebuah momen langka berhasil diabadikan di (.*?)\. Menurut saksi mata.*$",
+     r"A rare moment was captured at \1. According to witnesses, the smiles seen were one hundred "
+     r"percent genuine and completely unforced. The editors confirm this photo was printed directly "
+     r"on thermal paper, with no filter other than happiness. As of press time, the line in front of "
+     r"the booth keeps growing."),
+    (r"^(\d+) x POSE ANDALAN$", r"\1 x SIGNATURE POSE"),
+    (r"^CATATAN: (.*)$", r"NOTE: \1"),
+    (r"^Seru banget di (.*)!$", r"So much fun at \1!"),
+    (r"^Live dari (.*)!$", r"Live from \1!"),
+    (r"^Kenangan dari (.*)$", r"Memories from \1"),
+    (r"^Momen #(\d+) di (.*)$", r"Moment #\1 at \2"),
+    (r"^HARI INI · (.*)$", r"TODAY · \1"),
+    (r"^Angka keberuntungan: (.*)$", r"Lucky numbers: \1"),
+    (r"^Diperiksa oleh: Lab Photobooth (.*)$", r"Checked by: Photobooth Lab \1"),
+    (r"^No\. Sampel : (.*)$", r"Sample No. : \1"),
+    (r"^Ditetapkan di (.*)$", r"Issued at \1"),
+    (r"^Praktik: (.*)$", r"Practice: \1"),
+    (r"^SIP (.*)$", r"LIC \1"),
+    (r"^Suatu hari di (.*)$", r"One day at \1"),
+    (r"^S (.+)$", None),          # aturan pakai resep: "S <aturan>"
+    (r"^(.*) · UNDIAN #(.*)$", r"\1 · DRAW #\2"),
+    (r"^(.*)  ·  UNDIAN #(.*)$", r"\1  ·  DRAW #\2"),
+    (r"^Template ini tidak mendukung layout '(.*)'$", r"This template does not support the '\1' layout"),
+]]
+
+
+def tr(text):
+    """Terjemahkan teks cetak sesuai bahasa event (thread ini). Bahasa Indonesia: tidak diubah."""
+    if not text or get_lang() != "en" or getattr(_TL, "off", False) or not isinstance(text, str):
+        return text
+    hit = EN.get(text)
+    if hit is not None:
+        return hit
+    for rx, rep in EN_RX:
+        m = rx.match(text)
+        if m:
+            if rep is None:          # "S <aturan>"
+                inner = EN.get(m.group(1))
+                return "S " + inner if inner else text
+            return m.expand(rep)
+    return text
+
+
+class no_translate:
+    """with no_translate(): ... -> teks buatan user (template custom) tidak diterjemahkan."""
+    def __enter__(self):
+        self._old = getattr(_TL, "off", False)
+        _TL.off = True
+
+    def __exit__(self, *a):
+        _TL.off = self._old
+
 # ---------------------------------------------------------------- font
 _FILES = {
     "bebas": ("BebasNeue-Regular.ttf", None),
@@ -123,11 +319,11 @@ class Ctx:
 
     @property
     def date_long(self):
-        return f"{self.now.day} {BULAN[self.now.month - 1]} {self.now.year}"
+        return f"{self.now.day} {month_name(self.now.month)} {self.now.year}"
 
     @property
     def day(self):
-        return HARI[self.now.weekday()]
+        return day_name(self.now.weekday())
 
 
 # ---------------------------------------------------------------- kanvas
@@ -139,10 +335,12 @@ class Paper:
         self.y = 0
 
     def tw(self, text, f, spacing=0):
+        text = tr(text)
         return self.d.textlength(text, font=f) + spacing * max(0, len(text) - 1)
 
     def text(self, x, y, text, f, fill=K, spacing=0, stroke=0, stroke_fill=K):
         """Gambar teks dengan sisi atas glyph tepat di y. Return tinggi."""
+        text = tr(text)
         bb = f.getbbox(text or " ")
         top = bb[1]
         if spacing:
@@ -166,6 +364,7 @@ class Paper:
         return self.text(x1 - self.tw(text, f), y, text, f, fill)
 
     def wrap(self, text, f, max_w):
+        text = tr(text)
         lines, cur = [], ""
         for wd in text.split():
             t = (cur + " " + wd).strip()
@@ -335,6 +534,7 @@ def t_polaroid(c):
         im.paste(c.ph(i, pw, ph_), (pad, pad))
         d.rectangle((0, 0, cw - 1, ch - 1), outline=K, width=3)
         if label:
+            label = tr(label)
             f = hand if bottom > 50 else F("hand", 26)
             tw = d.textlength(label, font=f)
             bb = f.getbbox(label)
@@ -647,7 +847,7 @@ def t_belanja(c):
     p.y = p.dashed(h=2) + 16
     f = F("mono", 19)
     for k, v in [("NO. TRX", c.no), ("TANGGAL", f"{c.now.strftime('%d/%m/%Y')} {c.time}"), ("KASIR", "BOOTH-01")]:
-        p.text(M, p.y, f"{k:<9}: {v}", f)
+        p.text(M, p.y, f"{tr(k):<9}: {v}", f)
         p.y += 30
     p.y += 6
     p.y = p.dashed(h=2) + 18
@@ -924,7 +1124,7 @@ def test_receipt(width=576, printer_cfg=None):
 # ================================================================ PROFIL SOSMED
 
 def _fmt_num(n):
-    return f"{n:,}".replace(",", ".")
+    return f"{n:,}" if get_lang() == "en" else f"{n:,}".replace(",", ".")
 
 
 def _icon(d, kind, cx, cy, s=22, w=3, fill=K):
@@ -1085,15 +1285,15 @@ def t_sosmed(c):
     return p.finish(bottom_pad=30)
 
 
-# ================================================================ SOSMED LAIN (Threads, X, Facebook, YouTube)
-# Tata letak meniru halaman profil; ikon digambar generik (tanpa logo resmi).
+# ================================================================ SOSMED LAIN (Text Feed, Micro Profile, Social Page, Video Channel)
+# Tata letak profil sosial generik; ikon digambar generik, tanpa nama/logo merek apa pun.
 
 def _social(c):
     so = c.social or {}
     return {
         "user": (so.get("username") or "").strip().lstrip("@") or "username",
         "name": fill_tokens(so.get("display") or "{event}", c),
-        "web": (so.get("website") or "").strip() or "www.websitekamu.com",
+        "web": (so.get("website") or "").strip() or tr("www.websitekamu.com"),
         "bio": fill_tokens(so.get("bio") or "{date_long}", c),
         "rnd": random.Random(f"{c.no}-{c.now.timestamp()}"),
     }
@@ -1101,7 +1301,8 @@ def _social(c):
 
 def _num_short(n):
     if n >= 1000:
-        v = f"{n / 1000:.1f}".rstrip("0").rstrip(".").replace(".", ",")
+        v = f"{n / 1000:.1f}".rstrip("0").rstrip(".")
+        v = v if get_lang() == "en" else v.replace(".", ",")
         return v + "K"
     return str(n)
 
@@ -1154,7 +1355,7 @@ def _collage(c, x, y, w, style="x", gap=4):
             top = int(w * 0.6)
             tw = (w - 2 * gap) // 3
             r = [(x, y, w, top)] + [(x + k * (tw + gap), y + top + gap, tw, tw) for k in range(3)]
-    else:  # gaya X / Threads
+    else:  # gaya micro profile / text feed
         if n == 1:
             r = [(x, y, w, int(w * 0.8))]
         else:
@@ -1286,7 +1487,7 @@ def t_threads(c):
     p.d.rounded_rectangle((L + bw + 12, y, R, y + 46), radius=12, outline=K, width=2)
     p.center("Mention", F("sansb", 19), y=y + 13, x0=L + bw + 12, x1=R)
     y += 72
-    y = _tabs(p, y, ["Threads", "Replies", "Media", "Reposts"], 0)
+    y = _tabs(p, y, ["Posts", "Replies", "Media", "Reposts"], 0)
     # postingan
     y += 20
     pa = 52
@@ -1336,7 +1537,7 @@ def t_xprofil(c):
     p.text(L + 30, y, s["web"], F("sansb", 18))
     y += 30
     _icon2(p.d, "calendar", L + 10, y + 11, s=20)
-    p.text(L + 30, y, f"Joined {BULAN[c.now.month - 1]} {c.now.year}", F("sans", 18))
+    p.text(L + 30, y, f"Joined {MONTHS_EN[c.now.month - 1]} {c.now.year}", F("sans", 18))
     y += 34
     ing, fol = rnd.randint(500, 10000), rnd.randint(500, 10000)
     x = L
@@ -1528,8 +1729,14 @@ def t_kalender(c):
     put_photos(p, c, rects, border=2, frame_gap=5)
     y += 34
     # bulan & tahun
-    p.text(L + 14, y, BULAN[c.now.month - 1].upper(), F("bebas", 72))
-    p.right(str(c.now.year), F("bebas", 72), y, x1=R - 14)
+    mon, yr = month_name(c.now.month).upper(), str(c.now.year)
+    fy = F("bebas", 72)
+    room = (R - 14) - (L + 14) - p.tw(yr, fy) - 24
+    ms = 72
+    while p.tw(mon, F("bebas", ms)) > room and ms > 30:     # bulan panjang (NOVEMBER, SEPTEMBER) tidak menabrak tahun
+        ms -= 2
+    p.text(L + 14, y + (72 - ms) * 0.7, mon, F("bebas", ms))
+    p.right(yr, fy, y, x1=R - 14)
     y += 74
     y = p.rule(3, x0=L + 14, x1=R - 14, y=y) + 14
     # kalender (minggu dimulai MINGGU)
@@ -1558,7 +1765,7 @@ def t_kalender(c):
     y += 6
     y = p.rule(3, x0=L + 14, x1=R - 14, y=y) + 22
     # keterangan
-    hari = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"][c.now.weekday()]
+    hari = day_name(c.now.weekday()).capitalize()
     p.y = y
     if c.caption:
         p.para_center(c.caption, F("hand", 44), max_w=R - L - 28, line_gap=6)
@@ -1644,9 +1851,14 @@ def _stamp(p, cx, cy, r, text, sub=""):
     d = p.d
     d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=K, width=5)
     d.ellipse((cx - r + 10, cy - r + 10, cx + r - 10, cy + r - 10), outline=K, width=2)
+    text, sub = tr(text), tr(sub)
     lay = Image.new("L", (2 * r, 2 * r), 0)
     ld = ImageDraw.Draw(lay)
-    f = F("bebas", int(r * 0.55))
+    size = int(r * 0.55)
+    f = F("bebas", size)
+    while ld.textlength(text, font=f) > r * 1.5 and size > 12:   # teks panjang (mis. OFFICIAL) tetap muat
+        size -= 2
+        f = F("bebas", size)
     tw = ld.textlength(text, font=f)
     bb = f.getbbox(text)
     ld.text((r - tw / 2, r - (bb[3] - bb[1]) / 2 - bb[1] - (8 if sub else 0)), text, font=f, fill=255)
@@ -1683,7 +1895,7 @@ def t_ramalan(c):
     p.d.arc((cx - 26, p.y + 12, cx + 6, p.y + 44), 180, 270, fill=K, width=4)
     p.d.polygon([(cx - 34, p.y + 98), (cx + 34, p.y + 98), (cx + 22, p.y + 74), (cx - 22, p.y + 74)], fill=K)
     p.y += 116
-    p.para_center("“" + rnd.choice(RAMALAN) + "”", F("serifb", 26), max_w=R - L, line_gap=8)
+    p.para_center("“" + tr(rnd.choice(RAMALAN)) + "”", F("serifb", 26), max_w=R - L, line_gap=8)
     p.y += 16
     f = F("monob", 18)
     for lab in ["REZEKI", "JODOH", "KARIER", "MOOD"]:
@@ -1795,7 +2007,7 @@ def t_sertifikat(c):
     p.y += 6
     p.y = p.center("telah resmi dinyatakan sebagai", F("serif", 21)) + 16
     titles = [t for t in (c.opts.get("cert_titles") or GELAR) if t.strip()] or GELAR
-    title, sub = split_title(c.opts.get("cert_title") or rnd.choice(titles))
+    title, sub = split_title(tr(c.opts.get("cert_title") or rnd.choice(titles)))
     p.para_center(title.upper(), F("black", 40), max_w=R - L, line_gap=6)
     if sub:
         p.y += 2
@@ -2025,33 +2237,33 @@ def t_komik(c):
 
 
 TEMPLATES = [
-    ("klasik", "Klasik", t_klasik),
-    ("sosmed", "Instagram Profil", t_sosmed),
-    ("threads", "Threads Profil", t_threads),
-    ("xprofil", "X Profil", t_xprofil),
-    ("facebook", "Facebook Profil", t_facebook),
-    ("youtube", "YouTube Channel", t_youtube),
-    ("kalender", "Kalender", t_kalender),
-    ("ramalan", "Ramalan", t_ramalan),
+    ("klasik", "Classic", t_klasik),
+    ("sosmed", "Social Profile", t_sosmed),
+    ("threads", "Text Feed", t_threads),
+    ("xprofil", "Micro Profile", t_xprofil),
+    ("facebook", "Social Page", t_facebook),
+    ("youtube", "Video Channel", t_youtube),
+    ("kalender", "Calendar", t_kalender),
+    ("ramalan", "Fortune", t_ramalan),
     ("boarding", "Boarding Pass", t_boarding),
-    ("sertifikat", "Sertifikat", t_sertifikat),
-    ("resep", "Resep Dokter", t_resep),
-    ("cocok", "Tes Kecocokan", t_cocok),
-    ("kartupos", "Kartu Pos", t_kartupos),
-    ("komik", "Komik", t_komik),
+    ("sertifikat", "Certificate", t_sertifikat),
+    ("resep", "Prescription", t_resep),
+    ("cocok", "Match Test", t_cocok),
+    ("kartupos", "Postcard", t_kartupos),
+    ("komik", "Comic", t_komik),
     ("strip_rounded", "Strip Rounded", t_strip_rounded),
-    ("strip_kotak", "Strip Kotak", t_strip_kotak),
-    ("strip_kapsul", "Strip Kapsul", t_strip_kapsul),
-    ("strip_perangko", "Strip Perangko", t_strip_perangko),
+    ("strip_kotak", "Strip Square", t_strip_kotak),
+    ("strip_kapsul", "Strip Capsule", t_strip_kapsul),
+    ("strip_perangko", "Strip Stamp", t_strip_perangko),
     ("strip_vintage", "Strip Vintage", t_strip_vintage),
     ("polaroid", "Polaroid", t_polaroid),
     ("film", "Film Strip", t_film),
-    ("tiket", "Tiket Masuk", t_tiket),
+    ("tiket", "Admission Ticket", t_tiket),
     ("pass", "Guest Pass", t_pass),
-    ("koran", "Koran", t_koran),
-    ("majalah", "Cover Majalah", t_majalah),
-    ("belanja", "Struk Belanja", t_belanja),
-    ("elegan", "Elegan", t_elegan),
+    ("koran", "Newspaper", t_koran),
+    ("majalah", "Magazine Cover", t_majalah),
+    ("belanja", "Shopping Receipt", t_belanja),
+    ("elegan", "Elegant", t_elegan),
 ]
 BY_ID = {t[0]: t for t in TEMPLATES}
 
@@ -2310,10 +2522,14 @@ def supports(spec, layout, template_id=None):
 
 def render(template_id, ctx, custom=None):
     """template_id: id bawaan, atau 'c:<id>' untuk template custom dari event."""
+    if (ctx.opts or {}).get("lang"):
+        set_lang(ctx.opts["lang"])
+    ctx.footer, ctx.event = tr(ctx.footer), tr(ctx.event)   # hanya teks bawaan ("TERIMA KASIH", "NAMA EVENT")
     if template_id and template_id.startswith("c:") and custom:
         spec = custom.get(template_id[2:])
         if spec:
-            return t_overlay(ctx, spec) if spec.get("kind") == "overlay" else t_builder(ctx, spec)
+            with no_translate():
+                return t_overlay(ctx, spec) if spec.get("kind") == "overlay" else t_builder(ctx, spec)
     if template_id in BY_ID and not supports(None, ctx.layout, template_id):
         p = Paper(ctx.W)
         p.y = 40

@@ -23,7 +23,7 @@
     if (!dev.opened) await dev.open();
     if (dev.configuration === null) await dev.selectConfiguration(1);
     const o = pickEndpoint(dev);
-    if (!o) throw new Error('Endpoint printer (bulk OUT) tidak ditemukan');
+    if (!o) throw new Error('Printer endpoint (bulk OUT) not found');
     const iface = dev.configuration.interfaces.find((i) => i.interfaceNumber === o.iface);
     if (!iface.claimed) await dev.claimInterface(o.iface);
     if (o.alt) await dev.selectAlternateInterface(o.iface, o.alt);
@@ -34,15 +34,15 @@
 
   async function getDevice() {
     if (device && device.opened && out) return device;
-    if (!supported()) throw new Error('Browser ini tidak mendukung WebUSB (pakai Chrome di Android)');
+    if (!supported()) throw new Error('This browser does not support WebUSB (use Chrome on Android)');
     const list = await navigator.usb.getDevices();
-    if (!list.length) throw new Error('Printer USB belum disambungkan. Tekan "Sambungkan printer USB".');
+    if (!list.length) throw new Error('USB printer not connected. Tap "Connect USB printer".');
     return prepare(list[0]);
   }
 
   // Harus dipanggil dari klik (gesture) pengguna.
   async function connect() {
-    if (!supported()) throw new Error('Browser ini tidak mendukung WebUSB (pakai Chrome di Android)');
+    if (!supported()) throw new Error('This browser does not support WebUSB (use Chrome on Android)');
     const dev = await navigator.usb.requestDevice({ filters: [] });
     await prepare(dev);
     return info();
@@ -76,7 +76,7 @@
     const CHUNK = 16384;
     for (let i = 0; i < bytes.length; i += CHUNK) {
       const r = await dev.transferOut(out.ep, bytes.subarray(i, i + CHUNK));
-      if (r.status !== 'ok') throw new Error('Gagal kirim ke printer: ' + r.status);
+      if (r.status !== 'ok') throw new Error('Failed to send to printer: ' + r.status);
     }
   }
 

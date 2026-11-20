@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Atur adsbooth di PC Ubuntu setelah instal .deb. Jalankan sebagai user desktop (bukan root):
+#   adsbooth-setup
+# - server jalan otomatis saat boot (systemd: adsbooth@<user>)
+# - kiosk Chrome terbuka otomatis saat login desktop
+# - izin printer USB, layar tidak mati
+set -e
+if [ "$(id -u)" = "0" ]; then echo "Jalankan sebagai user biasa (bukan root/sudo):  adsbooth-setup"; exit 1; fi
+U="$(id -un)"
+
+echo "== 1/4 Browser =="
+if ! command -v google-chrome-stable >/dev/null && ! command -v chromium-browser >/dev/null && ! command -v chromium >/dev/null; then
+  if [ "$(uname -m)" = "x86_64" ]; then
+    curl -fsSL -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+    sudo apt-get install -y /tmp/chrome.deb
+  else
+    sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+  fi
+fi
+sudo apt-get install -y unclutter cups >/dev/null 2>&1 || true
+
+echo "== 2/4 Izin printer USB =="
+sudo usermod -aG lp,lpadmin "$U" || true
+
+echo "== 3/4 Server otomatis saat boot =="
+sudo systemctl enable --now "adsbooth@$U.service"
+
+echo "== 4/4 Kiosk otomatis + layar tidak mati =="
+mkdir -p "$HOME/.config/autostart"
+cat > "$HOME/.config/autostart/adsbooth-kiosk.desktop" <<DESK
+[Desktop Entry]
+Type=Application
+Name=AdsBooth Kiosk
+Exec=adsbooth --browser
+X-GNOME-Autostart-enabled=true
+DESK
+if command -v gsettings >/dev/null; then
+  gsettings set org.gnome.desktop.session idle-delay 0 || true
+  gsettings set org.gnome.desktop.screensaver lock-enabled false || true
+  gsettings set org.gnome.desktop.screensaver idle-activation-enabled false || true
+  gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing' || true
+  gsettings set org.gnome.desktop.notifications show-banners false || true
+fi
+
+IP="$(hostname -I | awk '{print $1}')"
+echo
+echo "== Selesai =="
+echo "Studio : http://localhost:5000/studio   (dari laptop: http://$IP:5000/studio)"
+echo "Server : sudo systemctl status adsbooth@$U   (log: journalctl -u adsbooth@$U -f)"
+echo "Ubuntu : aktifkan login otomatis -> Settings > Users > Automatic Login"
+echo "Reboot supaya kiosk terbuka otomatis:  sudo reboot"

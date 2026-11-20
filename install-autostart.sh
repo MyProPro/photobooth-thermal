@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Pasang photobooth di Raspberry Pi (Raspberry Pi OS Desktop 64-bit). Jalankan sekali sebagai user biasa:
+# Pasang photobooth di Raspberry Pi (Raspberry Pi OS Desktop 64-bit) atau PC Ubuntu Desktop (22.04/24.04).
+# Jalankan sekali sebagai user biasa:
 #   bash install-autostart.sh
 # - server jalan otomatis saat boot (systemd: photobooth.service)
 # - Chromium kiosk terbuka otomatis saat desktop login
@@ -14,7 +15,16 @@ if [ "$(id -u)" = "0" ]; then echo "Jalankan sebagai user biasa (bukan root/sudo
 echo "== 1/5 Paket sistem =="
 sudo apt-get update
 sudo apt-get install -y python3-venv python3-dev curl unclutter
-command -v chromium-browser >/dev/null || command -v chromium >/dev/null || sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+if [ "$(uname -m)" = "x86_64" ] && ! command -v raspi-config >/dev/null; then
+  # PC (Ubuntu/Debian): pakai Google Chrome .deb, bukan Chromium snap
+  if ! command -v google-chrome-stable >/dev/null; then
+    curl -fsSL -o /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+    sudo apt-get install -y /tmp/chrome.deb
+  fi
+  sudo apt-get install -y cups || true      # printer foto 4R lewat CUPS
+else
+  command -v chromium-browser >/dev/null || command -v chromium >/dev/null || sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+fi
 
 echo "== 2/5 Modul Python =="
 bash run-linux.sh --setup
@@ -63,6 +73,14 @@ mkdir -p "$HOME/.config/labwc"
 touch "$HOME/.config/labwc/autostart"
 grep -q "kiosk-linux.sh" "$HOME/.config/labwc/autostart" || echo "$DIR/kiosk-linux.sh &" >> "$HOME/.config/labwc/autostart"
 command -v raspi-config >/dev/null && sudo raspi-config nonint do_blanking 1 || true
+# Ubuntu (GNOME): layar tidak mati / terkunci, tanpa notifikasi update di layar kiosk
+if command -v gsettings >/dev/null; then
+  gsettings set org.gnome.desktop.session idle-delay 0 || true
+  gsettings set org.gnome.desktop.screensaver lock-enabled false || true
+  gsettings set org.gnome.desktop.screensaver idle-activation-enabled false || true
+  gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing' || true
+  gsettings set org.gnome.desktop.notifications show-banners false || true
+fi
 
 IP="$(hostname -I | awk '{print $1}')"
 echo
@@ -70,4 +88,5 @@ echo "== Selesai =="
 echo "Server : sudo systemctl status photobooth   (log: journalctl -u photobooth -f)"
 echo "Studio : http://localhost:5000/studio   atau dari laptop: http://$IP:5000/studio"
 echo "Printer: Studio -> Printer & tablet -> 'Raspberry Pi / Linux (USB, /dev/usb/lp0)' -> Cetak tes"
+echo "Ubuntu : aktifkan login otomatis -> Settings > Users > Automatic Login (supaya kiosk langsung terbuka)"
 echo "Reboot sekarang supaya kiosk terbuka otomatis:  sudo reboot"

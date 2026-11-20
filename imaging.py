@@ -209,7 +209,7 @@ def stylize_sample(img, style, width=576, brightness=1.0):
 
 def append_extras(img, extras, width=576):
     """img: struk mode '1'. extras: {'lucky': '0127', 'poses': [...], 'guestbook': {name, message, signature(PIL)}}."""
-    if not extras or not any(extras.get(k) for k in ("lucky", "poses", "guestbook")):
+    if not extras or not any(extras.get(k) for k in ("lucky", "poses", "guestbook", "living")):
         return img
     import templates as T
     p = T.Paper(width)
@@ -255,11 +255,39 @@ def append_extras(img, extras, width=576):
         p.center(str(extras["lucky"]), T.F("bebas", 70), y=p.y + 42, fill=T.P)
         p.y += h + 10
         p.y = p.center("Simpan struk ini untuk undian doorprize", T.F("sans", 17)) + 10
+    if extras.get("living"):
+        p.y = living_block(p, extras["living"], L, R)
     block = p.finish(bottom_pad=24).convert("1", dither=Image.NONE)
     out = Image.new("1", (width, img.height + block.height), 1)
     out.paste(img, (0, 0))
     out.paste(block, (0, img.height))
     return out
+
+
+def living_block(p, url, L, R):
+    """QR Living Photo (unik per cetakan) + petunjuk singkat. QR ±2,3 cm supaya mudah di-scan."""
+    import qrcode
+    import templates as T
+    p.y = p.dashed(h=3, x0=L, x1=R) + 18
+    q = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=1, border=1)
+    q.add_data(url)
+    q.make(fit=True)
+    m = q.make_image(fill_color="black", back_color="white").convert("L")
+    k = max(4, 184 // m.width)                       # modul utuh -> tajam di printer thermal
+    m = m.resize((m.width * k, m.height * k), Image.NEAREST).point(lambda v: 255 if v > 127 else 0).convert("1")
+    top = p.y
+    p.img.paste(m, (L, top))
+    x = L + m.width + 18
+    p.text(x, top + 6, "LIVING PHOTO", T.F("monob", 20), spacing=3)
+    big = 46
+    while big > 26 and max(p.tw("Scan untuk putar", T.F("bebas", big)), p.tw("video kamu", T.F("bebas", big))) > R - x:
+        big -= 2                                     # judul selalu muat di samping QR
+    p.text(x, top + 38 + (46 - big) // 2, "Scan untuk putar", T.F("bebas", big))
+    p.text(x, top + 82, "video kamu", T.F("bebas", big))
+    for i, line in enumerate(p.wrap("Scan pakai kamera HP lalu pilih video sekali. Video diputar tiap kali di-scan, tersimpan di HP kamu saja.",
+                                     T.F("sans", 16), R - x)):
+        p.text(x, top + 132 + i * 21, line, T.F("sans", 16))
+    return max(top + m.height, top + 132 + 21 * 3) + 14
 
 
 def host_copy(img, width=576, label="ARSIP TUAN RUMAH"):
