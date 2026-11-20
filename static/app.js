@@ -20,7 +20,8 @@ function freshState() {
         eventName: CFG.eventName || '', footer: CFG.footer || '',
         username: (CFG.social && CFG.social.username) || '', website: (CFG.social && CFG.social.website) || '',
         koranTitle: 'Kabar Booth',
-        brightness: CFG.brightness !== undefined ? CFG.brightness : 1.0 };
+        brightness: CFG.brightness !== undefined ? CFG.brightness : 1.0,
+        retakeCount: 0 };
   if ($('#gbName')) { $('#gbName').value = ''; $('#gbMsg').value = ''; clearSign(); }
   $('#caption').value = '';
   $('#showLogo').checked = true;
@@ -112,7 +113,7 @@ async function startCamera() {
   // resolusi dari Studio (720 / 1080 / 4k) + kamera tertentu berdasarkan nama (mis. "EMEET")
   // '1080+4k' = preview 1080p, saat jepret pindah sebentar ke 4K
   const RES = { '720': [1280, 720], '1080': [1920, 1080], '4k': [3840, 2160], '1080+4k': [1920, 1080] }[CFG.cameraRes] || [1920, 1080];
-  const video = { width: { ideal: RES[0] }, height: { ideal: RES[1] } };
+  const video = { width: { ideal: RES[0] }, height: { ideal: RES[1] }, frameRate: { ideal: 30, min: 15 } };
   try {
     const want = (CFG.cameraLabel || '').trim().toLowerCase();
     if (want) {
@@ -229,10 +230,15 @@ async function loadIntro() {
     $('#introName').textContent = INTRO.eventName || '';
     $('#ipName').textContent = (INTRO.eventName || '').toUpperCase();
     $('#ipDate').textContent = INTRO.date;
-    $('#introLogo').classList.toggle('hidden', !INTRO.logo);
-    if (INTRO.logo) $('#introLogo').src = INTRO.logo;
+    const hasLogo = !!INTRO.logo;
+    $('#introLogo').classList.toggle('hidden', !hasLogo);
+    if (hasLogo) {
+      $('#introLogo').onload = () => fitIntro();
+      $('#introLogo').src = INTRO.logo;
+    }
     INTRO.photos.forEach((p) => { new Image().src = p.color; new Image().src = p.dither; });
   } catch (e) { INTRO = null; }
+  fitIntro();
 }
 function stopIntro() {
   introOn = false;
@@ -351,16 +357,22 @@ function fitIntro() {
   buildIntroBg();
   sizeIntroBg();
   const box = $('#introFit');
-  if (!box || !box.clientHeight) return;
-  const k = Math.max(0.5, Math.min(box.clientHeight / 700, box.clientWidth / 450, 1.7));
-  ['#introStage', '#icStage', '#isStage'].forEach((s) => { $(s).style.transform = `scale(${k})`; });
+  if (!box || !box.clientHeight || !box.clientWidth) return;
+  // Berikan margin aman agar foto dan animasi intro tidak pernah menabrak logo/nama event di atas
+  const availH = Math.max(60, box.clientHeight - 24);
+  const availW = Math.max(60, box.clientWidth - 24);
+  const k = Math.max(0.35, Math.min(availH / 690, availW / 440, 1.4));
+  ['#introStage', '#icStage', '#isStage'].forEach((s) => {
+    const el = $(s);
+    if (el) el.style.transform = `scale(${k})`;
+  });
 }
 window.addEventListener('resize', () => setTimeout(fitIntro, 60));
 async function startIntro() {
-  setTimeout(fitIntro, 30);
   if (introOn) return;
   introOn = true;
   await loadIntro();
+  fitIntro();
   introTimers.forEach(clearTimeout); introTimers = [];
   introCycle();
 }
@@ -404,28 +416,48 @@ $('#copyDec').addEventListener('click', () => { S.copies = Math.max(1, S.copies 
 
 // ---------- 3. gaya ----------
 let styleBusy = false;
-// Tiap kartu gaya punya contoh kecil dari kamera (diperbarui berkala).
+let currentSampleType = null;
+// Tiap kartu gaya memakai contoh foto model statis (cewe/cowo acak) agar tajam dan kamera tidak lag
 async function refreshStylePreview() {
   if (styleBusy || current !== 'style') return;
-  const photo = capture(420);
-  if (!photo) return;
   styleBusy = true;
   try {
-    await Promise.all([...$$('#styleOptions .opt')].map(async (b) => {
-      const j = await api('/api/stylize', { photo, style: b.dataset.style });
-      let box = b.querySelector('.sthumb');
-      if (!box) { box = document.createElement('div'); box.className = 'sthumb'; box.innerHTML = '<img alt="">'; b.prepend(box); }
-      if (current === 'style') box.querySelector('img').src = j.image;
-    }));
-  } catch (e) { console.warn(e); }
+    const sample = Math.random() < 0.5 ? 'cewe' : 'cowo';
+    const data = await api('/api/sample-styles?sample=' + sample);
+    if (data && data.styles && current === 'style') {
+      currentSampleType = data.sample;
+      $$('#styleOptions .opt').forEach((b) => {
+        let box = b.querySelector('.sthumb');
+        if (!box) {
+          box = document.createElement('div');
+          box.className = 'sthumb';
+          box.innerHTML = '<img alt="">';
+          b.prepend(box);
+        }
+        const s = b.dataset.style;
+        if (data.styles[s]) {
+          box.querySelector('img').src = data.styles[s];
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('Gagal memuat sample style:', e);
+  }
   styleBusy = false;
 }
 function startStylePreview() {
   $$('#styleOptions .opt').forEach((b) => {
-    if (!b.querySelector('.sthumb')) { const d = document.createElement('div'); d.className = 'sthumb'; d.innerHTML = '<img alt="">'; b.prepend(d); }
+    if (!b.querySelector('.sthumb')) {
+      const d = document.createElement('div');
+      d.className = 'sthumb';
+      d.innerHTML = '<img alt="">';
+      b.prepend(d);
+    }
   });
-  startCamera().then(() => setTimeout(refreshStylePreview, 300));
-  styleTimer = setInterval(refreshStylePreview, 4000);
+  // Siapkan kamera di latar belakang untuk tahap foto berikutnya,
+  // tanpa membebani kamera/jaringan dengan loop capture berkala
+  startCamera();
+  refreshStylePreview();
 }
 $('#styleOptions').addEventListener('click', (e) => {
   const b = e.target.closest('.opt');
@@ -571,7 +603,13 @@ async function snapPhoto() {
   rv.classList.add('hidden');
   return photo;
 }
-$('#btnCancel').addEventListener('click', () => resetAll());
+$('#btnCancel').addEventListener('click', () => {
+  skipCountdown = true;
+  $('#btnReady').classList.add('hidden');
+  $('#poseBox').classList.add('hidden');
+  $('#count').textContent = '';
+  go('style');
+});
 
 // ---------- 4b. pilih template ----------
 function markTemplate() {
@@ -582,6 +620,10 @@ function markTemplate() {
 }
 let tplSeq = 0;
 async function renderTemplates() {
+  const left = Math.max(0, 2 - (S.retakeCount || 0));
+  const canRetake = left > 0;
+  $('#btnTplRetake').disabled = !canRetake;
+  $('#btnTplRetake').textContent = canRetake ? (left === 2 ? 'Retake' : `Retake (${left} left)`) : 'Retake (max 2x)';
   const key = [S.photoVer, S.layout, S.style, S.caption, S.showLogo].join('|');
   if (key === S.tplKey && $('#tplList .tpl')) { markTemplate(); setupCarousel(); return; }
   const seq = ++tplSeq;
@@ -827,6 +869,8 @@ function setupCarousel() {
   });
 })();
 $('#btnTplRetake').addEventListener('click', () => {
+  if ((S.retakeCount || 0) >= 2) return;
+  S.retakeCount = (S.retakeCount || 0) + 1;
   S.photos = new Array(SHOTS[S.layout]).fill(null);
   shoot([...Array(SHOTS[S.layout]).keys()], 'template');
 });
@@ -986,21 +1030,40 @@ function initEditControls() {
 }
 
 async function renderReview() {
+  const left = Math.max(0, 2 - (S.retakeCount || 0));
+  const canRetake = left > 0;
+  const quotaEl = $('#retakeQuota');
+  if (quotaEl) {
+    quotaEl.textContent = canRetake ? `Retake: ${left} of 2 left` : 'Retake: limit 2x reached';
+    quotaEl.classList.toggle('quota-exhausted', !canRetake);
+  }
   const list = $('#shotList');
   list.innerHTML = '';
   S.photos.forEach((p, i) => {
     const row = document.createElement('div');
     row.className = 'shot';
-    row.innerHTML = `<img alt=""><b>Photo ${i + 1}</b><button type="button">Retake</button>`;
+    row.innerHTML = `<img alt=""><b>Photo ${i + 1}</b><button type="button"${canRetake ? '' : ' disabled'}>Retake</button>`;
     row.querySelector('img').src = p || '';
-    row.querySelector('button').addEventListener('click', () => shoot([i], 'review'));
+    if (canRetake) {
+      row.querySelector('button').addEventListener('click', () => {
+        if ((S.retakeCount || 0) >= 2) return;
+        S.retakeCount = (S.retakeCount || 0) + 1;
+        shoot([i], 'review');
+      });
+    }
     list.appendChild(row);
   });
+  $('#btnRetakeAll').disabled = !canRetake;
+  $('#btnRetakeAll').textContent = canRetake
+    ? (left === 2 ? 'Retake all photos (max 2x)' : `Retake all photos (${left} left)`)
+    : 'Retake all photos (max 2x reached)';
   renderCertPick();
   syncEditFields();
   await renderPreview();
 }
 $('#btnRetakeAll').addEventListener('click', () => {
+  if ((S.retakeCount || 0) >= 2) return;
+  S.retakeCount = (S.retakeCount || 0) + 1;
   S.photos = new Array(SHOTS[S.layout]).fill(null);
   shoot([...Array(SHOTS[S.layout]).keys()]);
 });
@@ -1131,7 +1194,9 @@ $('#btnReprint').addEventListener('click', async () => {
 // ---------- status printer ----------
 async function pollStatus() {
   try {
-    const s = await api('/api/status');
+    const r = await fetch('/api/status');
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const s = await r.json();
     // Event diganti dari Studio -> muat ulang kiosk (langsung kalau sedang di layar awal)
     if (s.eventVersion && CFG.eventVersion && s.eventVersion !== CFG.eventVersion) {
       if (current === 'welcome') { location.reload(); return; }
@@ -1139,7 +1204,7 @@ async function pollStatus() {
     }
     const low = CFG.output !== 'photo' && s.paper && s.paper.low;
     const pill = $('#introStatus');
-    const problem = !s.ok ? 'PRINTER PROBLEM' : (low ? 'PAPER LOW' : '');
+    const problem = !s.ok ? 'PRINTER NOT CONNECTED' : (low ? 'PAPER LOW' : '');
     pill.textContent = problem; pill.classList.toggle('hidden', !problem);
     if (s.mode === 'webusb') {
       const d = await PBUSB.paired().catch(() => null);
@@ -1154,7 +1219,7 @@ async function pollStatus() {
       $('#btnUsb').classList.add('hidden');
     }
     $('#statusDot').className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
-    $('#statusText').textContent = !s.ok ? 'PRINTER PROBLEM'
+    $('#statusText').textContent = !s.ok ? 'PRINTER NOT CONNECTED'
       : (low ? `PAPER LOW (${s.paper.left_m} m)` : (s.mode === 'file' ? 'TEST MODE (NO PRINTER)' : 'PRINTER READY'));
     $('#statusText').title = s.message || '';
   } catch (e) {

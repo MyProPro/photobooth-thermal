@@ -29,7 +29,10 @@
   /* pemutar penuh layar */
   #play{padding:0;background:#000}
   #player{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
-  .hud{position:absolute;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom));display:flex;justify-content:center;gap:10px;pointer-events:none}
+  .hud{position:absolute;left:0;right:0;bottom:calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:10px;pointer-events:none}
+  .hud-actions{display:flex;justify-content:center;gap:10px}
+  .hud-brand{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.8);text-shadow:0 1px 4px rgba(0,0,0,.9);pointer-events:none}
+  .brand-tag{font-size:12px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-top:14px;font-weight:600}
   .hud button{pointer-events:auto;border:0;border-radius:999px;padding:12px 18px;background:rgba(20,20,22,.72);color:#fff;font-family:inherit;font-weight:600;font-size:15px;
     -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
   .tag{position:absolute;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);font-size:11px;letter-spacing:.14em;
@@ -45,6 +48,7 @@
   <div class="logo"><svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
   <h1>Living Photo</h1>
   <p>Scan the QR code on your photobooth print with your phone camera to play its video.</p>
+  <div class="brand-tag">by: AdsBooth</div>
 </section>
 
 <!-- QR contoh dari layar preview -->
@@ -68,6 +72,7 @@
   <button class="btn primary" id="btnPick" type="button">Choose a video</button>
   <input type="file" id="file" accept="video/*" hidden>
   <p class="note">Your video stays on this phone only. Nothing is uploaded.</p>
+  <div class="brand-tag">by: AdsBooth</div>
 </section>
 
 <!-- konfirmasi -->
@@ -87,13 +92,25 @@
   <button class="btn ghost" id="btnRetry" type="button">Try again</button>
 </section>
 
+<!-- kode tidak valid / palsu -->
+<section class="screen" id="invalidCode">
+  <div class="logo"><svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg></div>
+  <span class="pill">Living Photo</span>
+  <h1>Kode QR Tidak Valid</h1>
+  <p>Fitur Living Photo ini khusus untuk cetakan foto resmi photobooth AdsBooth. Pastikan Anda men-scan kode QR langsung dari kertas foto cetak Anda.</p>
+  <div class="brand-tag">by: AdsBooth</div>
+</section>
+
 <!-- putar -->
 <section class="screen" id="play">
   <video id="player" playsinline autoplay muted loop></video>
   <span class="tag">Living Photo · on this phone</span>
   <div class="hud">
-    <button id="btnSound" type="button">🔊 Tap for sound</button>
-    <button id="btnReplay" type="button">↺ Replay</button>
+    <div class="hud-actions">
+      <button id="btnSound" type="button">🔊 Tap for sound</button>
+      <button id="btnReplay" type="button">↺ Replay</button>
+    </div>
+    <div class="hud-brand">by: AdsBooth</div>
   </div>
 </section>
 
@@ -102,7 +119,25 @@
   const $ = (s) => document.querySelector(s);
   const show = (id) => document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
   // kode unik cetakan ada di bagian # (tidak dikirim ke server mana pun)
-  const code = decodeURIComponent((location.hash || '').slice(1)).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+  const rawCode = decodeURIComponent((location.hash || '').slice(1)).replace(/[^a-zA-Z0-9_.-]/g, '').slice(0, 50);
+  let code = '';
+
+  function verifyCode(input) {
+    if (!input) return { valid: false, code: '' };
+    if (input === 'preview') return { valid: true, isPreview: true, code: 'preview' };
+    const parts = input.split('-');
+    if (parts.length !== 2) return { valid: false, code: '' };
+    const [c, sig] = parts;
+    if (!c || !sig) return { valid: false, code: '' };
+    const salt = 'adsbooth_living_key_2026';
+    let h = 0x811c9dc5;
+    const s = c + ':' + salt;
+    for (let i = 0; i < s.length; i++) {
+      h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0;
+    }
+    const expected = h.toString(16).padStart(8, '0').slice(0, 6);
+    return { valid: sig.toLowerCase() === expected.toLowerCase(), code: c };
+  }
   const MAX_MB = 300;
 
   // ---------- penyimpanan lokal (IndexedDB) ----------
@@ -211,8 +246,12 @@
   $('#btnRetry').addEventListener('click', () => start());
 
   async function start() {
-    if (!code) return show('noCode');
-    if (code === 'preview') return show('isPreview');
+    if (!rawCode) return show('noCode');
+    const auth = verifyCode(rawCode);
+    if (!auth.valid) return show('invalidCode');
+    if (auth.isPreview) return show('isPreview');
+    code = auth.code;
+
     if (!('indexedDB' in window)) return fail('This browser cannot store videos. Open the link in Safari or Chrome.');
     try {
       const rec = await getClip(code);

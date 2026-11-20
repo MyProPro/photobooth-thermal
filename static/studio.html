@@ -290,6 +290,18 @@ body.ev-photo .thermal-only{display:none!important}
             <p class="small" id="secMsg"></p>
           </div>
 
+          <div class="card" style="margin-top:18px" id="livingCard">
+            <b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Living Photo (Web Viewer)</b>
+            <p class="hint">Alamat website pemutar video saat tamu scan QR di struk. Cukup atur sekali di sini untuk seluruh event pada perangkat ini.</p>
+            <label class="field" style="margin-top:10px"><span>Alamat Web Living Photo (Global)</span>
+              <input type="text" id="cfgLivingUrl" placeholder="https://mypropro.github.io/adsbooth/v/"></label>
+            <div class="row" style="margin-top:10px">
+              <button class="primary" type="button" id="btnSaveLivingUrl">Simpan Alamat Web</button>
+              <button class="ghost" type="button" id="btnResetLivingUrl">Kembalikan ke Default</button>
+            </div>
+            <p class="small" id="livingMsg"></p>
+          </div>
+
           <div class="card" style="margin-top:18px">
             <b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Tentang</b>
             <div class="small" id="aboutInfo" style="line-height:1.7;margin-top:8px">-</div>
@@ -365,9 +377,9 @@ body.ev-photo .thermal-only{display:none!important}
             <option value="instan">Kamera instan (foto polaroid berkembang)</option>
             <option value="strip">Photo strip (hitung mundur 3-2-1, strip keluar)</option>
           </select></label>
-        <div class="field"><span>Foto intro (untuk animasi foto → struk)</span>
-          <div class="row"><img class="logo-prev hidden" id="introPrev" alt="Foto intro" style="height:90px"><label class="btn">Upload foto<input type="file" id="introFile" class="hidden" accept="image/png,image/jpeg"></label><button class="ghost hidden" id="btnIntroDel" type="button">Hapus</button></div>
-          <span class="hint">Mis. foto pasangan pengantin atau suasana event. Kosong = pakai foto tamu terakhir. Teks yang tampil hanya nama event (dan logo).</span>
+        <div class="field"><span>Foto intro &amp; gaya cetak (hingga 3 foto)</span>
+          <div class="row" id="introPhotosGrid" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start"></div>
+          <span class="hint">Foto intro tampil bergantian di animasi layar awal kiosk &amp; otomatis menjadi contoh preview di layar Print Style. Maksimal 3 foto. Jika kosong, akan memakai foto model bawaan (cewe/cowo).</span>
         </div>
 
         <div class="sec">Tema kiosk (warna &amp; font)</div>
@@ -419,7 +431,7 @@ body.ev-photo .thermal-only{display:none!important}
           <label class="check card"><input type="checkbox" data-f="host_copy"> <span><b>Cetak arsip tuan rumah</b><br><span class="hint">Otomatis cetak 1 salinan tambahan berlabel ARSIP.</span></span></label>
           <label class="check card"><input type="checkbox" data-f="living_photo"> <span><b>QR video (Living Photo)</b><br><span class="hint">QR unik di bawah struk. Tamu scan, pilih video dari HP-nya sekali, lalu video diputar tiap kali di-scan. Video tetap di HP tamu.</span></span></label>
         </div>
-        <label class="field" style="margin-top:10px"><span>Alamat halaman Living Photo <span class="hint">(kosong = alamat bawaan)</span></span>
+        <label class="field hidden" style="margin-top:10px"><span>Alamat halaman Living Photo <span class="hint">(kosong = alamat bawaan)</span></span>
           <input type="text" data-k="living_url" id="livingUrl" placeholder="alamat bawaan"></label>
 
         <div class="sec thermal-only">Teks template Sertifikat &amp; Boarding Pass</div>
@@ -449,8 +461,8 @@ body.ev-photo .thermal-only{display:none!important}
         <div class="sec">Template Profil Sosial (Social Profile, Text Feed, Micro Profile, Social Page, Video Channel)</div>
         <p class="hint" style="margin-top:-6px">Dipakai bersama oleh kelima template sosial media. Angka followers, like, views, subscriber diacak setiap cetak. Avatar = logo event (atau foto pertama kalau tidak ada logo).</p>
         <div class="grid2">
-          <label class="field"><span>Username</span><input type="text" data-s="username" placeholder="mis. themulia.bali"></label>
-          <label class="field"><span>Website</span><input type="text" data-s="website" placeholder="mis. www.themulia.com"></label>
+          <label class="field"><span>Username</span><input type="text" data-s="username" placeholder="mis. adsbooth"></label>
+          <label class="field"><span>Website</span><input type="text" data-s="website" placeholder="mis. adsbooth.my.id"></label>
           <label class="field"><span>Nama tampilan</span><input type="text" data-s="display" placeholder="{event}"></label>
           <label class="field"><span>Bio</span><input type="text" data-s="bio" placeholder="{date_long}"><span class="hint">Pesan tamu otomatis ditambahkan di bawah bio.</span></label>
         </div>

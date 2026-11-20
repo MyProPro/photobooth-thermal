@@ -32,7 +32,7 @@ import events as EV
 import licensing as LIC
 import photo as PH
 import templates as TPL
-from imaging import LAYOUTS, append_extras, compose_receipt, host_copy, stylize_sample
+from imaging import LAYOUTS, append_extras, compose_receipt, host_copy, stylize, stylize_sample
 from printer import TYPES as PRINTER_TYPES, PaperCounter, ThermalPrinter, discover as discover_printers
 from printer import PHOTO_TYPES, PhotoPrinter, list_photo_printers
 from samples import _illustration, sample_photos
@@ -359,12 +359,29 @@ def features(ev):
 LIVING_DEFAULT = LIVING_BASE_URL     # bawaan produk (version.py)
 
 
+def sign_living_code(code: str) -> str:
+    """Tambahkan signature checksum agar kode cetakan resmi AdsBooth tidak bisa dikarang bebas."""
+    if not code or code == "preview":
+        return code or "preview"
+    salt = "adsbooth_living_key_2026"
+    h = 0x811c9dc5
+    for ch in f"{code}:{salt}":
+        h = ((h ^ ord(ch)) * 0x01000193) & 0xFFFFFFFF
+    sig = f"{h:08x}"[:6]
+    return f"{code}-{sig}"
+
+
 def living_url(ev, code):
     """Link QR Living Photo: halaman statis (GitHub Pages) + kode unik cetakan di bagian #."""
     base = (ev.get("living_url") or CFG.get("living_base_url") or LIVING_DEFAULT).strip()
+    if base.endswith("/index.html"):
+        base = base[:-10]
+    elif base.endswith("index.html"):
+        base = base[:-10]
     if not base.endswith("/") and "#" not in base:
         base += "/"
-    return f"{base}#{code}"
+    signed = sign_living_code(code)
+    return f"{base}#{signed}"
 
 
 def extras_from_payload(p, ev, lucky=None, code=None):
@@ -483,9 +500,15 @@ INTRO_STYLE = "bw2"   # ganti kalau cara olah gambar intro berubah (supaya brows
 def intro_sources(ev, asset_dir):
     """Daftar sumber foto intro: foto intro event, kalau tidak ada foto sesi terakhir, kalau tidak ada ilustrasi."""
     src = []
-    f = ev.get("intro_photo")
-    if f and os.path.exists(os.path.join(asset_dir, os.path.basename(f))):
-        src.append(("file", os.path.join(asset_dir, os.path.basename(f))))
+    photos = ev.get("intro_photos") or []
+    if isinstance(photos, str):
+        photos = [photos] if photos else []
+    if not photos and ev.get("intro_photo"):
+        photos = [ev["intro_photo"]]
+    for f in photos:
+        p = os.path.join(asset_dir, os.path.basename(f))
+        if f and os.path.exists(p):
+            src.append(("file", p))
     if not src:
         for m in sessions(ev.get("id", ""), limit=5):
             if m.get("photos"):
@@ -585,6 +608,76 @@ def api_stylize():
     img = stylize_sample(decode_image(p["photo"]), p.get("style", "dither"),
                          int(CFG.get("paper_px", 576)), float(CFG.get("brightness", 1.0)))
     return jsonify({"image": to_data_url(img)})
+
+
+_STYLE_SAMPLE_CACHE = {}
+
+
+@app.get("/api/sample-styles")
+def api_sample_styles():
+    ev, asset_dir = current_event()
+    mode = "photo" if is_photo(ev) else "thermal"
+    brightness = float(CFG.get("brightness", 1.0))
+
+    # Cek apakah ada foto intro dari event aktif
+    intro_files = []
+    photos = ev.get("intro_photos") or []
+    if isinstance(photos, str):
+        photos = [photos] if photos else []
+    if not photos and ev.get("intro_photo"):
+        photos = [ev["intro_photo"]]
+    for f in photos:
+        p = os.path.join(asset_dir, os.path.basename(f))
+        if f and os.path.exists(p):
+            intro_files.append(p)
+
+    sample_param = request.args.get("sample", "random")
+
+    if intro_files:
+        # Pakai foto intro yang diupload untuk event aktif
+        if sample_param == "random":
+            chosen_path = random.choice(intro_files)
+        else:
+            try:
+                idx = int(sample_param) % len(intro_files)
+                chosen_path = intro_files[idx]
+            except ValueError:
+                chosen_path = random.choice(intro_files)
+        sample_key = os.path.basename(chosen_path)
+        cache_key = (ev.get("id"), sample_key, mode, brightness)
+        img_path = chosen_path
+    else:
+        # Default: fallback ke contoh model cewe / cowo statis
+        if sample_param == "random":
+            sample_key = random.choice(["cewe", "cowo"])
+        elif sample_param in ("cewe", "cowo"):
+            sample_key = sample_param
+        else:
+            sample_key = "cewe"
+        cache_key = ("default", sample_key, mode, brightness)
+        img_path = os.path.join(BASE, "static", f"sample_{sample_key}.jpg")
+        if not os.path.exists(img_path):
+            img_path = os.path.join(BASE, "static", "sample_cewe.jpg")
+
+    if cache_key in _STYLE_SAMPLE_CACHE:
+        return jsonify(_STYLE_SAMPLE_CACHE[cache_key])
+
+    im = Image.open(img_path).convert("RGB")
+
+    out = {}
+    if mode == "photo":
+        for sid, _, _ in PH.STYLES:
+            styled = PH.style_photo(im, sid)
+            styled = ImageOps_fit(styled, (360, 640))
+            out[sid] = to_data_url(styled, "JPEG")
+    else:
+        for sid in ["dither", "halftone", "kontras", "sketsa", "ascii", "mewarnai"]:
+            styled = stylize(im, (360, 640), sid, brightness=brightness)
+            out[sid] = to_data_url(styled, "PNG")
+
+    data = {"sample": sample_key, "styles": out}
+    _STYLE_SAMPLE_CACHE[cache_key] = data
+    return jsonify(data)
 
 
 @app.post("/api/preview")
@@ -892,7 +985,21 @@ def studio_about():
     import platform
     return jsonify({"app": APP_NAME, "version": VERSION, "dataDir": DATA, "programDir": BASE, "mode": P.MODE,
                     "python": platform.python_version(), "os": f"{platform.system()} {platform.release()}",
-                    "server": SERVER_NAME, "livingDefault": CFG.get("living_base_url") or LIVING_DEFAULT})
+                    "server": SERVER_NAME, "livingBaseUrl": CFG.get("living_base_url", ""),
+                    "livingDefault": LIVING_DEFAULT})
+
+
+@app.put("/api/studio/living-url")
+@studio_auth
+def studio_living_url():
+    p = request.get_json(force=True)
+    url = (p.get("url") or "").strip()
+    if url:
+        CFG["living_base_url"] = url
+    else:
+        CFG.pop("living_base_url", None)
+    save_config()
+    return jsonify({"ok": True, "livingBaseUrl": CFG.get("living_base_url", ""), "livingDefault": LIVING_DEFAULT})
 
 
 @app.get("/api/studio/license")
@@ -1062,6 +1169,7 @@ def event_asset_public(fname):
     ev, asset_dir = current_event()
     fname = os.path.basename(fname)
     used = {ev.get("logo"), ev.get("intro_photo"), (ev.get("theme") or {}).get("bg_image")}
+    used |= set(ev.get("intro_photos") or [])
     used |= set((ev.get("photo_frames") or {}).values())
     if not ev.get("id") or fname not in used:
         abort(404)
@@ -1087,18 +1195,19 @@ def studio_preview():
     spec = p.get("spec")
     tid = p.get("template") or ("c:" + spec["id"] if spec else "klasik")
     ft = features(ev)
+    asset_dir = EV.path(eid)
     if is_photo(ev):
         n = {"solo": 1, "duo": 2, "strip": 3, "grid": 4}[layout]
         qr = living_url(ev, "preview") if ft["living_photo"] else preview_qr(ev)
-        img = render_receipt(sample_photos(9)[:n], {"layout": layout, "template": tid, "showLogo": True,
+        img = render_receipt(sample_photos(9, ev, asset_dir)[:n], {"layout": layout, "template": tid, "showLogo": True,
                                                      "caption": p.get("caption", "Selamat ya!"), "style": "warna"},
-                             ev, EV.path(eid), qr, number=127, lucky="0127" if ft["lucky_draw"] else None)
+                             ev, asset_dir, qr, number=127, lucky="0127" if ft["lucky_draw"] else None)
         img.thumbnail((800, 1200))
         return jsonify({"image": to_data_url(img, "JPEG"), "height": img.height})
-    img = render_receipt(sample_photos(9), {"layout": layout, "template": tid,
+    img = render_receipt(sample_photos(9, ev, asset_dir), {"layout": layout, "template": tid,
                                             "caption": p.get("caption", "Happy birthday!"),
                                             "showLogo": True, "style": p.get("style", "dither")},
-                         ev, EV.path(eid), preview_qr(ev), number=127, spec_override=spec)
+                         ev, asset_dir, preview_qr(ev), number=127, spec_override=spec)
     # fitur yang ikut tercetak di bawah struk (contoh): nomor undian & QR video
     ex = {}
     if ft["lucky_draw"]:

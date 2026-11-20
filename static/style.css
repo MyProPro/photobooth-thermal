@@ -21,7 +21,9 @@ input{-webkit-user-select:text;user-select:text}
 #app{height:100%;display:flex;flex-direction:column;margin:0 auto;overflow:hidden;max-width:1080px}
 body{display:flex;justify-content:center}
 .topbar{display:flex;justify-content:space-between;align-items:center;padding:22px 40px;border-bottom:2px solid var(--ink);font-size:15px}
-.topbar .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#999;margin-right:10px;vertical-align:middle}
+.topbar .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#999;margin-right:8px;vertical-align:middle}
+.status-indicator{display:inline-flex;align-items:center}
+.printer-icon{display:inline-block;vertical-align:middle;margin-right:6px;flex-shrink:0}
 .dot.ok{background:var(--ok)}.dot.bad{background:var(--accent)}
 body.dark{background:var(--ink)}body.dark .topbar{color:var(--paper);border-color:#3A3733}
 
@@ -47,7 +49,7 @@ h1.hero{font-size:clamp(64px,9vw,96px);line-height:.95}
 .btn.light{color:var(--paper);border-color:#6B665F}
 .small-btn{height:56px;font-size:20px;align-self:flex-start;min-width:0}
 .btn:active,.opt:active,.round:active{transform:scale(.98)}
-.btn:disabled{opacity:.4}
+.btn:disabled,button:disabled{opacity:.35;cursor:not-allowed;pointer-events:none}
 .nav{display:flex;gap:16px}
 
 .slot{width:420px;height:26px;background:var(--ink);border-radius:10px 10px 4px 4px}
@@ -201,11 +203,12 @@ h1.hero{font-size:clamp(64px,9vw,96px);line-height:.95}
 
 /* ================= LAYAR INTRO (animasi foto -> dither -> struk) ================= */
 body.intro-on .topbar{display:none}
-.screen.intro{position:relative;align-items:center;justify-content:space-between;padding:56px 40px 48px;gap:16px;cursor:pointer;overflow:hidden}
+.screen.intro{position:relative;align-items:center;justify-content:space-between;padding:36px 30px 32px;gap:12px;cursor:pointer;overflow:hidden}
 .intro-status{position:absolute;top:14px;right:16px;font:700 12px 'JetBrains Mono',monospace;letter-spacing:.08em;background:var(--accent);color:#fff;padding:5px 9px;border-radius:6px}
-.intro-head{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
-.intro-logo{max-height:90px;max-width:300px;object-fit:contain}
-.intro-head h1{font-size:64px;line-height:1.02;letter-spacing:-.02em;max-width:640px}
+.intro-head{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;z-index:2;max-width:90%}
+.intro-logo{max-height:75px;max-width:260px;object-fit:contain}
+.intro-head h1{font-size:clamp(32px,5.5vw,56px);line-height:1.05;letter-spacing:-.02em;max-width:700px;margin:0}
+.intro-logo:not(.hidden) ~ h1{font-size:clamp(28px,4.5vw,46px)}
 .intro-stage{position:relative;width:440px;height:690px;flex:0 0 auto}
 .ip-photo{position:absolute;left:50%;top:0;width:330px;height:248px;margin-left:-165px;background:#fff;padding:10px;box-shadow:0 14px 40px rgba(0,0,0,.18);
   border-radius:6px;opacity:0;transform:translateY(20px) scale(.92) rotate(-2deg);transition:opacity .7s ease,transform .7s cubic-bezier(.2,.8,.2,1)}
@@ -247,7 +250,6 @@ body.intro-on .topbar{display:none}
 
 .intro-fit{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;position:relative}
 .intro-fit .intro-stage{transform-origin:center center}
-.intro-head h1{font-size:72px}
 .intro-fit .intro-stage{position:absolute;left:50%;top:50%;margin:-345px 0 0 -220px}
 
 /* flash kamera saat foto asli muncul */
@@ -435,7 +437,7 @@ body.mode-photo .sthumb img{image-rendering:auto}
 
 /* kamera: jumlah foto & tombol Batal di tengah */
 #s-camera .row-between:has(#thumbs){justify-content:center}
-#s-camera #btnCancel{align-self:center;min-width:180px}
+#s-camera #btnCancel{align-self:center;min-width:180px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
 
 /* tombol kembali = panah */
 .nav .btn.btn-back,.btn.btn-back{width:88px;min-width:88px;max-width:88px;height:88px;padding:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 88px}
@@ -448,6 +450,10 @@ body.mode-photo .sthumb img{image-rendering:auto}
   background:#fff;box-shadow:0 0 0 1px #D8D2C6,0 10px 28px rgba(0,0,0,.14);border-radius:2px}
 .review .paper .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 .review-col > *{flex-shrink:0}
+.review-col .grow{display:none}
+.retake-header{display:flex;justify-content:space-between;align-items:center;padding:2px 2px 4px}
+.chip-retake{font-size:11px;font-weight:700;letter-spacing:.03em;padding:3px 9px;border-radius:12px;background:color-mix(in srgb,var(--ink) 8%,transparent);color:var(--ink)}
+.chip-retake.quota-exhausted{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
 /* foto-foto berjajar ke samping: thumbnail + tombol Retake */
 #shotList{display:grid;grid-template-columns:repeat(4,minmax(0,140px));gap:8px}
 #shotList .shot{flex-direction:column;align-items:stretch;padding:6px;gap:6px}

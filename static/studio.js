@@ -281,18 +281,58 @@ $('#btnThemeReset').addEventListener('click', () => { ev.theme = {}; setDirty();
 $('#introStyle').addEventListener('change', (e) => { ev.intro_style = e.target.value; setDirty(); });
 function renderIntro() {
   $('#introStyle').value = ev.intro_style || 'auto';
-  $('#introPrev').classList.toggle('hidden', !ev.intro_photo);
-  $('#btnIntroDel').classList.toggle('hidden', !ev.intro_photo);
-  if (ev.intro_photo) $('#introPrev').src = assetUrl(ev.intro_photo);
+  if (!Array.isArray(ev.intro_photos)) {
+    ev.intro_photos = ev.intro_photo ? [ev.intro_photo] : [];
+  }
+  ev.intro_photo = ev.intro_photos[0] || '';
+
+  const grid = $('#introPhotosGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const file = ev.intro_photos[i] || '';
+    const slot = document.createElement('div');
+    slot.className = 'intro-slot';
+    slot.style.cssText = 'width:125px;display:flex;flex-direction:column;align-items:center;gap:6px;border:1px dashed var(--line,#ccc);border-radius:10px;padding:8px;background:var(--card,#fafafa)';
+    slot.innerHTML = `
+      <div style="width:108px;height:125px;display:flex;align-items:center;justify-content:center;background:#eee;border-radius:6px;overflow:hidden;position:relative">
+        ${file ? `<img src="${assetUrl(file)}" style="width:100%;height:100%;object-fit:cover" alt="Foto ${i + 1}">` : `<span class="mono" style="font-size:12px;color:#888;text-align:center">Foto ${i + 1}<br><small>(Kosong)</small></span>`}
+      </div>
+      <div class="row" style="gap:4px;margin-top:2px;width:100%;justify-content:center">
+        <label class="btn" style="height:30px;font-size:12px;padding:0 8px;display:inline-flex;align-items:center;cursor:pointer;flex:1;justify-content:center">
+          ${file ? 'Ganti' : 'Upload'}
+          <input type="file" class="hidden" accept="image/png,image/jpeg">
+        </label>
+        ${file ? `<button type="button" class="ghost" style="height:30px;font-size:12px;padding:0 8px;color:#c33" title="Hapus foto">Hapus</button>` : ''}
+      </div>
+    `;
+    const input = slot.querySelector('input');
+    input.addEventListener('change', async (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      try {
+        const res = await upload(f, 'intro');
+        ev.intro_photos[i] = res.file;
+        ev.intro_photo = ev.intro_photos[0] || '';
+        renderIntro();
+        setDirty();
+      } catch (err) {
+        alert('Upload foto gagal: ' + err.message);
+      }
+      e.target.value = '';
+    });
+    const btnDel = slot.querySelector('button');
+    if (btnDel) {
+      btnDel.addEventListener('click', () => {
+        ev.intro_photos.splice(i, 1);
+        ev.intro_photo = ev.intro_photos[0] || '';
+        renderIntro();
+        setDirty();
+      });
+    }
+    grid.appendChild(slot);
+  }
 }
-$('#introFile').addEventListener('change', async (e) => {
-  const f = e.target.files[0];
-  if (!f) return;
-  try { ev.intro_photo = (await upload(f, 'intro')).file; renderIntro(); setDirty(); }
-  catch (err) { alert('Upload foto gagal: ' + err.message); }
-  e.target.value = '';
-});
-$('#btnIntroDel').addEventListener('click', () => { ev.intro_photo = ''; renderIntro(); setDirty(); });
 function renderLogo() {
   $('#logoPrev').classList.toggle('hidden', !ev.logo);
   $('#btnLogoDel').classList.toggle('hidden', !ev.logo);
@@ -963,9 +1003,36 @@ async function loadSecurity() {
   $('#secLocal').checked = !!s.localOnly;
   const a = await api('/api/studio/about');
   if (a.livingDefault && $('#livingUrl')) $('#livingUrl').placeholder = a.livingDefault;
+  if ($('#cfgLivingUrl')) {
+    $('#cfgLivingUrl').value = a.livingBaseUrl || '';
+    $('#cfgLivingUrl').placeholder = a.livingDefault || 'https://mypropro.github.io/adsbooth/v/';
+  }
   $('#aboutInfo').innerHTML = `<b>${esc(a.app)} v${esc(a.version)}</b><br>Folder data: <span class="mono">${esc(a.dataDir)}</span> (${esc(a.mode)})<br>`
     + `Folder program: <span class="mono">${esc(a.programDir)}</span><br>${esc(a.os)} · Python ${esc(a.python)} · server ${esc(a.server)}`;
 }
+$('#btnSaveLivingUrl').addEventListener('click', async () => {
+  const url = ($('#cfgLivingUrl').value || '').trim();
+  try {
+    const res = await api('/api/studio/living-url', { method: 'PUT', json: { url } });
+    $('#livingMsg').textContent = url ? 'Alamat Living Photo berhasil disimpan.' : 'Menggunakan alamat default bawaan.';
+    $('#livingMsg').style.color = '#2F7D3A';
+    $('#cfgLivingUrl').value = res.livingBaseUrl || '';
+  } catch (e) {
+    $('#livingMsg').textContent = 'Gagal menyimpan: ' + e.message;
+    $('#livingMsg').style.color = '#c33';
+  }
+});
+$('#btnResetLivingUrl').addEventListener('click', async () => {
+  try {
+    const res = await api('/api/studio/living-url', { method: 'PUT', json: { url: '' } });
+    $('#cfgLivingUrl').value = '';
+    $('#livingMsg').textContent = 'Kembali ke alamat default: ' + (res.livingDefault || '');
+    $('#livingMsg').style.color = '#2F7D3A';
+  } catch (e) {
+    $('#livingMsg').textContent = 'Gagal: ' + e.message;
+    $('#livingMsg').style.color = '#c33';
+  }
+});
 $('#btnSecPin').addEventListener('click', async () => {
   try {
     await api('/api/studio/security', { method: 'PUT', json: { oldPin: $('#secOld').value, newPin: $('#secNew').value } });

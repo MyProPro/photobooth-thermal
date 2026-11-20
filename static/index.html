@@ -19,7 +19,11 @@
 <div id="app">
   <header class="topbar">
     <span class="mono b"><span id="eventName">EVENT NAME</span> · PHOTOBOOTH</span>
-    <span class="mono" id="stepLabel"><span class="dot" id="statusDot"></span><span id="statusText">CHECKING PRINTER…</span></span>
+    <span class="mono status-indicator" id="stepLabel">
+      <span class="dot" id="statusDot"></span>
+      <svg class="printer-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+      <span id="statusText">CHECKING PRINTER…</span>
+    </span>
   </header>
 
   <!-- 1. Sambutan -->
@@ -135,7 +139,7 @@
       <div class="thumbs" id="thumbs"></div>
       <button class="shutter" id="btnShutter" aria-label="Shoot now"><span></span></button>
     </div>
-    <button class="btn ghost light small-btn" id="btnCancel">Cancel</button>
+    <button class="btn ghost light small-btn" id="btnCancel" aria-label="Print Style"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span data-photo="Photo Style">Print Style</span></button>
   </section>
 
   <!-- 4b. Pilih template -->
@@ -158,6 +162,10 @@
     <div class="review">
       <div class="paper"><img id="receiptPreview" alt="Print preview"><div class="loading mono" id="previewLoading">CREATING PREVIEW…</div></div>
       <div class="col review-col">
+        <div class="retake-header" id="retakeHeader">
+          <span class="mono" style="font-size:12px;font-weight:700;color:var(--muted)">PHOTOS</span>
+          <span class="mono chip-retake" id="retakeQuota">Retake: 2 of 2 left</span>
+        </div>
         <div id="shotList" class="col gap"></div>
         <button class="btn ghost tpl-change" data-go="template">Change template</button>
         <div class="cert-pick hidden" id="certPick"><b>Pick a certificate title</b><div class="chips" id="certChips"></div></div>

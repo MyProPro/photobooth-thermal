@@ -21,6 +21,7 @@ DEFAULT = {
     "footer": "TERIMA KASIH",
     "logo": "",
     "intro_photo": "",         # foto untuk animasi layar awal kiosk
+    "intro_photos": [],        # daftar foto intro & gaya (hingga 3 foto)
     "theme": {},
     "output": "thermal",
     "intro_style": "auto",     # animasi layar awal: auto | thermal | instan | strip       # "thermal" (struk 80mm) atau "photo" (foto 4R berwarna)

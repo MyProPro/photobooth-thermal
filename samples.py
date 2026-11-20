@@ -161,16 +161,36 @@ def _illustration(seed):
     return out.copy()
 
 
-def sample_photos(n=9):
-    try:
-        dirs = sorted((os.path.join(SESS, d) for d in os.listdir(SESS)),
-                      key=os.path.getmtime, reverse=True)
-        for d in dirs:
-            files = sorted(f for f in os.listdir(d) if f.startswith("foto_"))
-            if files:
-                ims = [Image.open(os.path.join(d, f)).convert("RGB") for f in files]
-                return [ims[i % len(ims)] for i in range(n)]
-    except OSError:
-        pass
+def sample_photos(n=9, ev=None, asset_dir=None):
+    # 1. Foto intro yang diupload untuk event (jika ada)
+    uploaded = []
+    if ev is None:
+        try:
+            import events as EV
+            act = EV.get_active()
+            if act:
+                ev = EV.load(act)
+                asset_dir = EV.path(act)
+        except Exception:
+            pass
+
+    if ev and asset_dir:
+        photos = ev.get("intro_photos") or []
+        if isinstance(photos, str):
+            photos = [photos] if photos else []
+        if not photos and ev.get("intro_photo"):
+            photos = [ev["intro_photo"]]
+        for f in photos:
+            p = os.path.join(asset_dir, os.path.basename(f))
+            if f and os.path.exists(p):
+                try:
+                    uploaded.append(Image.open(p).convert("RGB"))
+                except Exception:
+                    pass
+
+    if uploaded:
+        return [uploaded[i % len(uploaded)] for i in range(n)]
+
+    # 2. Default: pakai kartun ilustrasi bawaan
     base = [_illustration(i) for i in range(4)]
     return [base[i % 4] for i in range(n)]
