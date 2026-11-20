@@ -10,40 +10,59 @@
 @font-face{font-family:'PB Josefin';src:url('/fonts/JosefinSans.ttf');font-weight:100 700}
 @font-face{font-family:'PB Archivo';src:url('/fonts/ArchivoBlack-Regular.ttf')}
 @font-face{font-family:'PB Bebas';src:url('/fonts/BebasNeue-Regular.ttf')}
-:root{--paper:#F2EFE8;--ink:#121212;--muted:#5A5650;--line:#D3CDC2;--accent:#C8410F;--ok:#2F7D3A;--card:#fff}
+:root{
+  --paper:#F5F3EC;--ink:#18181B;--muted:#52525B;--line:#D8D2C6;--accent:#D9381E;--ok:#16A34A;--card:#fff;
+  --card-shadow:0 3px 14px rgba(0,0,0,.04);
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.45 Inter,system-ui,sans-serif}
-h1,h2,h3{font-family:'Space Grotesk',sans-serif;margin:0}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.5 Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:'Space Grotesk',sans-serif;font-weight:700;margin:0;color:var(--ink)}
 .mono{font-family:'JetBrains Mono',Consolas,monospace;letter-spacing:.04em}
 .muted{color:var(--muted)}.small{font-size:13px}
 .hidden{display:none!important}
-button,.btn{font:600 14px Inter,sans-serif;border:1.5px solid var(--ink);background:#fff;color:var(--ink);border-radius:10px;padding:8px 14px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+button,.btn{font:600 14px Inter,sans-serif;border:1.5px solid var(--ink);background:#fff;color:var(--ink);border-radius:10px;padding:8px 16px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;transition:all .15s ease}
+button:hover:not(:disabled),.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+button:active:not(:disabled),.btn:active:not(:disabled){transform:none}
 button.primary,.btn.primary{background:var(--ink);color:#fff}
+button.primary:hover:not(:disabled),.btn.primary:hover:not(:disabled){background:#242424}
 button.accent{background:var(--accent);border-color:var(--accent);color:#fff}
-button.ghost{border-color:var(--line)}
-button.danger{color:var(--accent);border-color:#E6B7A5}
-button:disabled{opacity:.45;cursor:default}
-input[type=text],input[type=number],select,textarea{font:14px Inter,sans-serif;border:1.5px solid var(--line);border-radius:8px;padding:7px 9px;background:#fff;color:var(--ink);width:100%}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--ink);outline-offset:1px}
+button.accent:hover:not(:disabled){background:#b0360a}
+button.ghost{border-color:var(--line);background:#fff}
+button.ghost:hover:not(:disabled){background:#FAF8F3;border-color:var(--ink)}
+button.danger{color:var(--accent);border-color:#E6B7A5;background:#fff}
+button.danger:hover:not(:disabled){background:#FFF5F2;border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:default;transform:none!important;box-shadow:none!important}
+input[type=text],input[type=number],input[type=password],select,textarea{font:14px Inter,sans-serif;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;background:#fff;color:var(--ink);width:100%;transition:border-color .15s ease,box-shadow .15s ease}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(24,24,27,.08)}
 label{display:block}
-.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 24px;border-bottom:2px solid var(--ink);background:var(--paper);position:sticky;top:0;z-index:5}
-.top .left{display:flex;align-items:center;gap:16px}
-.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:3px 8px;border-radius:99px;background:#E6E1D6}
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 28px;border-bottom:1.5px solid var(--line);background:rgba(245,243,236,.94);backdrop-filter:blur(10px);position:sticky;top:0;z-index:20}
+.top .left{display:flex;align-items:center;gap:14px}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;padding:4px 10px;border-radius:99px;background:#E6E1D6}
 .badge.on{background:#DCEBDD;color:#1F5A29}
+.badge.warn{background:#FCE8E6;color:#C5221F}
 .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
-.wrap{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:calc(100vh - 62px)}
-.side{border-right:1.5px solid var(--line);padding:18px;display:flex;flex-direction:column;gap:10px}
-.ev{border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;display:block;width:100%;font-weight:400}
-.ev.sel,.side button.sel{border:2px solid var(--accent);background:#fff}
-.ev b{display:block;font-family:'Space Grotesk',sans-serif;font-size:16px}
-.main{padding:20px 24px 80px;min-width:0}
-.tabs{display:flex;gap:6px;margin:14px 0 18px;border-bottom:1.5px solid var(--line)}
-.tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:8px 12px}
-.tabs button.on{border-bottom-color:var(--ink)}
+.wrap{display:grid;grid-template-columns:290px minmax(0,1fr);min-height:calc(100vh - 61px)}
+.side{border-right:1.5px solid var(--line);padding:20px 16px;display:flex;flex-direction:column;gap:10px;background:rgba(245,243,236,.65)}
+.side-sep{height:1.5px;background:var(--line);margin:14px 4px 6px}
+.side-title{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;padding:0 8px;margin-bottom:4px}
+.side-nav{display:flex;flex-direction:column;gap:6px}
+.side-btn{width:100%;text-align:left;display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid transparent;border-radius:12px;background:#fff;font-weight:600;font-size:14px;cursor:pointer;color:var(--ink);transition:all .15s ease}
+.side-btn:hover{background:#FAF8F3;border-color:var(--line)}
+.side-btn.sel{background:var(--ink);color:#fff;border-color:var(--ink);box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.side-btn .ico{font-size:16px;line-height:1}
+.ev{border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:12px 14px;cursor:pointer;text-align:left;display:block;width:100%;font-weight:400;transition:all .15s ease}
+.ev:hover{border-color:#b5aea2;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.ev.sel{border:2px solid var(--accent);background:#fff;box-shadow:0 4px 14px rgba(217,56,30,.12)}
+.ev b{display:block;font-family:'Space Grotesk',sans-serif;font-size:15px}
+.main{padding:24px 32px 80px;min-width:0}
+.tabs{display:inline-flex;gap:4px;margin:16px 0 22px;background:#E5E0D4;padding:4px;border-radius:12px;border:none}
+.tabs button{border:0;border-radius:8px;background:none;padding:8px 16px;font-weight:600;color:var(--muted);font-size:14px;transition:all .15s ease}
+.tabs button:hover{color:var(--ink)}
+.tabs button.on{background:#fff;color:var(--ink);box-shadow:0 2px 6px rgba(0,0,0,.08)}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.card{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:16px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.card{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:22px;box-shadow:var(--card-shadow)}
 .auth{position:fixed;inset:0;z-index:100;background:var(--bg,#F2EFE8);display:flex;align-items:center;justify-content:center}
 .auth.hidden{display:none}
 .auth-card{width:min(92vw,380px);background:#fff;border:1.5px solid var(--line);border-radius:18px;padding:28px;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.08)}
@@ -136,11 +155,25 @@ body.ev-photo .thermal-only{display:none!important}
 
 <div class="wrap">
   <aside class="side">
-    <div class="row" style="justify-content:space-between"><h2 style="font-size:17px">Event</h2><button class="primary" id="btnNewEvent">+ Event baru</button></div>
-    <div id="eventList" class="col"></div>
-    <button class="ghost" id="btnSettings" style="justify-content:center">⚙ Printer &amp; tablet</button>
-    <button class="ghost" id="btnLicenseNav" style="justify-content:center;margin-top:6px">🔑 Lisensi</button>
-    <p class="hint">Event aktif = yang dipakai layar kiosk. Kiosk otomatis ikut berganti saat kembali ke layar awal.</p>
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="font-size:16px;font-weight:700">Event</h2>
+      <button class="primary" id="btnNewEvent" style="padding:6px 12px;font-size:13px">+ Event baru</button>
+    </div>
+    <div id="eventList" class="col" style="display:flex;flex-direction:column;gap:8px"></div>
+
+    <div class="side-sep"></div>
+    <div class="side-title">PENGATURAN</div>
+    <div class="side-nav">
+      <button class="side-btn" id="btnSettings" type="button">
+        <span class="ico">⚙️</span>
+        <span class="txt">Printer &amp; Tablet</span>
+      </button>
+      <button class="side-btn" id="btnLicenseNav" type="button">
+        <span class="ico">🔑</span>
+        <span class="txt">Lisensi &amp; Aktivasi</span>
+      </button>
+    </div>
+    <p class="hint" style="margin-top:auto;font-size:11px;line-height:1.5">Event aktif = yang dipakai layar kiosk. Kiosk otomatis ikut berganti saat kembali ke layar awal.</p>
   </aside>
 
   <main class="main" id="main">
@@ -319,24 +352,44 @@ body.ev-photo .thermal-only{display:none!important}
     </div>
 
     <div id="licenseView" class="hidden">
-      <h2 style="font-size:26px">Lisensi &amp; Aktivasi</h2>
-      <p class="muted" style="margin-top:4px">Status aktivasi perangkat dan masa berlaku photobooth.</p>
-      <div style="max-width:640px;margin-top:16px">
+      <div style="margin-bottom:20px">
+        <h2 style="font-size:26px">Lisensi &amp; Aktivasi</h2>
+        <p class="muted" style="margin-top:4px">Status aktivasi perangkat dan masa berlaku photobooth.</p>
+      </div>
+      <div style="max-width:700px;display:flex;flex-direction:column;gap:18px">
         <div class="card" id="licCard">
-          <b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Status Lisensi</b>
-          <div id="licInfo" class="lic-info" style="margin-top:8px">Memuat…</div>
-          <div class="lic-dev" style="margin-top:16px">
-            <span class="hint">ID perangkat ini (kirimkan ke admin/penjual untuk aktivasi):</span>
-            <div class="row" style="margin-top:4px"><b class="mono" id="licDevice" style="font-size:18px">-</b><button type="button" class="ghost" id="btnLicCopy">Salin ID</button></div>
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <b class="h3" style="font-size:18px">Status Lisensi</b>
+            <span class="badge" id="licBadgeStatus">-</span>
           </div>
-          <label class="field" style="margin-top:16px"><span>Kode lisensi</span>
-            <textarea id="licToken" rows="3" spellcheck="false" placeholder="AB1.xxxxx.xxxxx" style="font-family:'JetBrains Mono',monospace;font-size:12px"></textarea></label>
-          <div class="row" style="margin-top:14px">
-            <button class="primary" type="button" id="btnLicSave">Aktifkan</button>
-            <label class="btn ghost" style="cursor:pointer">Buka file .lic<input type="file" id="licFile" accept=".lic,.txt" hidden></label>
-            <button class="danger" type="button" id="btnLicRemove">Hapus lisensi</button>
+          <div id="licInfo" class="lic-info" style="margin-top:12px">Memuat…</div>
+        </div>
+
+        <div class="card">
+          <b class="h3" style="font-size:18px">ID Perangkat Ini</b>
+          <p class="hint" style="margin-top:4px">Kirimkan ID ini kepada admin/penjual untuk dibuatkan kode lisensi resmi.</p>
+          <div class="row" style="margin-top:14px;background:#FAF8F3;border:1.5px solid var(--line);padding:14px 18px;border-radius:12px;justify-content:space-between;align-items:center">
+            <div>
+              <span style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;display:block">DEVICE ID</span>
+              <b class="mono" id="licDevice" style="font-size:20px;color:var(--ink);letter-spacing:.06em">-</b>
+            </div>
+            <button type="button" class="primary" id="btnLicCopy" style="padding:9px 18px;font-size:13px">📋 Salin ID</button>
           </div>
-          <p class="small" id="licMsg" style="margin-top:8px"></p>
+        </div>
+
+        <div class="card">
+          <b class="h3" style="font-size:18px">Aktivasi Kode Lisensi</b>
+          <p class="hint" style="margin-top:4px">Tempel kode token lisensi yang Anda terima dari penjual/admin di bawah ini.</p>
+          <label class="field" style="margin-top:14px">
+            <span>Kode lisensi (Token)</span>
+            <textarea id="licToken" rows="3" spellcheck="false" placeholder="AB1.xxxxx.xxxxx" style="font-family:'JetBrains Mono',monospace;font-size:13px;border-radius:10px"></textarea>
+          </label>
+          <div class="row" style="margin-top:16px">
+            <button class="primary" type="button" id="btnLicSave" style="padding:10px 22px">✓ Aktifkan Lisensi</button>
+            <label class="btn ghost" style="cursor:pointer;padding:10px 18px">📁 Buka file .lic<input type="file" id="licFile" accept=".lic,.txt" hidden></label>
+            <button class="danger ghost" type="button" id="btnLicRemove" style="margin-left:auto">Hapus lisensi</button>
+          </div>
+          <p class="small" id="licMsg" style="margin-top:10px"></p>
         </div>
       </div>
     </div>

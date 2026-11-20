@@ -1079,6 +1079,11 @@ async function loadLicense() {
   try { LIC = await api('/api/studio/license'); } catch (e) { $('#licInfo').textContent = 'Gagal memuat: ' + e.message; return; }
   const s = LIC, good = s.state === 'active' || s.state === 'grace';
   $('#licDevice').textContent = s.deviceId;
+  const bStatus = $('#licBadgeStatus');
+  if (bStatus) {
+    bStatus.textContent = LIC_LABEL[s.state] || s.state;
+    bStatus.className = 'badge ' + (good ? 'on' : (s.state === 'trial' ? '' : 'warn'));
+  }
   let h = `<span class="st ${s.state === 'active' ? 'ok' : ''}">${esc(LIC_LABEL[s.state] || s.state)}</span>`;
   if (good) {
     h += `Paket <b>${esc(s.planName || s.plan)}</b> · ${esc((s.feat || []).map((f) => FEAT_NAME[f] || f).join(', '))}<br>`;
@@ -1112,7 +1117,14 @@ $('#licPill').addEventListener('click', openLicense);
 $('#btnLicCopy').addEventListener('click', () => {
   const t = $('#licDevice').textContent;
   (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(
-    () => { $('#licMsg').textContent = 'ID perangkat disalin.'; },
+    () => {
+      $('#licMsg').textContent = '✓ ID perangkat disalin.';
+      $('#licMsg').className = 'small okc';
+      const b = $('#btnLicCopy');
+      const old = b.textContent;
+      b.textContent = '✓ Tersalin!';
+      setTimeout(() => { b.textContent = old; }, 2000);
+    },
     () => { prompt('Salin ID perangkat:', t); });
 });
 $('#licFile').addEventListener('change', async (e) => {
