@@ -23,7 +23,7 @@ import uuid
 import paths as P
 
 # Diisi otomatis oleh:  python license_admin.py init
-PUBLIC_KEY = ""
+PUBLIC_KEY = "4VJHiYXiprgtEQJC-__WPr_guzaoXJ40fL-uN-hyEQE"
 
 TRIAL_DAYS = 7
 GRACE_DAYS = 3

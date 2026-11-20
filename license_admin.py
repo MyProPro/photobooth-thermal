@@ -94,7 +94,7 @@ def cmd_issue(a):
     dev = a.device.strip().upper()
     dev = dev[:3] + dev[3:].replace("0", "O").replace("1", "I").replace("8", "B")   # salah ketik umum
     if not re.fullmatch(r"AB-[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}", dev):
-        sys.exit("Format ID perangkat salah. Contoh: AB-7KQ2-M9XD-4HTA-PZ3C (lihat di AdsBooth Studio → Lisensi).")
+        sys.exit("Format ID perangkat salah. Contoh: AB-7KQ2-M9XD-4HTA-PZ3C (lihat di AdsBooth Studio -> Lisensi).")
     now = int(time.time())
     if a.until:
         d = datetime.strptime(a.until, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
@@ -120,9 +120,9 @@ def cmd_issue(a):
             w.writerow(["waktu", "lic", "device", "plan", "fitur", "nama", "berlaku_sampai", "kode"])
         w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), payload["lic"], dev, a.plan, " ".join(feat),
                     a.name, datetime.fromtimestamp(exp).strftime("%Y-%m-%d") if exp else "selamanya", token])
-    print(f"Lisensi {payload['lic']} · {a.plan} ({', '.join(feat)}) · {a.name or '-'}")
+    print(f"Lisensi {payload['lic']} | {a.plan} ({', '.join(feat)}) | {a.name or '-'}")
     print("Berlaku sampai:", datetime.fromtimestamp(exp).strftime("%d %b %Y %H:%M") if exp else "selamanya")
-    print("\nKode lisensi (kirim ke pelanggan, tempel di Studio → Lisensi):\n")
+    print("\nKode lisensi (kirim ke pelanggan, tempel di Studio -> Lisensi):\n")
     print(token)
     if a.out:
         with open(a.out, "w", encoding="utf-8") as f:
@@ -153,7 +153,7 @@ def main():
     p = sub.add_parser("init", help="buat kunci (sekali)")
     p.add_argument("--force", action="store_true", help="buat kunci BARU (lisensi lama jadi tidak berlaku!)")
     p = sub.add_parser("issue", help="terbitkan kode lisensi")
-    p.add_argument("--device", required=True, help="ID perangkat dari Studio → Lisensi")
+    p.add_argument("--device", required=True, help="ID perangkat dari Studio -> Lisensi")
     p.add_argument("--plan", required=True, choices=PLANS)
     p.add_argument("--name", default="", help="nama pelanggan / usaha")
     p.add_argument("--days", type=int, default=30, help="masa berlaku (hari). 0 = selamanya")
