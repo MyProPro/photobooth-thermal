@@ -135,8 +135,9 @@ async function startCamera() {
     }
     const st = stream.getVideoTracks()[0];
     console.info('Kamera:', st.label, st.getSettings && st.getSettings());
-    $('#video').srcObject = stream;
-    $('#video2').srcObject = stream;
+    const v = $('#video');
+    v.srcObject = stream;
+    try { await v.play(); } catch (e) {}
     return true;
   } catch (e) {
     enableDummy(e.message);   // tidak ada kamera -> pakai foto contoh
@@ -155,8 +156,8 @@ function capture(maxW = 1280) {
     c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', 0.9);
   }
-  const v = $('#video2').videoWidth ? $('#video2') : $('#video');
-  if (!v.videoWidth) return null;
+  const v = $('#video');
+  if (!v || !v.videoWidth || !v.videoHeight) return null;
   const scale = Math.min(1, maxW / v.videoWidth);
   const c = $('#cap');
   c.width = Math.round(v.videoWidth * scale);
@@ -592,6 +593,7 @@ async function snapPhoto() {
     console.info('Jepret', photo ? '4K' : '1080p (fallback)', Math.round(performance.now() - t0) + 'ms');
   }
   if (!photo) { await sleep(60); photo = capture(maxW); }
+  if (!photo) { await sleep(120); photo = capture(maxW); }
   // hasil jepretan tampil diam sebentar; di belakangnya kamera kembali ke 1080p
   const reviewMs = CFG.shotReviewMs || 0;
   if (reviewMs > 0 && photo) { rv.src = photo; rv.classList.remove('hidden'); }
