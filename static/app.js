@@ -1308,3 +1308,67 @@ function applyLicense(L) {
     document.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 })();
+
+// ---------- Akses Rahasia Studio (Hidden Gesture: Tap 4x pojok kanan atas) ----------
+let adminTapCount = 0;
+let adminTapTimer = null;
+const secretTap = $('#secretAdminTap');
+if (secretTap) {
+  secretTap.addEventListener('click', (e) => {
+    e.stopPropagation();
+    adminTapCount += 1;
+    clearTimeout(adminTapTimer);
+    adminTapTimer = setTimeout(() => { adminTapCount = 0; }, 2000);
+    if (adminTapCount >= 4) {
+      adminTapCount = 0;
+      openAdminPinModal();
+    }
+  });
+}
+
+function openAdminPinModal() {
+  const m = $('#adminPinModal');
+  const inp = $('#adminPinInput');
+  const err = $('#adminPinErr');
+  if (!m || !inp) return;
+  inp.value = '';
+  if (err) err.classList.add('hidden');
+  m.classList.remove('hidden');
+  setTimeout(() => inp.focus(), 150);
+}
+
+function closeAdminPinModal() {
+  const m = $('#adminPinModal');
+  if (m) m.classList.add('hidden');
+}
+
+$('#btnAdminPinCancel')?.addEventListener('click', closeAdminPinModal);
+$('#btnAdminPinSubmit')?.addEventListener('click', submitAdminPin);
+$('#adminPinInput')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') submitAdminPin();
+  if (e.key === 'Escape') closeAdminPinModal();
+});
+
+async function submitAdminPin() {
+  const inp = $('#adminPinInput');
+  const err = $('#adminPinErr');
+  const pin = (inp?.value || '').trim();
+  if (!pin) return;
+  try {
+    const res = await api('/api/studio/login', { pin });
+    if (res.ok) {
+      window.location.href = '/studio';
+    } else {
+      throw new Error(res.error || 'PIN salah');
+    }
+  } catch (e) {
+    if (err) {
+      err.textContent = e.message || 'PIN salah, silakan coba lagi.';
+      err.classList.remove('hidden');
+    }
+    if (inp) {
+      inp.value = '';
+      inp.focus();
+    }
+  }
+}
