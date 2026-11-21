@@ -69,11 +69,12 @@ def compile_nuitka(ico):
     log(f"Kompilasi Nuitka ({platform.system()}, Python {platform.python_version()})")
     out = os.path.join(BUILD, "nuitka")
     cmd = [sys.executable, "-m", "nuitka", "--mode=standalone", f"--output-dir={out}",
-           f"--output-filename={EXE}", "--assume-yes-for-downloads", "--remove-output",
+           f"--output-filename={EXE}", "--assume-yes-for-downloads",
            "--python-flag=no_docstrings", "--python-flag=-O",
+           "--show-scons",
            "--include-module=waitress", "--include-package=waitress",
            "--include-module=werkzeug.serving",
-           "--include-module=cryptography.hazmat.primitives.asymmetric.ed25519",
+           "--include-package=cryptography",
            "--include-package=escpos", "--include-package-data=escpos",
            "--include-package=qrcode"]
     for d in DATA_DIRS:
