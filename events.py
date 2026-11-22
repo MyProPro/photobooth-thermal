@@ -24,7 +24,7 @@ DEFAULT = {
     "intro_photos": [],        # daftar foto intro & gaya (hingga 3 foto)
     "theme": {},
     "output": "thermal",
-    "intro_style": "auto",     # animasi layar awal: auto | thermal | instan | strip       # "thermal" (struk 80mm) atau "photo" (foto 4R berwarna)
+    "intro_style": "auto",     # animasi layar awal: auto (mengikuti output thermal/photo/both) | thermal | instan | strip
     "photo_templates": [],     # template mode foto yang tampil (kosong = semua)
     "photo_default_template": "klasik",
     "photo_frames": {},        # bingkai PNG mode foto per layout: {"solo": "file.png", ...}               # warna & font kiosk (kosong = tema bawaan krem)
@@ -34,6 +34,16 @@ DEFAULT = {
     "default_template": "klasik",
     "custom_templates": [],    # [{id, name, kind: builder|overlay, ...}]
     "social": {"username": "", "display": "{event}", "website": "", "bio": "{date_long}"},  # template Profil Sosmed
+    "payment": {
+        "enabled": False,
+        "method": "qr",           # qr | manual | both
+        "price_receipt": 15000,
+        "price_photo": 30000,
+        "timeout_seconds": 120,
+        "gateway": "simulator",   # simulator | qris_static | midtrans
+        "qris_image": "",
+    },
+    "download_auto_delete": 3, # menit auto-delete di server
     "qr_download": True,       # QR unduh foto digital (tamu harus satu Wi-Fi dengan server)
     "features": {"guestbook": False, "lucky_draw": False, "pose_challenge": False, "host_copy": False,
                  "living_photo": False},

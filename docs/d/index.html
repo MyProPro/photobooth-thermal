@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex">
+<title>Download Softcopy Foto — AdsBooth</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e10;
+    --card: #18181b;
+    --card-inner: #222226;
+    --fg: #f4f1ea;
+    --muted: #a1a1aa;
+    --line: #2e2e33;
+    --accent: #d9381e;
+    --green: #10b981;
+    --green-glow: rgba(16, 185, 129, 0.28);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245, 158, 11, 0.12);
+    --red-bg: rgba(239, 68, 68, 0.14);
+    --red: #ef4444;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.5 Inter, system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap {
+    max-width: 460px;
+    margin: 0 auto;
+    padding: calc(18px + env(safe-area-inset-top)) 18px calc(36px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .screen { display: none; flex-direction: column; align-items: center; text-align: center; width: 100%; }
+  .screen.on { display: flex; }
+  
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 22px 18px;
+    width: 100%;
+    box-shadow: 0 12px 32px rgba(0,0,0,.45);
+  }
+  
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    background: #27272a;
+    color: var(--fg);
+    padding: 4px 12px;
+    border-radius: 99px;
+    margin-bottom: 10px;
+  }
+  .badge.live { background: rgba(16, 185, 129, .15); color: #34d399; border: 1px solid rgba(16, 185, 129, .3); }
+  
+  h1 { font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 4px; }
+  p.lead { color: var(--muted); font-size: 13px; line-height: 1.45; margin-bottom: 16px; }
+  
+  .privacy-box {
+    background: var(--amber-bg);
+    border: 1px solid rgba(245, 158, 11, .3);
+    border-radius: 14px;
+    padding: 11px 14px;
+    font-size: 13px;
+    color: #fbbf24;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    margin-bottom: 16px;
+  }
+  .timer-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    background: var(--amber);
+    color: #111;
+    padding: 2px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+    margin-left: auto;
+  }
+  
+  .img-frame {
+    width: 100%;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #000;
+    border: 1px solid var(--line);
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    margin-bottom: 18px;
+    position: relative;
+  }
+  .img-frame img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: contain;
+  }
+  
+  .actions { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+  
+  .btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: 100%;
+    height: 52px;
+    border-radius: 15px;
+    font-family: inherit;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    border: 0;
+    transition: transform .12s ease, background .15s ease;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn-primary {
+    background: var(--green);
+    color: #042f1a;
+    box-shadow: 0 4px 18px var(--green-glow);
+  }
+  .btn-primary:hover { background: #059669; }
+  .btn-ghost {
+    background: var(--card-inner);
+    color: var(--fg);
+    border: 1px solid var(--line);
+    font-size: 14px;
+    height: 46px;
+  }
+  .btn-danger {
+    background: var(--red-bg);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, .25);
+    font-size: 13px;
+    height: 42px;
+    margin-top: 6px;
+  }
+  
+  .sec-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    margin: 18px 0 10px;
+    padding: 0 4px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  
+  .raw-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    width: 100%;
+  }
+  .raw-item {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    aspect-ratio: 3/4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .raw-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .raw-down {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    background: rgba(0,0,0,.75);
+    backdrop-filter: blur(8px);
+    color: #fff;
+    padding: 5px 9px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1px solid rgba(255,255,255,.15);
+  }
+  
+  .logo-icon {
+    width: 68px;
+    height: 68px;
+    border-radius: 20px;
+    background: var(--accent);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    margin: 14px auto 16px;
+    box-shadow: 0 6px 20px rgba(217, 56, 30, .35);
+  }
+  .brand-footer {
+    font-size: 12px;
+    color: #52525b;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-top: 24px;
+  }
+  
+  .in-app-warn {
+    background: rgba(59, 130, 246, .12);
+    border: 1px solid rgba(59, 130, 246, .3);
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #93c5fd;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: pulse 1.6s infinite;
+  }
+  @keyframes pulse {
+    0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { transform: scale(1); box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+    100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid #27272a;
+    border-top-color: var(--fg);
+    animation: spin .9s linear infinite;
+    margin: 40px auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  /* Modal Konfirmasi Hapus */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.75);
+    backdrop-filter: blur(8px);
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-box {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    max-width: 380px;
+    width: 100%;
+    padding: 24px 20px;
+    text-align: center;
+    box-shadow: 0 16px 40px rgba(0,0,0,.6);
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- IN-APP BROWSER NOTIFICATION -->
+  <div id="inAppNotice" class="in-app-warn hidden">
+    <span>💡</span>
+    <div>Buka halaman ini di <b>Safari</b> atau <b>Chrome</b> agar foto dapat langsung tersimpan ke galeri ponsel Anda.</div>
+  </div>
+
+  <!-- 1. LOADING SCREEN -->
+  <section class="screen on" id="s-loading">
+    <div class="spinner"></div>
+    <p style="color:var(--muted)">Menghubungkan ke photobooth…</p>
+  </section>
+
+  <!-- 2. TANPA KODE / DIRECT VISIT -->
+  <section class="screen" id="s-nocode">
+    <div class="card">
+      <div class="logo-icon">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="4"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+      </div>
+      <span class="badge">AdsBooth Softcopy</span>
+      <h1>Download Foto Digital</h1>
+      <p class="lead" style="margin-top:8px">Silakan scan kode QR yang tercetak pada kertas foto Anda untuk mengunduh softcopy foto berwarna resolusi tinggi ke ponsel.</p>
+    </div>
+    <div class="brand-footer">Powered by AdsBooth</div>
+  </section>
+
+  <!-- 3. PREVIEW DEMO SCREEN -->
+  <section class="screen" id="s-preview">
+    <div class="card">
+      <span class="badge live">Mode Pratinjau</span>
+      <h1>Pratinjau Softcopy HD</h1>
+      <p class="lead">Ini adalah tampilan contoh saat tamu membuka link QR dari struk atau layar kios.</p>
+      <div class="img-frame">
+        <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&auto=format&fit=crop&q=80" alt="Sample Foto">
+      </div>
+      <button class="btn btn-primary" type="button" onclick="alert('Ini adalah mode preview demo.')">📥 Download Softcopy (Demo)</button>
+    </div>
+    <div class="brand-footer">Powered by AdsBooth</div>
+  </section>
+
+  <!-- 4. GAGAL KONEKSI WI-FI / OFFLINE -->
+  <section class="screen" id="s-wifi">
+    <div class="card">
+      <div class="logo-icon" style="background:rgba(245,158,11,.15);color:var(--amber);border:1px solid rgba(245,158,11,.3)">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+          <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+          <line x1="12" y1="20" x2="12.01" y2="20"/>
+        </svg>
+      </div>
+      <span class="badge" style="color:var(--amber);background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25)">Langkah Terakhir</span>
+      <h1 style="font-size:22px;margin:4px 0 8px">Sambungkan ke Wi-Fi:</h1>
+      
+      <div style="background:var(--card-inner);border:1.5px solid var(--amber);border-radius:16px;padding:14px;margin:12px 0 14px;text-align:center">
+        <span style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Nama Wi-Fi Photobooth:</span>
+        <b id="wifiSsid" style="font-size:18px;color:#fff;font-family:'Space Grotesk',sans-serif;letter-spacing:-.01em;display:block">(Nama Event) AdsBooth</b>
+      </div>
+
+      <p class="lead" style="margin-bottom:14px">Buka menu <b>Wi-Fi</b> di ponsel Anda, lalu sambungkan ke Wi-Fi di atas untuk mengambil foto dari mesin booth.</p>
+
+      <div class="pulse-status" style="display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:12px;padding:10px 14px;font-size:12px;color:#34d399;margin-bottom:18px">
+        <span class="pulse-dot"></span>
+        <span>Menunggu koneksi... Begitu tersambung, foto langsung muncul otomatis!</span>
+      </div>
+
+      <button class="btn btn-primary" id="btnRetryWifi" type="button">🔄 Coba Muat Ulang Sekarang</button>
+    </div>
+    <div class="brand-footer">Powered by AdsBooth</div>
+  </section>
+
+  <!-- 5. KADALUWARSA / SUDAH TERHAPUS -->
+  <section class="screen" id="s-expired">
+    <div class="card">
+      <div class="logo-icon" style="background:#27272a;color:#f87171">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </div>
+      <span class="badge" style="color:#f87171">Batas Waktu Habis</span>
+      <h1>Foto Sudah Terhapus</h1>
+      <p class="lead" style="margin-top:8px">Demi keamanan dan menjaga privasi Anda, foto sesi ini telah otomatis terhapus permanen dari sistem.</p>
+    </div>
+    <div class="brand-footer">Powered by AdsBooth</div>
+  </section>
+
+  <!-- 6. SCREEN UTAMA (FOTO DITEMUKAN) -->
+  <section class="screen" id="s-main">
+    <div class="card">
+      <span class="badge live">ADSBOOTH DIGITAL · RESMI</span>
+      <h1 id="eventTitle">AdsBooth Photobooth</h1>
+      <p class="lead">Softcopy foto berkualitas tinggi dengan bingkai pilihan Anda.</p>
+
+      <div class="privacy-box" id="timerBox">
+        <span>🔒</span>
+        <div>Foto otomatis terhapus dalam:</div>
+        <div class="timer-pill" id="delTimer">--:--</div>
+      </div>
+
+      <div class="img-frame" id="mainImgFrame">
+        <img id="mainImg" alt="Softcopy Foto">
+      </div>
+
+      <div class="actions">
+        <a class="btn btn-primary" id="btnDownloadMain" download="AdsBooth-Photo.jpg">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download Softcopy Berwarna (HD)
+        </a>
+        <button class="btn btn-ghost" id="btnShare" type="button">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Bagikan Foto
+        </button>
+        <button class="btn btn-danger" id="btnDelNow" type="button">🗑️ Hapus Foto Saya Sekarang</button>
+      </div>
+    </div>
+
+    <!-- Foto Satuan (Raw Shots) jika ada -->
+    <div id="rawSection" class="hidden" style="width:100%">
+      <div class="sec-heading">
+        <span>Foto Satuan (Raw Shots)</span>
+        <span id="rawCount" style="color:var(--muted);font-weight:400"></span>
+      </div>
+      <div class="raw-grid" id="rawGrid"></div>
+    </div>
+
+    <div class="brand-footer">Powered by AdsBooth</div>
+  </section>
+
+</div>
+
+<!-- MODAL KONFIRMASI HAPUS -->
+<div id="delModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div style="font-size:36px;margin-bottom:10px">🗑️</div>
+    <h2 style="font-size:18px;margin-bottom:8px">Hapus Foto Sekarang?</h2>
+    <p style="font-size:13px;color:var(--muted);line-height:1.4;margin-bottom:18px">File foto Anda di mesin photobooth akan langsung dihapus permanen. Aksi ini tidak dapat dibatalkan.</p>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" id="btnCancelDel" style="flex:1" type="button">Batal</button>
+      <button class="btn btn-primary" id="btnConfirmDel" style="flex:1;background:var(--red);color:#fff" type="button">Ya, Hapus</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const show = (id) => document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('on', s.id === id));
+  
+  // Deteksi in-app browser (IG, FB, Line, TikTok)
+  const ua = navigator.userAgent || '';
+  if (/Instagram|FBAN|FBAV|FB_IAB|Line\/|TikTok|MicroMessenger/i.test(ua)) {
+    $('#inAppNotice').classList.remove('hidden');
+  }
+
+  // Parse parameter dari Hash atau Query String
+  function parseParams() {
+    let raw = (location.hash || '').replace(/^#/, '');
+    if (!raw && location.search) {
+      raw = location.search.replace(/^\?/, '');
+    }
+    const params = new URLSearchParams(raw);
+    let sid = params.get('s') || params.get('sid') || '';
+    let host = params.get('h') || params.get('host') || '';
+    let exp = parseInt(params.get('exp') || '3');
+
+    // Dukungan hash format lama / simple #<sid>
+    if (!sid && raw && !raw.includes('=')) {
+      sid = raw.replace(/[^a-zA-Z0-9_.-]/g, '');
+    }
+
+    // Dukungan direct URL path: /d/<sid> jika dijalankan langsung di server Flask
+    if (!sid) {
+      const match = location.pathname.match(/\/d\/([a-zA-Z0-9_.-]+)/);
+      if (match && match[1] && match[1] !== 'index.html') {
+        sid = match[1];
+      }
+    }
+
+    // Default host = origin saat ini jika tidak dispesifikasikan di URL
+    if (!host) {
+      host = location.origin;
+    }
+    host = host.replace(/\/$/, '');
+
+    let wifi = params.get('w') || params.get('wifi') || '(Event) AdsBooth';
+    return { sid, host, exp, wifi };
+  }
+
+  let currentSid = '';
+  let currentHost = '';
+  let currentExp = 3;
+  let remainingSeconds = 180;
+  let timerInterval = null;
+  let currentSessionData = null;
+  let wifiPollInterval = null;
+
+  async function fetchWithTimeout(url, opts = {}, timeoutMs = 2500) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...opts, signal: controller.signal });
+      clearTimeout(id);
+      return res;
+    } catch (e) {
+      clearTimeout(id);
+      throw e;
+    }
+  }
+
+  function startWifiPolling(h, s, ex) {
+    clearInterval(wifiPollInterval);
+    wifiPollInterval = setInterval(async () => {
+      try {
+        const res = await fetchWithTimeout(`${h}/d/${s}/info`, { mode: 'cors' }, 1500);
+        if (res && res.ok) {
+          clearInterval(wifiPollInterval);
+          wifiPollInterval = null;
+          const data = await res.json();
+          currentSessionData = data;
+          renderMain({
+            title: data.title || 'AdsBooth Photobooth',
+            main_url: `${h}/d/${s}/${data.main_file || 'softcopy_color.jpg'}`,
+            raw_files: data.raw_files || [],
+            rem_sec: data.rem_sec || (ex * 60)
+          });
+        }
+      } catch (e) {}
+    }, 1500);
+  }
+
+  async function loadSession() {
+    clearInterval(wifiPollInterval);
+    wifiPollInterval = null;
+    const { sid, host, exp, wifi } = parseParams();
+    currentSid = sid;
+    currentHost = host;
+    currentExp = exp;
+
+    if (!sid) {
+      return show('s-nocode');
+    }
+    if (sid === 'preview') {
+      return show('s-preview');
+    }
+
+    show('s-loading');
+
+    // URL endpoint API pada mesin booth
+    const apiUrl = `${host}/d/${sid}/info`;
+    const fallbackDirectImg = `${host}/d/${sid}/softcopy_color.jpg`;
+
+    try {
+      const res = await fetchWithTimeout(apiUrl, { mode: 'cors' }, 2200).catch(() => null);
+      if (!res || !res.ok) {
+        if (res && res.status === 403) return show('s-expired');
+        if (res && res.status === 404) return show('s-expired');
+        
+        // Coba langsung load gambar utama jika info API gagal
+        const imgCheck = await fetchWithTimeout(fallbackDirectImg, { method: 'HEAD', mode: 'cors' }, 1500).catch(() => null);
+        if (imgCheck && imgCheck.ok) {
+          renderMain({
+            title: 'AdsBooth Photobooth',
+            main_url: fallbackDirectImg,
+            raw_files: [],
+            rem_sec: exp * 60
+          });
+          return;
+        }
+        $('#wifiSsid').textContent = wifi;
+        show('s-wifi');
+        startWifiPolling(host, sid, exp);
+        return;
+      }
+
+      const data = await res.json();
+      currentSessionData = data;
+      renderMain({
+        title: data.title || 'AdsBooth Photobooth',
+        main_url: `${host}/d/${sid}/${data.main_file || 'softcopy_color.jpg'}`,
+        raw_files: data.raw_files || [],
+        rem_sec: data.rem_sec || (exp * 60)
+      });
+
+    } catch (err) {
+      console.warn('Load session error:', err);
+      $('#wifiSsid').textContent = wifi;
+      show('s-wifi');
+      startWifiPolling(host, sid, exp);
+    }
+  }
+
+  function renderMain(item) {
+    clearInterval(wifiPollInterval);
+    wifiPollInterval = null;
+    $('#eventTitle').textContent = item.title;
+    $('#mainImg').src = item.main_url;
+    $('#btnDownloadMain').href = item.main_url;
+    $('#btnDownloadMain').download = `AdsBooth-${currentSid}.jpg`;
+
+    // Setup Raw Shots Grid
+    const rawGrid = $('#rawGrid');
+    rawGrid.innerHTML = '';
+    if (item.raw_files && item.raw_files.length) {
+      $('#rawSection').classList.remove('hidden');
+      $('#rawCount').textContent = `${item.raw_files.length} foto`;
+      item.raw_files.forEach((rf) => {
+        const fileUrl = `${currentHost}/d/${currentSid}/${rf}`;
+        const div = document.createElement('div');
+        div.className = 'raw-item';
+        div.innerHTML = `
+          <img src="${fileUrl}" alt="Raw Shot" loading="lazy">
+          <a class="raw-down" href="${fileUrl}" download="${rf}">Download</a>
+        `;
+        rawGrid.appendChild(div);
+      });
+    } else {
+      $('#rawSection').classList.add('hidden');
+    }
+
+    // Auto-Delete Countdown Timer
+    remainingSeconds = Math.max(0, item.rem_sec || (currentExp * 60));
+    updateTimerDisplay();
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      remainingSeconds--;
+      updateTimerDisplay();
+      if (remainingSeconds <= 0) {
+        clearInterval(timerInterval);
+        show('s-expired');
+      }
+    }, 1000);
+
+    show('s-main');
+  }
+
+  function updateTimerDisplay() {
+    const m = Math.floor(remainingSeconds / 60);
+    const s = remainingSeconds % 60;
+    const str = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    const el = $('#delTimer');
+    if (el) el.textContent = str;
+  }
+
+  // Web Share API
+  $('#btnShare').addEventListener('click', async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Foto Photobooth Saya',
+          text: 'Lihat foto keren saya dari photobooth AdsBooth!',
+          url: location.href
+        });
+      } catch (e) {}
+    } else {
+      navigator.clipboard?.writeText(location.href);
+      alert('Link foto berhasil disalin ke clipboard!');
+    }
+  });
+
+  // Tombol Hapus Sekarang
+  $('#btnDelNow').addEventListener('click', () => {
+    $('#delModal').classList.remove('hidden');
+  });
+  $('#btnCancelDel').addEventListener('click', () => {
+    $('#delModal').classList.add('hidden');
+  });
+  $('#btnConfirmDel').addEventListener('click', async () => {
+    $('#btnConfirmDel').disabled = true;
+    $('#btnConfirmDel').textContent = 'Menghapus…';
+    try {
+      await fetch(`${currentHost}/d/${currentSid}/delete`, { method: 'POST', mode: 'cors' });
+      $('#delModal').classList.add('hidden');
+      show('s-expired');
+    } catch (e) {
+      alert('Gagal menghapus foto dari server.');
+    } finally {
+      $('#btnConfirmDel').disabled = false;
+      $('#btnConfirmDel').textContent = 'Ya, Hapus';
+    }
+  });
+
+  $('#btnRetryWifi').addEventListener('click', () => {
+    loadSession();
+  });
+
+  // Start & listen for hash change
+  window.addEventListener('hashchange', () => loadSession());
+  loadSession();
+})();
+</script>
+</body>
+</html>

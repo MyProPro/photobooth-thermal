@@ -30,12 +30,12 @@ GRACE_DAYS = 3
 PREFIX = "AB1"
 
 PLANS = {
-    "thermal": {"name": "Thermal", "feat": ["thermal"]},
+    "thermal": {"name": "Receipt Photobooth", "feat": ["thermal"]},
     "photo": {"name": "Foto 4R", "feat": ["photo"]},
     "complete": {"name": "Lengkap", "feat": ["thermal", "photo", "living"]},
 }
 ALL_FEATURES = ["thermal", "photo", "living"]
-FEATURE_NAMES = {"thermal": "Struk thermal", "photo": "Foto 4R", "living": "Living Photo"}
+FEATURE_NAMES = {"thermal": "Receipt Photobooth", "photo": "Foto 4R", "living": "Living Photo"}
 
 LICENSE_FILE = os.path.join(P.DATA, "license.key")
 STATE_FILE = os.path.join(P.DATA, ".license_state")
@@ -295,7 +295,7 @@ def watermark(img):
     f = T.F("black", size)
     stroke = max(3, size // 14)
     tile = Image.new("RGBA", (int(W * 1.6), int(size * 1.6)), (0, 0, 0, 0))
-    ImageDraw.Draw(tile).text((stroke, stroke), "DEMO   " * 6, font=f, fill=(255, 255, 255, 255),
+    ImageDraw.Draw(tile).text((stroke, stroke), "ADSBOOTH   " * 4, font=f, fill=(255, 255, 255, 255),
                               stroke_width=stroke, stroke_fill=(0, 0, 0, 255))
     tile = tile.rotate(28, expand=True, resample=Image.BICUBIC)
     if mode in ("1", "L"):                           # thermal: harus hitam/putih murni
@@ -315,7 +315,7 @@ def watermark(img):
     d = ImageDraw.Draw(out)
     d.rectangle((0, H - band, W, H), fill=(0, 0, 0))
     fb = T.F("monob", max(16, band // 3))
-    msg = T.tr("VERSI DEMO - BELUM BERLISENSI")
+    msg = "ADSBOOTH PHOTOBOOTH"
     tw = d.textlength(msg, font=fb)
     bb = fb.getbbox(msg)
     d.text(((W - tw) / 2, H - band + (band - (bb[3] - bb[1])) / 2 - bb[1]), msg, font=fb, fill=(255, 255, 255))

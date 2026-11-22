@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AdsBooth Studio</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap">
 <style>
 @font-face{font-family:'PB Playfair';src:url('/fonts/PlayfairDisplay.ttf');font-weight:400 900}
@@ -185,7 +187,7 @@ body.ev-photo .thermal-only{display:none!important}
       <div class="split" style="margin-top:16px">
         <div>
           <div class="card">
-            <div class="row" style="justify-content:space-between"><b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Printer thermal</b><span class="badge" id="prStatus">-</span></div>
+            <div class="row" style="justify-content:space-between"><b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Printer Receipt Photobooth</b><span class="badge" id="prStatus">-</span></div>
             <div class="grid2" style="margin-top:12px">
               <label class="field"><span>Jenis koneksi</span>
                 <select id="prType">
@@ -377,6 +379,62 @@ body.ev-photo .thermal-only{display:none!important}
           </div>
         </div>
 
+        <!-- KARTU LANGGANAN OTOMATIS MIDTRANS -->
+        <div class="card" id="licSubscribeCard">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <b class="h3" style="font-size:18px">Beli / Perpanjang Lisensi Online</b>
+            <span class="badge" style="background:#EBF5FB;color:#2980B9;font-weight:700">QRIS / VA Otomatis</span>
+          </div>
+          <p class="hint" style="margin-top:4px">Pilih paket lisensi untuk perangkat ini. Pembayaran via Midtrans akan langsung mengaktifkan lisensi secara otomatis.</p>
+
+          <div class="field" style="margin-top:14px">
+            <span style="font-weight:600">1. Pilih Paket</span>
+            <div id="licPlanChoices" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:12px;margin-top:8px">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:14px">
+            <span style="font-weight:600">2. Durasi Langganan</span>
+            <div class="row" id="licDurChoices" style="gap:10px;margin-top:8px">
+              <label class="btn ghost lic-dur-btn on" data-days="30" style="flex:1;cursor:pointer;text-align:center;padding:10px;border-radius:10px">
+                <input type="radio" name="licDur" value="30" checked hidden>
+                <b>1 Bulan (30 Hari)</b>
+              </label>
+              <label class="btn ghost lic-dur-btn" data-days="365" style="flex:1;cursor:pointer;text-align:center;padding:10px;border-radius:10px">
+                <input type="radio" name="licDur" value="365" hidden>
+                <b>1 Tahun (Hemat)</b>
+              </label>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:14px;gap:12px">
+            <label class="field" style="flex:1">
+              <span>Nama Usaha / Pelanggan (opsional)</span>
+              <input type="text" id="licCustName" placeholder="Contoh: Studio Foto Ceria">
+            </label>
+          </div>
+
+          <div class="row" style="justify-content:space-between;align-items:center;margin-top:18px;background:#FAF8F3;border:1.5px solid var(--line);border-radius:12px;padding:14px 18px">
+            <div>
+              <span style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;display:block">TOTAL PEMBAYARAN</span>
+              <b id="licTotalAmount" style="font-size:22px;color:var(--ink);font-weight:800">-</b>
+            </div>
+            <button class="primary" type="button" id="btnLicSubscribe" style="padding:12px 22px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px">
+              💳 Bayar &amp; Aktifkan Otomatis
+            </button>
+          </div>
+
+          <!-- Indikator Polling Aktivasi Otomatis -->
+          <div id="licPollNotice" class="hidden" style="margin-top:14px;background:#EFF6FF;border:1.5px solid #BFDBFE;padding:14px;border-radius:12px;display:flex;align-items:center;gap:12px">
+            <div class="spinner" style="width:22px;height:22px;border:3px solid #93C5FD;border-top-color:#2563EB;border-radius:50%;animation:spin 1s linear infinite"></div>
+            <div>
+              <b style="font-size:13px;color:#1E40AF;display:block">Menunggu konfirmasi pembayaran...</b>
+              <span style="font-size:12px;color:#3B82F6">Sistem sedang memantau pembayaran Midtrans. Lisensi akan otomatis aktif begitu pembayaran selesai!</span>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
           <b class="h3" style="font-size:18px">Aktivasi Kode Lisensi</b>
           <p class="hint" style="margin-top:4px">Tempel kode token lisensi yang Anda terima dari penjual/admin di bawah ini.</p>
@@ -416,8 +474,9 @@ body.ev-photo .thermal-only{display:none!important}
       <!-- INFO -->
       <section id="tab-info">
         <div class="out-pick" id="outPick">
-          <button type="button" data-out="thermal"><b>Struk thermal 80mm</b><span>Hitam-putih, gaya struk. Printer thermal ESC/POS.</span></button>
+          <button type="button" data-out="thermal"><b>Receipt Photobooth 80mm</b><span>Hitam-putih, gaya struk. Printer Receipt Photobooth ESC/POS.</span></button>
           <button type="button" data-out="photo"><b>Foto 4R berwarna</b><span>Kertas 10×15 cm, photobooth biasa. Printer foto (Selphy, DNP, Epson, dll).</span></button>
+          <button type="button" data-out="both"><b>Dual Mode (Receipt + 4R)</b><span>Pilihan di layar intro kiosk. Tamu bebas memilih Receipt atau 4R.</span></button>
         </div>
         <div class="grid2">
           <label class="field"><span>Nama event (di Studio)</span><input type="text" data-k="name"></label>
@@ -430,13 +489,16 @@ body.ev-photo .thermal-only{display:none!important}
           </div>
         </div>
         <div class="sec">Layar awal kiosk</div>
-        <label class="field" style="max-width:420px"><span>Animasi intro</span>
-          <select id="introStyle">
-            <option value="auto">Otomatis (ikut jenis cetak)</option>
-            <option value="thermal">Printer thermal (struk keluar)</option>
-            <option value="instan">Kamera instan (foto polaroid berkembang)</option>
-            <option value="strip">Photo strip (hitung mundur 3-2-1, strip keluar)</option>
-          </select></label>
+        <div class="intro-auto-banner" id="introAutoBanner" style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-radius:14px;background:var(--card,#f4f4f5);border:1.5px solid var(--line,#e4e4e7);margin-bottom:16px">
+          <div style="font-size:32px" id="introAutoIcon">✨</div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px">
+              <b style="font-size:15px;color:var(--ink)" id="introAutoTitle">Animasi Intro: Otomatis</b>
+              <span class="badge on" style="font-size:11px;font-weight:700">OTOMATIS</span>
+            </div>
+            <p class="hint" style="margin:3px 0 0;font-size:13px" id="introAutoDesc">Animasi di layar awal kiosk otomatis menyesuaikan jenis cetak yang dipilih di atas tanpa perlu diatur manual.</p>
+          </div>
+        </div>
         <div class="field"><span>Foto intro &amp; gaya cetak (hingga 3 foto)</span>
           <div class="row" id="introPhotosGrid" style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start"></div>
           <span class="hint">Foto intro tampil bergantian di animasi layar awal kiosk &amp; otomatis menjadi contoh preview di layar Print Style. Maksimal 3 foto. Jika kosong, akan memakai foto model bawaan (cewe/cowo).</span>
@@ -494,6 +556,73 @@ body.ev-photo .thermal-only{display:none!important}
         <label class="field hidden" style="margin-top:10px"><span>Alamat halaman Living Photo <span class="hint">(kosong = alamat bawaan)</span></span>
           <input type="text" data-k="living_url" id="livingUrl" placeholder="alamat bawaan"></label>
 
+        <div class="sec">Kasir &amp; Pembayaran Kiosk (QRIS)</div>
+        <div class="card" style="padding:16px">
+          <label class="check" style="margin-bottom:12px">
+            <input type="checkbox" id="payEnabled"> <span><b>Aktifkan Kasir / Pembayaran di Layar Preview</b><br><span class="hint">Tamu melihat total tagihan &amp; scan QRIS sebelum tombol Print Now aktif. Tombol retake langsung dikunci setelah bayar lunas.</span></span>
+          </label>
+          <div id="payFields" class="grid2" style="margin-top:10px">
+            <label class="field"><span>Tarif Receipt Photobooth (Rp)</span>
+              <input type="number" id="payPriceReceipt" min="0" step="1000" placeholder="15000">
+              <span class="hint">Harga per lembar struk retro.</span>
+            </label>
+            <label class="field"><span>Tarif 4R Photobooth (Rp)</span>
+              <input type="number" id="payPricePhoto" min="0" step="1000" placeholder="30000">
+              <span class="hint">Harga per lembar foto 4R glossy.</span>
+            </label>
+            <label class="field"><span>Batas Waktu Bayar (Timer Kiosk)</span>
+              <select id="payTimeout">
+                <option value="60">1 Menit (60 detik)</option>
+                <option value="90">1.5 Menit (90 detik)</option>
+                <option value="120">2 Menit (120 detik - Disarankan)</option>
+                <option value="180">3 Menit (180 detik)</option>
+                <option value="300">5 Menit (300 detik)</option>
+              </select>
+              <span class="hint">Jika tidak dibayar dalam batas waktu, kiosk otomatis kembali ke menu awal.</span>
+            </label>
+            <label class="field"><span>Pilihan Metode Pembayaran</span>
+              <select id="payMethod">
+                <option value="qr">QR Code (QRIS)</option>
+                <option value="manual">Manual (Kasir / Tunai)</option>
+                <option value="both">Tamu Bisa Pilih (QRIS &amp; Tunai)</option>
+              </select>
+              <span class="hint">Pilih metode bayar di kiosk: scan QR, bayar kasir manual, atau keduanya.</span>
+            </label>
+            <label class="field" id="payGatewayField"><span>Metode QRIS / Gateway</span>
+              <select id="payGateway">
+                <option value="simulator">Simulator (Demo / Uji Coba)</option>
+                <option value="static">QRIS Statis (Upload Gambar QRIS)</option>
+              </select>
+              <span class="hint">Mode simulator menampilkan tombol uji bayar instan untuk demo.</span>
+            </label>
+          </div>
+          <div id="payQrisImgRow" class="row hidden" style="margin-top:12px;align-items:center;gap:14px">
+            <label class="ghost" style="cursor:pointer">Upload Gambar QRIS<input type="file" id="payQrisFile" accept="image/png,image/jpeg" hidden></label>
+            <img id="payQrisPrev" class="hidden" style="height:64px;border-radius:8px;border:1px solid var(--line)" alt="Preview QRIS">
+            <button class="ghost hidden" id="btnPayQrisDel" type="button">Hapus QRIS</button>
+          </div>
+        </div>
+
+        <div class="sec">Softcopy Foto &amp; Auto-Delete Privasi</div>
+        <div class="card" style="padding:16px">
+          <label class="check" style="font-weight:600;font-size:15px;cursor:pointer">
+            <input type="checkbox" id="qrToggle"> Aktifkan Download Softcopy Foto
+          </label>
+          <p class="hint" style="margin:4px 0 14px 24px">Tamu dapat mengunduh softcopy foto berwarna resolusi tinggi lewat QR di struk &amp; layar Selesai. Pengaturan link/penyimpanan diatur di <span class="mono">config.json</span> aplikasi.</p>
+          <div id="autoDeleteWrap" style="padding-top:14px;border-top:1px solid var(--line);max-width:360px">
+            <label class="field"><span>Hapus Otomatis File di Server Setelah</span>
+              <select id="downloadAutoDelete">
+                <option value="1">1 Menit</option>
+                <option value="2">2 Menit</option>
+                <option value="3">3 Menit (Bawaan Privasi)</option>
+                <option value="5">5 Menit</option>
+                <option value="10">10 Menit</option>
+              </select>
+              <span class="hint">Sesi dan file foto tamu di server akan dihapus permanen secara otomatis demi privasi.</span>
+            </label>
+          </div>
+        </div>
+
         <div class="sec thermal-only">Teks template Sertifikat &amp; Boarding Pass</div>
         <div class="grid2 thermal-only">
           <label class="field"><span>Daftar gelar Sertifikat (satu per baris)</span>
@@ -509,10 +638,6 @@ body.ev-photo .thermal-only{display:none!important}
             <button class="ghost" id="btnCertDefault" type="button" style="align-self:flex-start;margin-top:8px">Isi gelar bawaan</button>
           </div>
         </div>
-
-        <div class="sec">QR unduh foto digital</div>
-        <label class="check"><input type="checkbox" id="qrToggle"> Cetak QR di struk &amp; tampilkan di layar Selesai</label>
-        <p class="hint">Tamu scan QR untuk mengunduh foto berwarna. HP tamu harus tersambung ke Wi-Fi yang sama dengan server (atau isi <span class="mono">public_base_url</span>). Matikan untuk kiosk umum.</p>
 
         <div class="sec">Layout yang boleh dipilih tamu</div>
         <div class="row" id="layoutChecks"></div>
@@ -570,6 +695,11 @@ body.ev-photo .thermal-only{display:none!important}
                 <div class="sec" style="margin:0">Template yang tampil di kiosk</div>
                 <div class="row thermal-only"><button id="btnNewBuilder" class="primary">+ Template builder</button><button id="btnNewOverlay">+ Upload frame PNG</button></div>
               </div>
+              <div id="bothTplPicker" class="row hidden" style="margin:8px 0;gap:8px">
+                <span class="small muted" style="align-self:center">Kelola template untuk:</span>
+                <button type="button" class="ghost on" id="btnBothTplThermal">🧾 Receipt Photobooth</button>
+                <button type="button" class="ghost" id="btnBothTplPhoto">📸 Foto 4R</button>
+              </div>
               <p class="hint">Centang untuk menampilkan, ★ = terpilih otomatis, panah untuk urutan. Klik nama untuk preview.</p>
               <div class="card" id="tplList" style="padding:6px"></div>
               <div class="card photo-only" id="frameCard" style="margin-top:14px">
@@ -608,18 +738,67 @@ body.ev-photo .thermal-only{display:none!important}
   <button class="primary" id="btnSave">Simpan</button>
 </div>
 
-<script src="/static/webusb.js"></script>
-<script src="/static/studio.js"></script>
+<!-- Modal Notifikasi & Dialog Aplikasi Studio (Pengganti alert, confirm, prompt native) -->
+<div id="studioAppModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.68);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px" aria-modal="true" role="dialog">
+  <div style="background:#fff;border-radius:22px;max-width:400px;width:100%;padding:28px 24px;box-shadow:0 20px 50px rgba(0,0,0,.28);text-align:center;position:relative">
+    <div id="studioModalIcon" style="width:64px;height:64px;border-radius:50%;background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px">✅</div>
+    <b id="studioModalTitle" style="font-size:21px;display:block;font-family:'Space Grotesk',sans-serif;color:#111;margin-bottom:8px">Pemberitahuan</b>
+    <p id="studioModalMessage" style="font-size:14px;color:#374151;margin:0 0 16px;line-height:1.45;white-space:pre-line"></p>
+    
+    <!-- Input Wrap untuk Prompt Modal -->
+    <div id="studioModalInputWrap" class="hidden" style="margin-bottom:18px;text-align:left">
+      <input type="text" id="studioModalInput" style="width:100%;padding:11px 13px;border:2px solid var(--line,#e5e7eb);border-radius:10px;font-size:14px;box-sizing:border-box" autocomplete="off">
+    </div>
+
+    <!-- Tombol Aksi -->
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button type="button" class="btn ghost hidden" id="btnStudioModalCancel" style="flex:1;justify-content:center;padding:12px;font-size:14px;font-weight:600;border:1px solid #d1d5db;border-radius:10px;background:#f9fafb;color:#374151;cursor:pointer">Batal</button>
+      <button type="button" class="primary" id="btnStudioModalOk" style="flex:1;justify-content:center;padding:12px;font-size:14px;font-weight:700;border-radius:10px;cursor:pointer">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- layar PIN Studio -->
 <div class="auth hidden" id="auth">
   <form class="auth-card" id="authForm" autocomplete="off">
     <b class="auth-title" id="authTitle">Masuk AdsBooth Studio</b>
     <p class="hint" id="authHint">Masukkan PIN Studio.</p>
-    <input type="password" id="authPin" inputmode="numeric" maxlength="12" placeholder="PIN" autofocus>
+    <input type="password" id="authPin" placeholder="PIN atau Kode Lisensi" autofocus>
     <input type="password" id="authPin2" inputmode="numeric" maxlength="12" placeholder="Ulangi PIN" class="hidden">
     <button class="primary" type="submit" id="authBtn">Masuk</button>
+    <button type="button" id="btnForgotPin" style="background:transparent;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:13px;padding:4px">Lupa PIN? Masuk dengan Kode Lisensi</button>
     <p class="small warn" id="authMsg"></p>
   </form>
+
+  <form class="auth-card hidden" id="resetPinForm" autocomplete="off" style="width:min(92vw,440px)">
+    <b class="auth-title">Buka dengan Kode Lisensi</b>
+    <p class="hint">Lupa PIN? Cukup masukkan <b>Kode Lisensi</b> perangkat ini. PIN akan otomatis direset ke <b>1234</b>.</p>
+    <div class="field">
+      <span>Kode Lisensi</span>
+      <textarea id="resetLicenseKey" rows="3" placeholder="Paste kode lisensi atau ketik ID perangkat..." style="width:100%;font:13px monospace;padding:10px;border:1.5px solid var(--line);border-radius:10px;resize:none" required></textarea>
+    </div>
+    <div class="row" style="gap:10px;margin-top:10px">
+      <button type="button" id="btnCancelResetPin" class="ghost" style="flex:1">Batal</button>
+      <button class="primary" type="submit" id="btnDoResetPin" style="flex:2">Masuk &amp; Reset ke 1234</button>
+    </div>
+    <p class="small warn" id="resetPinMsg"></p>
+  </form>
+
+  <!-- Kartu Sukses Reset PIN versi Aplikasi (Tanpa Native Alert) -->
+  <div class="auth-card hidden" id="resetPinSuccessCard" style="width:min(92vw,400px);text-align:center">
+    <div style="width:62px;height:62px;border-radius:50%;background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px">✅</div>
+    <b class="auth-title" style="font-size:20px;color:#111">PIN Berhasil Direset!</b>
+    <p style="font-size:14px;color:#374151;margin:10px 0 6px;line-height:1.45">
+      PIN berhasil direset ke <b style="font-family:monospace;font-size:16px;background:#f3f4f6;padding:2px 8px;border-radius:6px">1234</b>
+    </p>
+    <p class="hint" style="margin:0 0 20px;color:#6b7280;font-size:13px">
+      Anda dapat menggantinya kapan saja di menu Pengaturan Studio.
+    </p>
+    <button type="button" class="primary" id="btnResetPinSuccessOk" style="width:100%;justify-content:center;padding:12px;font-size:15px;font-weight:700">Masuk ke Studio</button>
+  </div>
 </div>
+
+<script src="/static/webusb.js"></script>
+<script src="/static/studio.js"></script>
 </body>
 </html>

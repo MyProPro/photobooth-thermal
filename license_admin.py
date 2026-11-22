@@ -90,36 +90,54 @@ def cmd_init(a):
     print(f"  public.key   -> sudah ditulis ke licensing.py ({b64e(pub)})")
 
 
-def cmd_issue(a):
-    dev = a.device.strip().upper()
+def issue_token(device, plan, name="", days=30, until=None, add=None, lic_id=None, private_key=None):
+    dev = device.strip().upper()
     dev = dev[:3] + dev[3:].replace("0", "O").replace("1", "I").replace("8", "B")   # salah ketik umum
     if not re.fullmatch(r"AB-[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}-[A-Z2-7]{4}", dev):
-        sys.exit("Format ID perangkat salah. Contoh: AB-7KQ2-M9XD-4HTA-PZ3C (lihat di AdsBooth Studio -> Lisensi).")
+        raise ValueError("Format ID perangkat salah. Contoh: AB-7KQ2-M9XD-4HTA-PZ3C")
+    if plan not in PLANS:
+        raise ValueError(f"Paket '{plan}' tidak dikenal. Pilihan: {', '.join(PLANS)}")
     now = int(time.time())
-    if a.until:
-        d = datetime.strptime(a.until, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    if until:
+        d = datetime.strptime(until, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
         exp = int(d.timestamp())
-    elif a.days == 0:
+    elif days == 0:
         exp = 0
     else:
-        exp = now + a.days * 86400
-    feat = list(PLAN_FEAT[a.plan])
-    for x in a.add or []:
+        exp = now + days * 86400
+    feat = list(PLAN_FEAT.get(plan, []))
+    for x in add or []:
         if x not in feat:
             feat.append(x)
-    payload = {"v": 1, "lic": a.id or "L-" + uuid.uuid4().hex[:8].upper(), "dev": dev, "plan": a.plan,
-               "feat": feat, "name": a.name, "iat": now, "exp": exp}
+    lic_id = lic_id or ("L-" + uuid.uuid4().hex[:8].upper())
+    payload = {"v": 1, "lic": lic_id, "dev": dev, "plan": plan,
+               "feat": feat, "name": name, "iat": now, "exp": exp}
     body = "AB1." + b64e(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode())
-    sig = load_private().sign(body.encode())
+    pk = private_key or load_private()
+    sig = pk.sign(body.encode())
     token = body + "." + b64e(sig)
-    os.makedirs(KEY_DIR, exist_ok=True)
-    new = not os.path.exists(LOG)
-    with open(LOG, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        if new:
-            w.writerow(["waktu", "lic", "device", "plan", "fitur", "nama", "berlaku_sampai", "kode"])
-        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), payload["lic"], dev, a.plan, " ".join(feat),
-                    a.name, datetime.fromtimestamp(exp).strftime("%Y-%m-%d") if exp else "selamanya", token])
+    try:
+        os.makedirs(KEY_DIR, exist_ok=True)
+        new = not os.path.exists(LOG)
+        with open(LOG, "a", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            if new:
+                w.writerow(["waktu", "lic", "device", "plan", "fitur", "nama", "berlaku_sampai", "kode"])
+            w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), payload["lic"], dev, plan, " ".join(feat),
+                        name, datetime.fromtimestamp(exp).strftime("%Y-%m-%d") if exp else "selamanya", token])
+    except Exception:
+        pass
+    return token, payload
+
+
+def cmd_issue(a):
+    try:
+        token, payload = issue_token(a.device, a.plan, name=a.name, days=a.days,
+                                     until=a.until, add=a.add, lic_id=a.id)
+    except ValueError as e:
+        sys.exit(str(e))
+    exp = payload.get("exp")
+    feat = payload.get("feat", [])
     print(f"Lisensi {payload['lic']} | {a.plan} ({', '.join(feat)}) | {a.name or '-'}")
     print("Berlaku sampai:", datetime.fromtimestamp(exp).strftime("%d %b %Y %H:%M") if exp else "selamanya")
     print("\nKode lisensi (kirim ke pelanggan, tempel di Studio -> Lisensi):\n")

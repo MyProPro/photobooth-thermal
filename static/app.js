@@ -14,6 +14,8 @@ let idleTimer = null, resetTimer = null, styleTimer = null;
 let skipCountdown = false, shooting = false;
 
 function freshState() {
+  if (S.paymentTimer) { clearInterval(S.paymentTimer); S.paymentTimer = null; }
+  if (S.paymentPollTimer) { clearInterval(S.paymentPollTimer); S.paymentPollTimer = null; }
   S = { layout: CFG.defaultLayout || 'strip', copies: 1, style: (CFG.styles && CFG.styles[0].id) || 'dither', caption: '', showLogo: true,
         photos: [], lastPrint: null, printed: 0, template: CFG.defaultTemplate, photoVer: 0, tplKey: '',
         poses: [], guestbook: null, certTitle: '', pendingJobs: null,
@@ -21,19 +23,72 @@ function freshState() {
         username: (CFG.social && CFG.social.username) || '', website: (CFG.social && CFG.social.website) || '',
         koranTitle: 'Kabar Booth',
         brightness: CFG.brightness !== undefined ? CFG.brightness : 1.0,
-        retakeCount: 0 };
+        retakeCount: 0,
+        outputMode: (CFG.output === 'both' ? null : CFG.output),
+        paid: false,
+        paymentTx: null,
+        paymentTimer: null,
+        paymentPollTimer: null };
   if ($('#gbName')) { $('#gbName').value = ''; $('#gbMsg').value = ''; clearSign(); }
-  $('#caption').value = '';
-  $('#showLogo').checked = true;
+  if ($('#caption')) $('#caption').value = '';
+  if ($('#showLogo')) $('#showLogo').checked = true;
+  if ($('#paymentCard')) $('#paymentCard').classList.add('hidden');
+  if ($('#paySuccessCard')) $('#paySuccessCard').classList.add('hidden');
+  if ($('#printingQrCard')) $('#printingQrCard').classList.add('hidden');
+  if ($('#modePickerModal')) $('#modePickerModal').classList.add('hidden');
+  if ($('#btnPrint')) { $('#btnPrint').classList.remove('hidden'); $('#btnPrint').disabled = false; }
+  const tplBtn = $('.tpl-change');
+  if (tplBtn) tplBtn.classList.remove('hidden');
+  const editPanel = $('#editPanel');
+  if (editPanel) editPanel.classList.remove('hidden');
+  if ($('#btnRetakeAll')) $('#btnRetakeAll').classList.remove('hidden');
+  if ($('#copyDec')) $('#copyDec').disabled = false;
+  if ($('#copyInc')) $('#copyInc').disabled = false;
   syncEditFields();
   renderOptions();
 }
 
+// ---------- topbar clock ----------
+function updateTopbarClock() {
+  const el = $('#topbarClock');
+  if (!el) return;
+  const now = new Date();
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const d = String(now.getDate()).padStart(2, '0');
+  const m = MONTHS[now.getMonth()];
+  const y = now.getFullYear();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  el.textContent = `${d} ${m} ${y} | ${hh}:${mm}`;
+}
+setInterval(updateTopbarClock, 1000);
+updateTopbarClock();
+
 // ---------- navigasi ----------
 function go(name) {
+  window.go = go;
+  const fromScreen = current;
+  let flyToTopbar = false, rFromIntro = null;
+  let flyToIntro = false, rFromTopbar = null;
+
+  if (fromScreen === 'welcome' && name === 'layout') {
+    const il = $('#introLogo');
+    if (il && !il.classList.contains('hidden') && (il.naturalWidth || il.offsetWidth > 0)) {
+      rFromIntro = il.getBoundingClientRect();
+      flyToTopbar = true;
+    }
+  } else if (fromScreen && fromScreen !== 'welcome' && name === 'welcome') {
+    const tl = $('#topbarLogo');
+    if (tl && !tl.classList.contains('hidden') && (tl.naturalWidth || tl.offsetWidth > 0)) {
+      rFromTopbar = tl.getBoundingClientRect();
+      flyToIntro = true;
+    }
+  }
+
   $$('.screen').forEach((el) => el.classList.remove('active'));
   $('#s-' + name).classList.add('active');
-  document.body.classList.toggle('dark', name === 'camera');
+  // background disamakan pada semua scene (termasuk kamera)
+  document.body.classList.remove('dark');
   document.body.classList.toggle('intro-on', name === 'welcome');
   if (name === 'welcome') startIntro(); else stopIntro();
   current = name;
@@ -46,6 +101,64 @@ function go(name) {
   if (name === 'camera') { sizeViewfinder(); setTimeout(sizeViewfinder, 60); }
   if (name === 'done') startResetCountdown();
   bumpIdle();
+
+  if (flyToTopbar && rFromIntro) {
+    requestAnimationFrame(() => {
+      const tl = $('#topbarLogo');
+      if (tl && !tl.classList.contains('hidden')) {
+        const r2 = tl.getBoundingClientRect();
+        if (r2.width > 0 && r2.height > 0) {
+          const appZoom = parseFloat($('#app').style.zoom) || 1;
+          const dx = ((rFromIntro.left + rFromIntro.width / 2) - (r2.left + r2.width / 2)) / appZoom;
+          const dy = ((rFromIntro.top + rFromIntro.height / 2) - (r2.top + r2.height / 2)) / appZoom;
+          const scale = (rFromIntro.height / r2.height) || 1;
+          tl.animate([
+            {
+              transform: `translate(${dx}px, ${dy}px) scale(${scale})`,
+              transformOrigin: 'center center',
+              opacity: 0.95
+            },
+            {
+              transform: 'translate(0, 0) scale(1)',
+              transformOrigin: 'center center',
+              opacity: 1
+            }
+          ], {
+            duration: 600,
+            easing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+          });
+        }
+      }
+    });
+  } else if (flyToIntro && rFromTopbar) {
+    requestAnimationFrame(() => {
+      const il = $('#introLogo');
+      if (il && !il.classList.contains('hidden')) {
+        const r2 = il.getBoundingClientRect();
+        if (r2.width > 0 && r2.height > 0) {
+          const appZoom = parseFloat($('#app').style.zoom) || 1;
+          const dx = ((rFromTopbar.left + rFromTopbar.width / 2) - (r2.left + r2.width / 2)) / appZoom;
+          const dy = ((rFromTopbar.top + rFromTopbar.height / 2) - (r2.top + r2.height / 2)) / appZoom;
+          const scale = (rFromTopbar.height / r2.height) || 1;
+          il.animate([
+            {
+              transform: `translate(${dx}px, ${dy}px) scale(${scale})`,
+              transformOrigin: 'center center',
+              opacity: 0.95
+            },
+            {
+              transform: 'translate(0, 0) scale(1)',
+              transformOrigin: 'center center',
+              opacity: 1
+            }
+          ], {
+            duration: 600,
+            easing: 'cubic-bezier(0.16, 1, 0.3, 1)'
+          });
+        }
+      }
+    });
+  }
 }
 $$('[data-go]').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
 
@@ -228,7 +341,7 @@ let INTRO = null, introTimers = [], introIdx = 0, introOn = false;
 async function loadIntro() {
   try {
     INTRO = await api('/api/intro');
-    $('#introName').textContent = INTRO.eventName || '';
+    if ($('#introName')) $('#introName').textContent = INTRO.eventName || '';
     $('#ipName').textContent = (INTRO.eventName || '').toUpperCase();
     $('#ipDate').textContent = INTRO.date;
     const hasLogo = !!INTRO.logo;
@@ -245,16 +358,60 @@ function stopIntro() {
   introOn = false;
   introTimers.forEach(clearTimeout); introTimers = [];
 }
+let dualIntroStep = 0;
+const DUAL_INTRO_STYLES = ['thermal', 'strip', 'thermal', 'instan'];
+const PHOTO_INTRO_STYLES = ['strip', 'instan'];
+
 function introStyle() {
-  const s = CFG.introStyle || 'auto';
-  return s === 'auto' ? (CFG.output === 'photo' ? 'instan' : 'thermal') : s;
+  const cfgStyle = (CFG.introStyle || '').toLowerCase();
+  if (cfgStyle === 'strip') return 'strip';
+  if (cfgStyle === 'instan') return 'instan';
+  if (cfgStyle === 'thermal') return 'thermal';
+
+  const out = CFG.output || 'thermal';
+  if (out === 'photo') {
+    return 'strip'; // Mode Foto: Photo Strip Korea 3-Pose (Opsi A)
+  }
+  if (out === 'both') {
+    return DUAL_INTRO_STYLES[dualIntroStep % DUAL_INTRO_STYLES.length];
+  }
+  // Mode Thermal (Receipt): Animasi printer struk thermal monokrom
+  return 'thermal';
 }
+
+function nextDualIntro() {
+  const cfgStyle = (CFG.introStyle || '').toLowerCase();
+  if (cfgStyle === 'strip' || cfgStyle === 'instan' || cfgStyle === 'thermal') return;
+  const out = CFG.output || 'thermal';
+  if (out === 'photo') {
+    dualIntroStep = (dualIntroStep + 1) % PHOTO_INTRO_STYLES.length;
+  } else if (out === 'both') {
+    dualIntroStep = (dualIntroStep + 1) % DUAL_INTRO_STYLES.length;
+  }
+}
+
 function introCycle() {
   if (!introOn) return;
+  const isBoth = CFG.output === 'both';
   const sty = introStyle();
   $('#introStage').classList.toggle('hidden', sty !== 'thermal');
   $('#icStage').classList.toggle('hidden', sty !== 'instan');
   $('#isStage').classList.toggle('hidden', sty !== 'strip');
+
+  // Update badge pill highlight in dual mode (hanya aktif di dual mode)
+  const badge = $('#introDualBadge');
+  if (badge) {
+    badge.classList.toggle('hidden', !isBoth);
+    const pReceipt = $('#idPillReceipt');
+    const pPhoto = $('#idPillPhoto');
+    if (pReceipt && pPhoto) {
+      pReceipt.classList.toggle('active', sty === 'thermal');
+      pPhoto.classList.toggle('active', sty !== 'thermal');
+    }
+  }
+  const prompt = $('#introPrompt');
+  if (prompt) prompt.classList.add('hidden');
+
   if (sty === 'instan') return introInstant();
   if (sty === 'strip') return introStrip();
   const st = $('#introStage');
@@ -271,7 +428,7 @@ function introCycle() {
   at(6300, () => { st.className = 'intro-stage p-print'; });
   at(9200, () => { st.className = 'intro-stage p-hold'; });
   at(11900, () => { st.className = 'intro-stage p-out'; });
-  at(12700, introCycle);
+  at(12700, () => { nextDualIntro(); introCycle(); });
 }
 const introAt = (ms, fn) => introTimers.push(setTimeout(() => { if (introOn) fn(); }, ms));
 function introPhoto(k = 0) {
@@ -292,7 +449,7 @@ function introInstant() {
   introAt(4300, () => { st.className = 'intro-stage ic-stage p-dev'; });
   introAt(9200, () => { st.className = 'intro-stage ic-stage p-hold'; });
   introAt(11000, () => { st.className = 'intro-stage ic-stage p-out'; });
-  introAt(11800, introCycle);
+  introAt(11800, () => { nextDualIntro(); introCycle(); });
 }
 // photo strip: hitung mundur 3-2-1, flash 3x, strip keluar dari slot
 function introStrip() {
@@ -318,40 +475,94 @@ function introStrip() {
   introAt(6500, () => { st.className = 'intro-stage is-stage p-print'; });
   introAt(10000, () => { st.className = 'intro-stage is-stage p-hold'; });
   introAt(11600, () => { st.className = 'intro-stage is-stage p-out'; });
-  introAt(12400, introCycle);
+  introAt(12400, () => { nextDualIntro(); introCycle(); });
 }
 
-// latar intro: struk mini & polaroid melayang naik
+// latar intro: khusus receipt photobooth menampilkan mini souvenir template cetak thermal asli
 function buildIntroBg() {
   const bg = $('#introBg');
-  if (!bg || bg.dataset.ready) return;
-  bg.dataset.ready = '1';
-  const photoIntro = introStyle() !== 'thermal';
-  const kinds = ['receipt', 'polaroid', 'dot', 'receipt', 'polaroid', 'receipt', 'dot', 'polaroid', 'receipt', 'polaroid', 'dot', 'receipt', 'polaroid', 'receipt', 'dot', 'polaroid'];
-  kinds.forEach((k0, i) => {
-    let k = k0;
-    if (photoIntro && k === 'receipt') k = 'strip';
-    const el = document.createElement('div');
-    el.className = 'fl fl-' + k;
-    if (k === 'strip') el.innerHTML = '<i></i><i></i><i></i>';
-    if (k === 'receipt') el.innerHTML = '<i></i><i class="s"></i><b></b><i></i><i class="s"></i>';
-    if (k === 'polaroid') el.innerHTML = '<b></b>';
-    const lane = (i + 0.5) / kinds.length;                    // sebar merata kiri-kanan
-    const scale = k === 'dot' ? 1 + Math.random() * 0.8 : 1 + Math.random() * 0.8;
-    const dur = 22 + Math.random() * 16;
-    el.style.left = `calc(${(lane * 100).toFixed(1)}% - 35px)`;
-    el.style.setProperty('--d', dur.toFixed(1) + 's');
-    el.style.setProperty('--delay', (-Math.random() * dur).toFixed(1) + 's');   // langsung tersebar saat mulai
-    el.style.setProperty('--r0', (Math.random() * 40 - 20).toFixed(0) + 'deg');
-    el.style.setProperty('--r1', (Math.random() * 80 - 40).toFixed(0) + 'deg');
-    el.style.setProperty('--o', (k === 'dot' ? 0.55 : 0.55 + Math.random() * 0.3).toFixed(2));
-    el.style.zoom = scale;
-    bg.appendChild(el);
-  });
+  if (!bg) return;
+
+  const isThermal = (CFG.output || 'thermal') === 'thermal';
+  const isBoth = CFG.output === 'both';
+  const isPhoto = CFG.output === 'photo';
+
+  const evName = (INTRO && INTRO.eventName) || 'PHOTOBOOTH';
+  const evDate = (INTRO && INTRO.date) || '23.11.2026';
+  const getDither = (idx) => {
+    if (INTRO && INTRO.photos && INTRO.photos.length) {
+      return INTRO.photos[idx % INTRO.photos.length].dither;
+    }
+    return `/api/intro/${idx % 3}.png`;
+  };
+
+  if (!bg.dataset.ready) {
+    bg.dataset.ready = '1';
+    let kinds = [];
+    if (isThermal) {
+      // Khusus mode receipt: template cetak thermal mini (card solo & strip) dengan foto hasil dither thermal + sparkle dots
+      kinds = ['th-card', 'th-strip', 'dot', 'th-card', 'th-strip', 'dot', 'th-card', 'th-strip', 'dot', 'th-card', 'th-strip', 'dot'];
+    } else if (isPhoto) {
+      kinds = ['strip', 'polaroid', 'dot', 'strip', 'polaroid', 'dot', 'strip', 'polaroid', 'dot', 'strip', 'polaroid', 'dot'];
+    } else {
+      kinds = ['th-card', 'strip', 'dot', 'th-strip', 'polaroid', 'dot', 'th-card', 'strip', 'dot', 'th-strip', 'polaroid', 'dot'];
+    }
+
+    kinds.forEach((k, i) => {
+      const el = document.createElement('div');
+      el.className = 'fl fl-' + k;
+      const phIdx = i % 3;
+
+      if (k === 'th-card') {
+        el.innerHTML = `
+          <div class="fl-th-header">${evName}</div>
+          <img class="fl-th-img" src="${getDither(phIdx)}" alt="">
+          <div class="fl-th-footer">${evDate} · ADSBOOTH</div>
+        `;
+      } else if (k === 'th-strip') {
+        el.innerHTML = `
+          <div class="fl-th-header">${evName}</div>
+          <img class="fl-th-img" src="${getDither(phIdx)}" alt="">
+          <img class="fl-th-img" src="${getDither((phIdx + 1) % 3)}" alt="">
+          <div class="fl-th-footer">${evDate}</div>
+        `;
+      } else if (k === 'strip') {
+        el.innerHTML = '<i></i><i></i><i></i>';
+      } else if (k === 'polaroid') {
+        el.innerHTML = '<b></b>';
+      }
+
+      const lane = (i + 0.5) / kinds.length;                    // sebar merata kiri-kanan
+      const scale = k === 'dot' ? 1 + Math.random() * 0.4 : 0.92 + Math.random() * 0.22;
+      const dur = 22 + Math.random() * 12;
+      el.style.left = `calc(${(lane * 100).toFixed(1)}% - 38px)`;
+      el.style.setProperty('--d', dur.toFixed(1) + 's');
+      el.style.setProperty('--delay', (-Math.random() * dur).toFixed(1) + 's');   // langsung tersebar saat mulai
+      el.style.setProperty('--r0', (Math.random() * 26 - 13).toFixed(0) + 'deg');
+      el.style.setProperty('--r1', (Math.random() * 52 - 26).toFixed(0) + 'deg');
+      el.style.setProperty('--o', (k === 'dot' ? 0.45 : 0.85 + Math.random() * 0.15).toFixed(2));
+      el.style.setProperty('--s', scale.toFixed(2));
+      bg.appendChild(el);
+    });
+  } else {
+    // Perbarui foto & teks template jika data intro baru termuat
+    const headers = bg.querySelectorAll('.fl-th-header');
+    headers.forEach(h => { if (INTRO && INTRO.eventName) h.textContent = INTRO.eventName; });
+    const footers = bg.querySelectorAll('.fl-th-footer');
+    footers.forEach(f => { if (INTRO && INTRO.date) f.textContent = f.textContent.includes('ADSBOOTH') ? `${INTRO.date} · ADSBOOTH` : INTRO.date; });
+    const imgs = bg.querySelectorAll('.fl-th-img');
+    imgs.forEach((img, idx) => {
+      if (INTRO && INTRO.photos && INTRO.photos.length) {
+        img.src = INTRO.photos[idx % INTRO.photos.length].dither;
+      }
+    });
+  }
+  sizeIntroBg();
 }
 function sizeIntroBg() {
   const bg = $('#introBg');
-  if (bg) bg.style.setProperty('--travel', (bg.clientHeight + 460) + 'px');
+  const h = Math.max(window.innerHeight || 1080, (bg && bg.clientHeight) || 1080, 1080);
+  if (bg) bg.style.setProperty('--travel', (h + 500) + 'px');
 }
 
 function fitIntro() {
@@ -387,9 +598,34 @@ $('#btnStart').addEventListener('click', async () => {
   kioskMode();
   freshState();
   initEditControls();
+  if (CFG.output === 'both') {
+    const modal = $('#modePickerModal');
+    if (modal) modal.classList.remove('hidden');
+    return;
+  }
+  applyOutputMode();
   go('layout');
   startCamera();
 });
+
+$$('.mode-card').forEach((card) => {
+  card.addEventListener('click', () => {
+    const mode = card.dataset.mode;
+    S.outputMode = mode;
+    const modal = $('#modePickerModal');
+    if (modal) modal.classList.add('hidden');
+    applyOutputMode(mode);
+    go('layout');
+    startCamera();
+  });
+});
+const btnCancelMode = $('#btnCancelMode');
+if (btnCancelMode) {
+  btnCancelMode.addEventListener('click', () => {
+    const modal = $('#modePickerModal');
+    if (modal) modal.classList.add('hidden');
+  });
+}
 
 // ---------- 2. layout ----------
 function renderOptions() {
@@ -412,10 +648,33 @@ $$('#layoutOptions .opt').forEach((b) => b.addEventListener('click', () => {
   S.layout = b.dataset.layout; renderOptions();
   setTimeout(() => go('style'), 180);   // tap langsung lanjut
 }));
-$('#copyInc').addEventListener('click', () => { S.copies = Math.min(CFG.maxCopies, S.copies + 1); renderOptions(); });
-$('#copyDec').addEventListener('click', () => { S.copies = Math.max(1, S.copies - 1); renderOptions(); });
+$('#copyInc').addEventListener('click', () => {
+  if (S.paid) return;
+  S.copies = Math.min(CFG.maxCopies, S.copies + 1);
+  renderOptions();
+  if (current === 'review' && CFG.payment && CFG.payment.enabled && !S.paid) {
+    startPaymentFlow();
+  }
+});
+$('#copyDec').addEventListener('click', () => {
+  if (S.paid) return;
+  S.copies = Math.max(1, S.copies - 1);
+  renderOptions();
+  if (current === 'review' && CFG.payment && CFG.payment.enabled && !S.paid) {
+    startPaymentFlow();
+  }
+});
 
 // ---------- 3. gaya ----------
+const DEFAULT_PHOTO_STYLES = [
+  { id: 'warna', name: 'Color', desc: 'True, natural color' },
+  { id: 'cerah', name: 'Vivid', desc: 'Brighter, livelier colors' },
+  { id: 'bw', name: 'Black & white', desc: 'Classic, soft contrast' },
+  { id: 'sepia', name: 'Sepia', desc: 'Warm brown, old-photo look' },
+  { id: 'vintage', name: 'Vintage', desc: 'Faded, warm, a little grain' },
+  { id: 'dingin', name: 'Cool', desc: 'Blue tint, clean' }
+];
+
 let styleBusy = false;
 let currentSampleType = null;
 // Tiap kartu gaya memakai contoh foto model statis (cewe/cowo acak) agar tajam dan kamera tidak lag
@@ -424,7 +683,8 @@ async function refreshStylePreview() {
   styleBusy = true;
   try {
     const sample = Math.random() < 0.5 ? 'cewe' : 'cowo';
-    const data = await api('/api/sample-styles?sample=' + sample);
+    const mode = S.outputMode || (CFG.output === 'both' ? 'thermal' : CFG.output);
+    const data = await api('/api/sample-styles?sample=' + sample + '&mode=' + mode);
     if (data && data.styles && current === 'style') {
       currentSampleType = data.sample;
       $$('#styleOptions .opt').forEach((b) => {
@@ -446,6 +706,51 @@ async function refreshStylePreview() {
   }
   styleBusy = false;
 }
+function updateStyleArrows() {
+  const el = $('#styleOptions');
+  const prev = $('#stylePrev');
+  const next = $('#styleNext');
+  if (!el || !prev || !next) return;
+  const canScroll = el.scrollWidth > el.clientWidth + 12;
+  if (!canScroll) {
+    prev.classList.add('off');
+    next.classList.add('off');
+    return;
+  }
+  prev.classList.toggle('off', el.scrollLeft <= 10);
+  next.classList.toggle('off', el.scrollLeft >= el.scrollWidth - el.clientWidth - 10);
+}
+
+const styleDrag = { on: false, x: 0, sl: 0, moved: false };
+const styleOptEl = $('#styleOptions');
+if (styleOptEl) {
+  styleOptEl.addEventListener('scroll', updateStyleArrows, { passive: true });
+  styleOptEl.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse') { styleDrag.moved = false; return; }
+    Object.assign(styleDrag, { on: true, x: e.clientX, sl: styleOptEl.scrollLeft, moved: false });
+    styleOptEl.classList.add('dragging');
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!styleDrag.on) return;
+    const dx = e.clientX - styleDrag.x;
+    if (Math.abs(dx) > 6) styleDrag.moved = true;
+    styleOptEl.scrollLeft = styleDrag.sl - dx;
+  });
+  window.addEventListener('pointerup', () => {
+    if (!styleDrag.on) return;
+    styleDrag.on = false;
+    styleOptEl.classList.remove('dragging');
+  });
+}
+$('#stylePrev')?.addEventListener('click', () => {
+  const el = $('#styleOptions');
+  if (el) el.scrollBy({ left: -el.clientWidth * 0.75, behavior: 'smooth' });
+});
+$('#styleNext')?.addEventListener('click', () => {
+  const el = $('#styleOptions');
+  if (el) el.scrollBy({ left: el.clientWidth * 0.75, behavior: 'smooth' });
+});
+
 function startStylePreview() {
   $$('#styleOptions .opt').forEach((b) => {
     if (!b.querySelector('.sthumb')) {
@@ -459,26 +764,45 @@ function startStylePreview() {
   // tanpa membebani kamera/jaringan dengan loop capture berkala
   startCamera();
   refreshStylePreview();
+  setTimeout(updateStyleArrows, 60);
 }
 $('#styleOptions').addEventListener('click', (e) => {
+  if (styleDrag.moved) return;
   const b = e.target.closest('.opt');
   if (!b) return;
   S.style = b.dataset.style; renderOptions();
   setTimeout(startShooting, 180);   // tap langsung ke kamera
 });
 
-// Mode cetak foto 4R: ganti pilihan gaya & teks yang menyebut "struk".
-function applyOutputMode() {
-  const photo = CFG.output === 'photo';
+// Mode cetak foto 4R / Receipt: ganti pilihan gaya & teks yang menyebut "struk".
+function applyOutputMode(mode) {
+  const currentMode = mode || S.outputMode || (CFG.output === 'both' ? 'thermal' : CFG.output);
+  const photo = currentMode === 'photo';
   document.body.classList.toggle('mode-photo', photo);
   $$('[data-photo]').forEach((el) => {
     if (el.dataset.thermal === undefined) el.dataset.thermal = el.textContent;
     el.textContent = photo ? el.dataset.photo : el.dataset.thermal;
   });
   if (!window.__thermalStyles) window.__thermalStyles = $('#styleOptions').innerHTML;
-  $('#styleOptions').innerHTML = photo && CFG.styles
-    ? CFG.styles.map((s) => `<button class="opt sm" data-style="${s.id}"><b>${s.name}</b><span>${s.desc}</span></button>`).join('')
+  const pStyles = (CFG.styles && CFG.styles.length) ? CFG.styles : DEFAULT_PHOTO_STYLES;
+  $('#styleOptions').innerHTML = photo
+    ? pStyles.map((s) => `<button class="opt sm" data-style="${s.id}"><b>${s.name}</b><span>${s.desc}</span></button>`).join('')
     : window.__thermalStyles;
+
+  // Sesuaikan style aktif agar sesuai dengan mode yang dipilih
+  if (photo) {
+    if (!['warna', 'cerah', 'bw', 'sepia', 'vintage', 'dingin'].includes(S.style)) {
+      S.style = 'warna';
+    }
+  } else {
+    if (!['dither', 'halftone', 'kontras', 'sketsa', 'ascii', 'mewarnai'].includes(S.style)) {
+      S.style = 'dither';
+    }
+  }
+  renderOptions();
+  const el = $('#styleOptions');
+  if (el) el.scrollLeft = 0;
+  setTimeout(updateStyleArrows, 60);
 }
 $('#caption').addEventListener('input', (e) => { S.caption = e.target.value; });
 $('#showLogo').addEventListener('change', (e) => { S.showLogo = e.target.checked; });
@@ -635,6 +959,7 @@ async function renderTemplates() {
   let prep;
   try {
     prep = await api('/api/templates/prepare', payload());
+    S.availableTemplates = (prep && prep.templates) ? prep.templates : [];
   } catch (e) {
     list.innerHTML = '<div class="loading mono">FAILED TO LOAD TEMPLATES: ' + e.message + '</div>';
     return;
@@ -884,32 +1209,70 @@ function payload() {
            poses: S.poses.slice(0, SHOTS[S.layout]), guestbook: S.guestbook, certTitle: S.certTitle,
            event_name: S.eventName, footer: S.footer, username: S.username, website: S.website,
            newspaper_name: S.koranTitle, koran_title: S.koranTitle,
-           brightness: S.brightness, lucky: S.lucky };
+           brightness: S.brightness, lucky: S.lucky,
+           output: S.outputMode || (CFG.output === 'both' ? 'thermal' : CFG.output) };
 }
 function renderCertPick() {
   const on = S.template === 'sertifikat' && CFG.certTitles.length;
-  $('#certPick').classList.toggle('hidden', !on);
+  $('#certPick')?.classList.toggle('hidden', !on);
   if (!on) return;
   if (!S.certTitle) S.certTitle = CFG.certTitles[Math.floor(Math.random() * CFG.certTitles.length)];
   const box = $('#certChips');
+  if (!box) return;
   box.innerHTML = '';
+
+  const activeLabel = $('#certActiveName');
+  if (activeLabel) activeLabel.textContent = S.certTitle.split('|')[0].trim();
+
   const dice = document.createElement('button');
-  dice.type = 'button'; dice.className = 'chip dice'; dice.textContent = 'Random';
+  dice.type = 'button';
+  dice.className = 'chip dice';
+  dice.textContent = '🎲 Acak';
+  dice.title = 'Pilih gelar secara acak';
   dice.addEventListener('click', () => {
     const others = CFG.certTitles.filter((t) => t !== S.certTitle);
     S.certTitle = others[Math.floor(Math.random() * others.length)] || S.certTitle;
-    renderCertPick(); renderPreview();
+    renderCertPick();
+    renderPreview();
+    setTimeout(() => {
+      const activeEl = box.querySelector('.chip.on');
+      if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }, 60);
   });
   box.appendChild(dice);
+
   CFG.certTitles.forEach((t) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'chip' + (t === S.certTitle ? ' on' : '');
+    const isSelected = t === S.certTitle;
+    b.className = 'chip' + (isSelected ? ' on' : '');
     b.textContent = t.split('|')[0].trim();
-    b.addEventListener('click', () => { S.certTitle = t; renderCertPick(); renderPreview(); });
+    b.title = t;
+    b.addEventListener('click', () => {
+      S.certTitle = t;
+      renderCertPick();
+      renderPreview();
+      setTimeout(() => {
+        b.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }, 60);
+    });
     box.appendChild(b);
   });
+
+  // Pastikan chip aktif terlihat saat pertama kali render
+  setTimeout(() => {
+    const activeEl = box.querySelector('.chip.on');
+    if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, 100);
 }
+
+// Navigasi scroll horizontal chip gelar sertifikat
+$('#certNavPrev')?.addEventListener('click', () => {
+  $('#certChips')?.scrollBy({ left: -140, behavior: 'smooth' });
+});
+$('#certNavNext')?.addEventListener('click', () => {
+  $('#certChips')?.scrollBy({ left: 140, behavior: 'smooth' });
+});
 
 let pvSeq = 0;
 async function renderPreview() {
@@ -926,7 +1289,13 @@ async function renderPreview() {
     return;
   }
   $('#previewLoading').classList.add('hidden');
-  $('#btnPrint').disabled = false;
+  if (CFG.payment && CFG.payment.enabled && !S.paid) {
+    $('#btnPrint').disabled = true;
+    $('#btnPrint').classList.add('hidden');
+  } else {
+    $('#btnPrint').disabled = false;
+    $('#btnPrint').classList.remove('hidden');
+  }
 }
 
 let editDebounce = null;
@@ -1031,44 +1400,306 @@ function initEditControls() {
   });
 }
 
-async function renderReview() {
-  const left = Math.max(0, 2 - (S.retakeCount || 0));
-  const canRetake = left > 0;
-  const quotaEl = $('#retakeQuota');
-  if (quotaEl) {
-    quotaEl.textContent = canRetake ? `Retake: ${left} of 2 left` : 'Retake: limit 2x reached';
-    quotaEl.classList.toggle('quota-exhausted', !canRetake);
+// Carousel Template di Layar Review
+function getAvailableTemplates() {
+  if (S.availableTemplates && S.availableTemplates.length) {
+    return S.availableTemplates;
   }
-  const list = $('#shotList');
-  list.innerHTML = '';
-  S.photos.forEach((p, i) => {
-    const row = document.createElement('div');
-    row.className = 'shot';
-    row.innerHTML = `<img alt=""><b>Photo ${i + 1}</b><button type="button"${canRetake ? '' : ' disabled'}>Retake</button>`;
-    row.querySelector('img').src = p || '';
-    if (canRetake) {
-      row.querySelector('button').addEventListener('click', () => {
-        if ((S.retakeCount || 0) >= 2) return;
-        S.retakeCount = (S.retakeCount || 0) + 1;
-        shoot([i], 'review');
-      });
+  if (CFG.templates && CFG.templates.length) {
+    return CFG.templates;
+  }
+  return [{ id: S.template || 'klasik', name: S.template || 'Default' }];
+}
+
+function updateReviewTplMeta() {
+  const tpls = getAvailableTemplates();
+  if (!tpls.length) return;
+  const idx = tpls.findIndex((t) => t.id === S.template);
+  const cur = idx >= 0 ? tpls[idx] : tpls[0];
+  const nameEl = $('#revTplName');
+  const countEl = $('#revTplCount');
+  if (nameEl) nameEl.textContent = cur ? (cur.name || cur.id) : (S.template || '-');
+  if (countEl) countEl.textContent = `${idx >= 0 ? idx + 1 : 1} / ${tpls.length}`;
+
+  const showNav = !S.paid && tpls.length > 1;
+  $('#revTplPrev')?.classList.toggle('hidden', !showNav);
+  $('#revTplNext')?.classList.toggle('hidden', !showNav);
+}
+
+let revStepDebounce = false;
+async function stepReviewTemplate(dir) {
+  if (S.paid || revStepDebounce) return;
+  const tpls = getAvailableTemplates();
+  if (!tpls.length) return;
+  let idx = tpls.findIndex((t) => t.id === S.template);
+  if (idx < 0) idx = 0;
+  idx = (idx + dir + tpls.length) % tpls.length;
+  const nextTpl = tpls[idx];
+  if (!nextTpl || nextTpl.id === S.template) return;
+
+  revStepDebounce = true;
+  S.template = nextTpl.id;
+  updateReviewTplMeta();
+  renderCertPick();
+  updateEditFieldsForTemplate();
+  try {
+    await renderPreview();
+  } finally {
+    revStepDebounce = false;
+  }
+}
+
+$('#revTplPrev')?.addEventListener('click', () => stepReviewTemplate(-1));
+$('#revTplNext')?.addEventListener('click', () => stepReviewTemplate(1));
+
+// Swipe touch gesture pada preview paper di halaman review
+let revTouchX = 0;
+let revTouchY = 0;
+const paperRev = $('#paperReview');
+if (paperRev) {
+  paperRev.addEventListener('touchstart', (e) => {
+    revTouchX = e.touches[0].clientX;
+    revTouchY = e.touches[0].clientY;
+  }, { passive: true });
+  paperRev.addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - revTouchX;
+    const dy = e.changedTouches[0].clientY - revTouchY;
+    if (Math.abs(dx) > 35 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx < 0) stepReviewTemplate(1);
+      else stepReviewTemplate(-1);
     }
-    list.appendChild(row);
-  });
-  $('#btnRetakeAll').disabled = !canRetake;
-  $('#btnRetakeAll').textContent = canRetake
-    ? (left === 2 ? 'Retake all photos (max 2x)' : `Retake all photos (${left} left)`)
-    : 'Retake all photos (max 2x reached)';
+  }, { passive: true });
+}
+
+window.addEventListener('keydown', (e) => {
+  if (current === 'review' && !S.paid && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+    if (e.key === 'ArrowLeft') stepReviewTemplate(-1);
+    if (e.key === 'ArrowRight') stepReviewTemplate(1);
+  }
+});
+
+async function renderReview() {
+  // Pastikan daftar template tersedia untuk carousel review
+  if (!S.availableTemplates || !S.availableTemplates.length) {
+    try {
+      const prep = await api('/api/templates/prepare', payload());
+      if (prep && prep.templates) S.availableTemplates = prep.templates;
+    } catch (_) {}
+  }
+
+  updateReviewTplMeta();
+
+  const editPanel = $('#editPanel');
+  if (editPanel) editPanel.classList.toggle('hidden', !!S.paid);
+  if ($('#copyDec')) $('#copyDec').disabled = !!S.paid;
+  if ($('#copyInc')) $('#copyInc').disabled = !!S.paid;
+
   renderCertPick();
   syncEditFields();
   await renderPreview();
+
+  // Kasir / Pembayaran QRIS Kiosk
+  if (CFG.payment && CFG.payment.enabled) {
+    if (!S.paid) {
+      startPaymentFlow();
+    } else {
+      onPaymentSuccess();
+    }
+  } else {
+    if ($('#paymentCard')) $('#paymentCard').classList.add('hidden');
+    if ($('#paySuccessCard')) $('#paySuccessCard').classList.add('hidden');
+    $('#btnPrint').classList.remove('hidden');
+    $('#btnPrint').disabled = false;
+  }
 }
-$('#btnRetakeAll').addEventListener('click', () => {
-  if ((S.retakeCount || 0) >= 2) return;
-  S.retakeCount = (S.retakeCount || 0) + 1;
-  S.photos = new Array(SHOTS[S.layout]).fill(null);
-  shoot([...Array(SHOTS[S.layout]).keys()]);
+
+// ---------- Kasir / Pembayaran QRIS ----------
+async function startPaymentFlow() {
+  if (!CFG.payment || !CFG.payment.enabled || S.paid) return;
+
+  const mode = S.outputMode || (CFG.output === 'both' ? 'thermal' : CFG.output);
+  const copies = S.copies || 1;
+  const priceUnit = mode === 'photo' ? (CFG.payment.price_photo || 30000) : (CFG.payment.price_receipt || 15000);
+  const totalAmount = priceUnit * copies;
+  const timeoutSecs = CFG.payment.timeout_seconds || 120;
+
+  const card = $('#paymentCard');
+  if (card) card.classList.remove('hidden');
+  const succ = $('#paySuccessCard');
+  if (succ) succ.classList.add('hidden');
+  $('#btnPrint').classList.add('hidden');
+  $('#btnPrint').disabled = true;
+
+  const payTotalText = $('#payTotalText');
+  if (payTotalText) payTotalText.textContent = 'Rp ' + Number(totalAmount).toLocaleString('id-ID');
+  const payDetailText = $('#payDetailText');
+  if (payDetailText) payDetailText.textContent = `${copies} Lembar ${mode === 'photo' ? '4R Photobooth' : 'Receipt Photobooth'}`;
+
+  // Countdown timer
+  let remaining = timeoutSecs;
+  const timerBadge = $('#payTimerSecs');
+  const updateTimer = () => {
+    if (!timerBadge) return;
+    const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+    const ss = String(remaining % 60).padStart(2, '0');
+    timerBadge.textContent = `${mm}:${ss}`;
+  };
+  updateTimer();
+
+  if (S.paymentTimer) clearInterval(S.paymentTimer);
+  S.paymentTimer = setInterval(async () => {
+    remaining -= 1;
+    updateTimer();
+    if (remaining <= 0) {
+      clearInterval(S.paymentTimer);
+      S.paymentTimer = null;
+      if (S.paymentPollTimer) clearInterval(S.paymentPollTimer);
+      await showKioskAlert('Waktu Pembayaran Habis', 'Waktu batas pembayaran telah habis. Kiosk kembali ke awal.', '⏱️', 'Kembali ke Awal');
+      resetAll();
+    }
+  }, 1000);
+
+  // Request payment create
+  try {
+    const res = await api('/api/payment/create', {
+      output: mode,
+      copies: copies,
+      amount: totalAmount,
+      method: CFG.payment?.method || 'qr'
+    });
+    if (res.ok && res.required) {
+      S.paymentTx = res.tx_id;
+      const method = res.method || CFG.payment.method || 'qr';
+      S.paymentMethod = method;
+
+      // Setup tab & tampilan QR / Manual
+      const qrBox = $('#payQrBox');
+      const manualBox = $('#payManualBox');
+      const tabs = $('#payTabs');
+      const tagText = $('#payTagText');
+      const simBox = $('#paySimBox');
+
+      if ((res.qr || res.qr_image) && $('#payQrImg')) {
+        $('#payQrImg').src = res.qr || res.qr_image;
+      }
+
+      if (method === 'manual') {
+        if (tabs) tabs.classList.add('hidden');
+        if (qrBox) qrBox.classList.add('hidden');
+        if (manualBox) manualBox.classList.remove('hidden');
+        if (tagText) tagText.textContent = 'PEMBAYARAN TUNAI / KASIR';
+        if (simBox) simBox.classList.add('hidden');
+      } else if (method === 'both') {
+        if (tabs) tabs.classList.remove('hidden');
+        if (qrBox) qrBox.classList.remove('hidden');
+        if (manualBox) manualBox.classList.add('hidden');
+        if (tagText) tagText.textContent = 'PILIHAN PEMBAYARAN';
+        $('#btnPayTabQr')?.classList.add('on');
+        $('#btnPayTabManual')?.classList.remove('on');
+        if (simBox) simBox.classList.toggle('hidden', CFG.payment.gateway !== 'simulator');
+      } else {
+        // default: 'qr'
+        if (tabs) tabs.classList.add('hidden');
+        if (qrBox) qrBox.classList.remove('hidden');
+        if (manualBox) manualBox.classList.add('hidden');
+        if (tagText) tagText.textContent = 'PEMBAYARAN QRIS';
+        if (simBox) simBox.classList.toggle('hidden', CFG.payment.gateway !== 'simulator');
+      }
+
+      // Start polling
+      if (S.paymentPollTimer) clearInterval(S.paymentPollTimer);
+      S.paymentPollTimer = setInterval(async () => {
+        if (!S.paymentTx || S.paid) {
+          clearInterval(S.paymentPollTimer);
+          return;
+        }
+        try {
+          const st = await api('/api/payment/status/' + S.paymentTx);
+          if (st.status === 'paid') {
+            onPaymentSuccess();
+          } else if (st.status === 'expired') {
+            clearInterval(S.paymentPollTimer);
+            clearInterval(S.paymentTimer);
+            await showKioskAlert('Waktu Pembayaran Habis', 'Waktu pembayaran telah habis. Kiosk kembali ke awal.', '⏱️', 'Kembali ke Awal');
+            resetAll();
+          }
+        } catch (e) {
+          // ignore transient poll error
+        }
+      }, 2000);
+    }
+  } catch (err) {
+    console.warn('Gagal membuat pembayaran:', err);
+  }
+}
+
+function onPaymentSuccess() {
+  S.paid = true;
+  if (S.paymentTimer) { clearInterval(S.paymentTimer); S.paymentTimer = null; }
+  if (S.paymentPollTimer) { clearInterval(S.paymentPollTimer); S.paymentPollTimer = null; }
+
+  if ($('#paymentCard')) $('#paymentCard').classList.add('hidden');
+  if ($('#paySuccessCard')) $('#paySuccessCard').classList.remove('hidden');
+
+  // Kunci tombol template & carousel panah
+  $('#revTplPrev')?.classList.add('hidden');
+  $('#revTplNext')?.classList.add('hidden');
+  const editPanel = $('#editPanel');
+  if (editPanel) editPanel.classList.add('hidden');
+  if ($('#copyDec')) $('#copyDec').disabled = true;
+  if ($('#copyInc')) $('#copyInc').disabled = true;
+
+  // Tampilkan tombol Print now
+  $('#btnPrint').classList.remove('hidden');
+  $('#btnPrint').disabled = false;
+}
+
+// Tab switcher pembayaran (saat method === 'both')
+$('#btnPayTabQr')?.addEventListener('click', () => {
+  $('#btnPayTabQr')?.classList.add('on');
+  $('#btnPayTabManual')?.classList.remove('on');
+  $('#payQrBox')?.classList.remove('hidden');
+  $('#payManualBox')?.classList.add('hidden');
+  const simBox = $('#paySimBox');
+  if (simBox) simBox.classList.toggle('hidden', CFG.payment.gateway !== 'simulator');
 });
+$('#btnPayTabManual')?.addEventListener('click', () => {
+  $('#btnPayTabManual')?.classList.add('on');
+  $('#btnPayTabQr')?.classList.remove('on');
+  $('#payManualBox')?.classList.remove('hidden');
+  $('#payQrBox')?.classList.add('hidden');
+  $('#paySimBox')?.classList.add('hidden');
+});
+
+// Tombol Konfirmasi Bayar Tunai / Kasir Manual
+$('#btnConfirmManualPay')?.addEventListener('click', async () => {
+  if (!S.paymentTx) return;
+  const btn = $('#btnConfirmManualPay');
+  if (btn) { btn.disabled = true; btn.textContent = 'Memverifikasi...'; }
+  try {
+    const res = await api('/api/payment/confirm-manual/' + S.paymentTx, {});
+    if (res.ok) {
+      onPaymentSuccess();
+    }
+  } catch (e) {
+    await showKioskAlert('Konfirmasi Gagal', e.message || 'Gagal konfirmasi pembayaran kasir.', '⚠️');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✓ Sudah Bayar ke Kasir'; }
+  }
+});
+
+const btnSimPay = $('#btnSimulatePay');
+if (btnSimPay) {
+  btnSimPay.addEventListener('click', async () => {
+    if (!S.paymentTx) return;
+    try {
+      await api('/api/payment/simulate/' + S.paymentTx, {});
+      onPaymentSuccess();
+    } catch (e) {
+      await showKioskAlert('Simulasi Gagal', 'Simulasi gagal: ' + e.message, '⚠️', 'OK');
+    }
+  });
+}
 
 // ---------- 6. mencetak ----------
 async function doPrint() {
@@ -1087,6 +1718,17 @@ async function doPrint() {
     } else {
       j = await api('/api/print', payload());
       S.lastPrint = j;
+    }
+    // Tampilkan QR Softcopy berwarna langsung di layar mencetak jika aktif
+    const pQrCard = $('#printingQrCard');
+    if (j.qr) {
+      const pQrImg = $('#printingQrImg');
+      if (pQrImg) pQrImg.src = j.qr;
+      if (pQrCard) pQrCard.classList.remove('hidden');
+      const qImg = $('#qrImg');
+      if (qImg) qImg.src = j.qr;
+    } else {
+      if (pQrCard) pQrCard.classList.add('hidden');
     }
     if (j.jobs && j.jobs.length) {   // mode printer USB di tablet (WebUSB)
       S.pendingJobs = j.jobs;
@@ -1120,7 +1762,7 @@ async function usbConnect() {
     pollStatus();
     return d;
   } catch (e) {
-    if (e.name !== 'NotFoundError') alert('Could not connect the printer: ' + e.message);
+    if (e.name !== 'NotFoundError') await showKioskAlert('Koneksi Printer Gagal', 'Gagal menghubungkan printer: ' + e.message, '⚠️', 'OK');
     return null;
   }
 }
@@ -1188,7 +1830,7 @@ $('#btnReprint').addEventListener('click', async () => {
     const r = await api('/api/reprint/' + S.lastPrint.id, {});
     if (r.jobs && r.jobs.length) await PBUSB.printJobs(r.jobs);
     S.printed += 1;
-  } catch (e) { alert('Reprint failed: ' + e.message); }
+  } catch (e) { await showKioskAlert('Cetak Ulang Gagal', 'Gagal cetak ulang: ' + e.message, '⚠️', 'OK'); }
   clearInterval(resetTimer);
   startResetCountdown();
 });
@@ -1233,9 +1875,18 @@ async function pollStatus() {
 // ---------- skala layar (tablet / TV vertikal 24") ----------
 // Desain dasar 768 px lebar (portrait). Di 1080x1920 semua diperbesar ~1.4x,
 // tinggi sisa dipakai elemen yang fleksibel. Landscape: dibatasi tinggi min 900.
+// Pada layar ponsel (mobile viewport), gunakan layout responsive native tanpa paksaan zoom tablet.
 function fitScreen() {
   const W = window.innerWidth, H = window.innerHeight;
   const app = $('#app');
+  if (!app) return;
+  const isMobile = (W <= 600) || (W < H && W <= 768) || (W > H && H <= 500);
+  if (isMobile) {
+    app.style.zoom = '';
+    app.style.width = '100%';
+    app.style.height = '100%';
+    return;
+  }
   const apply = (z) => {
     app.style.zoom = z;
     app.style.width = (W / z) + 'px';
@@ -1247,7 +1898,7 @@ function fitScreen() {
   // Ukur layar yang paling tinggi; kalau ada yang tidak muat, perkecil skala.
   const screens = [...document.querySelectorAll('.screen')];
   const active = document.querySelector('.screen.active');
-  const topbar = document.querySelector('.topbar').offsetHeight;
+  const topbar = document.querySelector('.topbar')?.offsetHeight || 60;
   let need = 0;
   screens.forEach((el) => {
     screens.forEach((x) => x.classList.remove('active'));
@@ -1277,7 +1928,7 @@ function applyLicense(L) {
   let [title, text] = LIC_TEXT[L.state] || ['Device not activated', 'Please contact your provider to activate this photobooth.'];
   if (L.ok && L.blocked) {
     title = 'Mode not included';
-    text = CFG.output === 'photo' ? 'This license does not include 4R photo printing.' : 'This license does not include thermal receipt printing.';
+    text = CFG.output === 'photo' ? 'This license does not include 4R photo printing.' : 'This license does not include Receipt Photobooth printing.';
   }
   $('#licTitle').textContent = title;
   $('#licText').textContent = text;
@@ -1293,7 +1944,15 @@ function applyLicense(L) {
     applyOutputMode();
     applyTheme(CFG.theme);
     applyBackground(CFG.theme);
-    $('#eventName').textContent = c.eventName;
+    if ($('#eventName')) $('#eventName').textContent = c.eventName;
+    if ($('#topbarLogo')) {
+      if (c.logo) {
+        $('#topbarLogo').src = c.logo;
+        $('#topbarLogo').classList.remove('hidden');
+      } else {
+        $('#topbarLogo').classList.add('hidden');
+      }
+    }
     applyLicense(c.license);
   } catch (e) { console.warn(e); }
   freshState();
@@ -1318,19 +1977,43 @@ if (secretTap) {
     e.stopPropagation();
     adminTapCount += 1;
     clearTimeout(adminTapTimer);
-    adminTapTimer = setTimeout(() => { adminTapCount = 0; }, 2000);
-    if (adminTapCount >= 4) {
+    adminTapTimer = setTimeout(() => { adminTapCount = 0; }, 1800);
+    if (adminTapCount >= 3) {   // ketuk 3x di kanan atas
       adminTapCount = 0;
       openAdminPinModal();
     }
   });
 }
 
+// Pintasan Keyboard: Tekan Escape atau Q 3x berturut-turut untuk buka menu admin
+let adminKeyCount = 0;
+let adminKeyTimer = null;
+window.addEventListener('keydown', (e) => {
+  if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+  if (e.key === 'Escape' || e.key.toLowerCase() === 'q') {
+    adminKeyCount += 1;
+    clearTimeout(adminKeyTimer);
+    adminKeyTimer = setTimeout(() => { adminKeyCount = 0; }, 1500);
+    if (adminKeyCount >= 3) {
+      adminKeyCount = 0;
+      openAdminPinModal();
+    }
+  }
+});
+
 function openAdminPinModal() {
   const m = $('#adminPinModal');
   const inp = $('#adminPinInput');
   const err = $('#adminPinErr');
+  const pinView = $('#adminPinView');
+  const licView = $('#adminLicenseView');
+  const confView = $('#adminShutdownConfirmView');
+  const succView = $('#adminLicenseSuccessView');
   if (!m || !inp) return;
+  if (pinView) pinView.classList.remove('hidden');
+  if (licView) licView.classList.add('hidden');
+  if (confView) confView.classList.add('hidden');
+  if (succView) succView.classList.add('hidden');
   inp.value = '';
   if (err) err.classList.add('hidden');
   m.classList.remove('hidden');
@@ -1343,11 +2026,128 @@ function closeAdminPinModal() {
 }
 
 $('#btnAdminPinCancel')?.addEventListener('click', closeAdminPinModal);
+$('#btnAdminModalClose')?.addEventListener('click', closeAdminPinModal);
 $('#btnAdminPinSubmit')?.addEventListener('click', submitAdminPin);
 $('#adminPinInput')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') submitAdminPin();
   if (e.key === 'Escape') closeAdminPinModal();
 });
+
+// Klik "🛑 Shut Down": Tampilkan modal konfirmasi custom versi aplikasi (bukan dialog native)
+$('#btnAdminShutdown')?.addEventListener('click', () => {
+  const inp = $('#adminPinInput');
+  const err = $('#adminPinErr');
+  const pin = (inp?.value || '').trim();
+  if (!pin) {
+    if (err) {
+      err.textContent = 'Masukkan PIN admin untuk mematikan AdsBooth.';
+      err.classList.remove('hidden');
+    }
+    inp?.focus();
+    return;
+  }
+  // Beralih ke view konfirmasi custom di dalam modal aplikasi
+  $('#adminPinView')?.classList.add('hidden');
+  $('#adminLicenseView')?.classList.add('hidden');
+  $('#adminShutdownConfirmView')?.classList.remove('hidden');
+});
+
+// Tombol Batal pada konfirmasi shut down -> kembali ke input PIN
+$('#btnConfirmShutdownNo')?.addEventListener('click', () => {
+  $('#adminShutdownConfirmView')?.classList.add('hidden');
+  $('#adminPinView')?.classList.remove('hidden');
+  $('#adminPinInput')?.focus();
+});
+
+// Tombol "Ya, Matikan Sekarang" pada konfirmasi shut down
+$('#btnConfirmShutdownYes')?.addEventListener('click', async () => {
+  const btn = $('#btnConfirmShutdownYes');
+  const inp = $('#adminPinInput');
+  const err = $('#adminPinErr');
+  const pin = (inp?.value || '').trim();
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Mematikan sistem...';
+  }
+
+  try {
+    const res = await api('/api/admin/shutdown', { pin });
+    if (res.ok) {
+      document.body.innerHTML = '<div style="position:fixed;inset:0;background:#0f172a;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;padding:24px"><div style="font-size:56px;margin-bottom:16px">👋</div><b style="font-size:26px;margin-bottom:10px">AdsBooth Sedang Dimatikan...</b><p style="color:#94a3b8;font-size:16px;max-width:440px;line-height:1.5">Sistem dan server telah dinonaktifkan dengan aman. Layar ini akan tertutup otomatis.</p></div>';
+      setTimeout(() => {
+        try { window.close(); } catch (_) {}
+      }, 1200);
+    } else {
+      throw new Error(res.error || 'PIN salah');
+    }
+  } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🛑 Ya, Matikan Sekarang';
+    }
+    // Kembali ke view PIN dan tampilkan error
+    $('#adminShutdownConfirmView')?.classList.add('hidden');
+    $('#adminPinView')?.classList.remove('hidden');
+    if (err) {
+      err.textContent = e.message || 'PIN salah, gagal mematikan AdsBooth.';
+      err.classList.remove('hidden');
+    }
+    if (inp) {
+      inp.value = '';
+      inp.focus();
+    }
+  }
+});
+
+// Toggle view Lupa PIN di Modal Kiosk
+$('#btnAdminForgotPin')?.addEventListener('click', () => {
+  $('#adminPinView')?.classList.add('hidden');
+  $('#adminShutdownConfirmView')?.classList.add('hidden');
+  $('#adminLicenseView')?.classList.remove('hidden');
+  const inpLic = $('#adminLicenseInput');
+  if (inpLic) { inpLic.value = ''; inpLic.focus(); }
+  $('#adminLicenseErr')?.classList.add('hidden');
+});
+
+$('#btnAdminLicenseBack')?.addEventListener('click', () => {
+  $('#adminLicenseView')?.classList.add('hidden');
+  $('#adminShutdownConfirmView')?.classList.add('hidden');
+  $('#adminPinView')?.classList.remove('hidden');
+  $('#adminPinInput')?.focus();
+});
+
+$('#btnAdminLicenseSubmit')?.addEventListener('click', submitAdminLicenseReset);
+$('#adminLicenseInput')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitAdminLicenseReset(); }
+});
+
+async function submitAdminLicenseReset() {
+  const inp = $('#adminLicenseInput');
+  const err = $('#adminLicenseErr');
+  const licenseKey = (inp?.value || '').trim();
+  if (!licenseKey) return;
+  if (err) err.classList.add('hidden');
+  try {
+    const res = await api('/api/studio/reset-pin-license', { licenseKey, newPin: '1234' });
+    if (res.ok) {
+      $('#adminLicenseView')?.classList.add('hidden');
+      $('#adminPinView')?.classList.add('hidden');
+      $('#adminShutdownConfirmView')?.classList.add('hidden');
+      $('#adminLicenseSuccessView')?.classList.remove('hidden');
+      $('#btnAdminLicenseSuccessOk')?.addEventListener('click', () => {
+        window.location.href = '/studio';
+      });
+    } else {
+      throw new Error(res.error || 'Kode lisensi tidak valid');
+    }
+  } catch (e) {
+    if (err) {
+      err.textContent = e.message || 'Kode lisensi tidak valid.';
+      err.classList.remove('hidden');
+    }
+  }
+}
 
 async function submitAdminPin() {
   const inp = $('#adminPinInput');
@@ -1372,3 +2172,107 @@ async function submitAdminPin() {
     }
   }
 }
+
+// ---------- Modal Notifikasi Sistem In-App Kiosk ----------
+function showKioskAlert(title, message, icon = 'ℹ️', btnText = 'OK') {
+  return new Promise((resolve) => {
+    const modal = $('#kioskAppModal');
+    const t = $('#kioskModalTitle');
+    const msg = $('#kioskModalMessage');
+    const ico = $('#kioskModalIcon');
+    const btnOk = $('#btnKioskModalOk');
+    const btnCancel = $('#btnKioskModalCancel');
+    if (!modal) {
+      resolve(true);
+      return;
+    }
+    if (t) t.textContent = title;
+    if (msg) msg.textContent = message;
+    if (ico) {
+      ico.textContent = icon;
+      if (icon === '⏱️' || icon === '❌' || icon === '🛑') {
+        ico.style.background = '#fee2e2';
+        ico.style.color = '#dc2626';
+      } else if (icon === '⚠️') {
+        ico.style.background = '#fef3c7';
+        ico.style.color = '#d97706';
+      } else if (icon === '✅') {
+        ico.style.background = '#dcfce7';
+        ico.style.color = '#15803d';
+      } else {
+        ico.style.background = '#dbeafe';
+        ico.style.color = '#1d4ed8';
+      }
+    }
+    if (btnOk) btnOk.textContent = btnText;
+    if (btnCancel) btnCancel.classList.add('hidden');
+    modal.classList.remove('hidden');
+
+    const onOk = () => {
+      btnOk?.removeEventListener('click', onOk);
+      modal.classList.add('hidden');
+      resolve(true);
+    };
+    btnOk?.addEventListener('click', onOk);
+  });
+}
+
+function showKioskConfirm(title, message, okText = 'Ya', cancelText = 'Batal', icon = '❓') {
+  return new Promise((resolve) => {
+    const modal = $('#kioskAppModal');
+    const t = $('#kioskModalTitle');
+    const msg = $('#kioskModalMessage');
+    const ico = $('#kioskModalIcon');
+    const btnOk = $('#btnKioskModalOk');
+    const btnCancel = $('#btnKioskModalCancel');
+    if (!modal) {
+      resolve(false);
+      return;
+    }
+    if (t) t.textContent = title;
+    if (msg) msg.textContent = message;
+    if (ico) {
+      ico.textContent = icon;
+      if (icon === '❌' || icon === '🛑') {
+        ico.style.background = '#fee2e2';
+        ico.style.color = '#dc2626';
+      } else if (icon === '⚠️') {
+        ico.style.background = '#fef3c7';
+        ico.style.color = '#d97706';
+      } else {
+        ico.style.background = '#dbeafe';
+        ico.style.color = '#1d4ed8';
+      }
+    }
+    if (btnOk) btnOk.textContent = okText;
+    if (btnCancel) {
+      btnCancel.textContent = cancelText;
+      btnCancel.classList.remove('hidden');
+    }
+    modal.classList.remove('hidden');
+
+    const cleanUp = () => {
+      btnOk?.removeEventListener('click', onOk);
+      btnCancel?.removeEventListener('click', onCancel);
+      modal.classList.add('hidden');
+    };
+    const onOk = () => {
+      cleanUp();
+      resolve(true);
+    };
+    const onCancel = () => {
+      cleanUp();
+      resolve(false);
+    };
+    btnOk?.addEventListener('click', onOk);
+    btnCancel?.addEventListener('click', onCancel);
+  });
+}
+
+// Override dialog native browser di Kiosk agar 100% menggunakan modal sistem
+window.alert = function(msg) {
+  return showKioskAlert('Pemberitahuan', String(msg || ''), 'ℹ️', 'OK');
+};
+window.confirm = function(msg) {
+  return showKioskConfirm('Konfirmasi', String(msg || ''), 'Ya', 'Batal', '❓');
+};

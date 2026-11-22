@@ -1,6 +1,6 @@
-# AdsBooth — photobooth struk thermal 80mm & foto 4R
+# AdsBooth — Receipt Photobooth 80mm & foto 4R
 
-AdsBooth: photobooth dengan cetak instan ke printer thermal 80mm (ESC/POS).
+AdsBooth: photobooth dengan cetak instan ke printer Receipt Photobooth 80mm (ESC/POS).
 Python (Flask) + halaman kiosk di browser + Pillow (dithering) + python-escpos.
 
 ```
@@ -42,7 +42,7 @@ Lainnya:
 - `paper_px`: 576 untuk 80mm @203dpi. Kalau hasil cetak kepotong di kanan, coba 512.
 - `impl`: `bitImageRaster` (default). Kalau printer cetak sampah/karakter aneh, coba `graphics` atau `bitImageColumn`.
 - `fragment_height`: kecilkan (mis. 128) kalau printer macet di tengah gambar panjang.
-- `brightness`: >1.0 = lebih terang (thermal cenderung gelap), mis. `1.15`.
+- `brightness`: >1.0 = lebih terang (Receipt Photobooth cenderung gelap), mis. `1.15`.
 - `cut`: `false` kalau printer tidak punya auto-cutter.
 
 ## QR unduh versi digital
@@ -119,7 +119,7 @@ Dither, Halftone, Kontras, Sketsa, **ASCII** (foto tersusun dari huruf & simbol)
 
 ## Mode foto 4R berwarna (photobooth biasa)
 Satu sistem bisa untuk dua jenis cetak. Pilih per event di **Studio → Info event → paling atas**:
-- **Struk thermal 80mm** (hitam-putih, printer ESC/POS)
+- **Receipt Photobooth 80mm** (hitam-putih, printer ESC/POS)
 - **Foto 4R berwarna** (kertas 10×15 cm, 300 dpi, printer foto)
 
 Di mode foto:
@@ -298,11 +298,11 @@ Cocok untuk PC yang tidak kuat Windows 11. Pakai **Ubuntu Desktop 22.04 / 24.04 
    ```bash
    bash install-autostart.sh
    ```
-   Skrip memasang Python, **Google Chrome** (bukan Chromium snap), CUPS untuk printer foto, izin printer thermal USB,
+   Skrip memasang Python, **Google Chrome** (bukan Chromium snap), CUPS untuk printer foto, izin printer Receipt Photobooth USB,
    server otomatis saat boot, kiosk layar penuh saat login, dan mematikan layar-mati/kunci layar.
 3. **Settings → Users → Automatic Login** = ON, lalu `sudo reboot`.
 4. Studio: `http://localhost:5000/studio` (atau dari laptop lain: `http://IP-PC:5000/studio`).
-   - Printer thermal USB: Printer & tablet → "Raspberry Pi / Linux (USB, /dev/usb/lp0)" → Cetak tes.
+   - Printer Receipt Photobooth USB: Printer & tablet → "Raspberry Pi / Linux (USB, /dev/usb/lp0)" → Cetak tes.
    - Printer foto 4R: tambahkan dulu di CUPS (`http://localhost:631`), lalu pilih "Linux / Raspberry Pi: CUPS".
    - Kamera EMEET: Printer & tablet → Kamera → Deteksi kamera → pilih → Simpan. PC lama: pakai **1080p**.
 
@@ -322,7 +322,7 @@ dan di layar kunci kiosk. Kode lisensi hanya berlaku untuk ID itu.
 | Masa tenggang (3 hari setelah habis) | normal, peringatan di Studio | normal |
 | Habis / masa coba habis | terkunci (layar "Device not activated") | tidak bisa cetak |
 
-Paket: `thermal` (struk), `photo` (foto 4R), `complete` (struk + foto 4R + Living Photo).
+Paket: `thermal` (Receipt Photobooth), `photo` (foto 4R), `complete` (Receipt Photobooth + foto 4R + Living Photo).
 Living Photo bisa juga ditambahkan sebagai add-on (`--add living`).
 
 **Khusus penjual (di PC sendiri, bukan di perangkat pelanggan):**

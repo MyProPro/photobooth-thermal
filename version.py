@@ -7,3 +7,7 @@ APP_NAME = "AdsBooth"
 # Bisa ditimpa tanpa ubah kode: config.json "living_base_url", atau per event di Studio.
 # LIVING_BASE_URL = "https://mypropro.github.io/adsbooth/v/"
 LIVING_BASE_URL = "https://adsbooth.my.id/v/"
+
+# Alamat bawaan halaman unduh Softcopy foto (folder docs/d/ yang di-host statis / domain sendiri).
+# Bisa ditimpa tanpa ubah kode: config.json "softcopy_base_url" atau "public_base_url".
+SOFTCOPY_BASE_URL = "https://adsbooth.my.id/d/"

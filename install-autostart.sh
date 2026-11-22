@@ -31,7 +31,7 @@ bash run-linux.sh --setup
 
 echo "== 3/5 Izin printer USB =="
 sudo tee /etc/udev/rules.d/99-photobooth-printer.rules >/dev/null <<RULES
-# Printer thermal USB untuk photobooth (Epson = 04b8)
+# Printer Receipt Photobooth USB untuk photobooth (Epson = 04b8)
 SUBSYSTEM=="usbmisc", KERNEL=="lp[0-9]*", MODE="0666"
 SUBSYSTEM=="usb", ATTRS{idVendor}=="04b8", MODE="0666"
 RULES
@@ -41,7 +41,7 @@ sudo udevadm control --reload-rules && sudo udevadm trigger || true
 echo "== 4/5 Server otomatis saat boot =="
 sudo tee /etc/systemd/system/photobooth.service >/dev/null <<UNIT
 [Unit]
-Description=Photobooth thermal server
+Description=AdsBooth Receipt Photobooth server
 After=network-online.target
 Wants=network-online.target
 

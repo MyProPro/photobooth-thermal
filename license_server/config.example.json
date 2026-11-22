@@ -1,0 +1,38 @@
+{
+  "midtrans": {
+    "is_production": false,
+    "server_key": "SB-Mid-server-YOUR_SANDBOX_SERVER_KEY",
+    "client_key": "SB-Mid-client-YOUR_SANDBOX_CLIENT_KEY"
+  },
+  "license": {
+    "private_key_path": "../.adsbooth-license/private.key",
+    "public_key_path": "../.adsbooth-license/public.key"
+  },
+  "pricing": {
+    "thermal": {
+      "name": "Paket Thermal (80mm)",
+      "desc": "Struk receipt photobooth 80mm",
+      "prices": {
+        "30": 150000,
+        "365": 1200000
+      }
+    },
+    "photo": {
+      "name": "Paket Foto 4R",
+      "desc": "Cetak foto berwarna 4R (10x15 cm)",
+      "prices": {
+        "30": 250000,
+        "365": 2000000
+      }
+    },
+    "complete": {
+      "name": "Paket Lengkap (All-in)",
+      "desc": "Struk thermal + Foto 4R + Living Photo",
+      "prices": {
+        "30": 350000,
+        "365": 2800000
+      }
+    }
+  },
+  "port": 8080
+}

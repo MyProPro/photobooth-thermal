@@ -1,6 +1,6 @@
 """Mode cetak FOTO berwarna (kertas 4R = 4x6 inci, 300 dpi = 1200 x 1800 px).
 
-Dipakai kalau event di Studio diset "Jenis cetak: Foto 4R". Layout sama dengan thermal:
+Dipakai kalau event di Studio diset "Jenis cetak: Foto 4R". Layout sama dengan Receipt Photobooth:
   solo (1 foto), duo (2), strip (3 foto -> 2 strip 2x6 inci kembar dalam 1 lembar, tinggal dipotong), grid (4).
 """
 import os
@@ -412,8 +412,8 @@ def compose_photo(photos, layout="strip", style="warna", caption="", show_logo=T
             logo = None
     qr = None
     if qr_url:
-        import qrcode
-        qr = qrcode.make(qr_url, border=1).convert("RGB")
+        from imaging import make_qr_with_logo
+        qr = make_qr_with_logo(qr_url, logo=logo, as_rgb=True)
     W = STRIP_W if layout == "strip" else W4R
     c = Ctx(styled, layout, W, H4R, event_name or T.tr("NAMA EVENT"), T.tr(footer), caption or "", date_str(now), logo, qr,
             theme or {}, lucky, number)

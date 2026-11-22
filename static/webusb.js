@@ -1,4 +1,4 @@
-// Cetak ke printer thermal USB yang dicolok ke tablet Android (kabel OTG) lewat WebUSB.
+// Cetak ke printer Receipt Photobooth USB yang dicolok ke tablet Android (kabel OTG) lewat WebUSB.
 // Dipakai saat printer.type = "webusb". Server mengirim data ESC/POS (base64), file ini meneruskannya ke printer.
 // Butuh Chrome di Android dan halaman dibuka lewat localhost atau HTTPS.
 (function () {

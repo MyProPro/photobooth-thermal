@@ -58,7 +58,7 @@ async function loadEvents() {
 }
 
 async function openEvent(id) {
-  if (dirty && !confirm('Perubahan belum disimpan. Tetap pindah event?')) return;
+  if (dirty && !(await showStudioConfirm('Pindah Event', 'Perubahan belum disimpan. Tetap pindah event?', 'Tetap Pindah', 'Batal', '⚠️'))) return;
   const j = await api('/api/studio/events/' + encodeURIComponent(id));
   ev = j.event;
   ev.custom_templates = ev.custom_templates || [];
@@ -81,22 +81,22 @@ async function openEvent(id) {
 }
 
 $('#btnNewEvent').addEventListener('click', async () => {
-  const name = prompt('Nama event baru:', 'Wedding ...');
-  if (!name) return;
-  const j = await api('/api/studio/events', { json: { name } });
+  const name = await showStudioPrompt('Nama Event Baru', 'Masukkan nama event baru:', 'Wedding ...', 'Contoh: Wedding Budi & Ani', '🎉');
+  if (!name || !name.trim()) return;
+  const j = await api('/api/studio/events', { json: { name: name.trim() } });
   await loadEvents();
   dirty = false;
   openEvent(j.event.id);
 });
 $('#btnDuplicate').addEventListener('click', async () => {
-  const name = prompt('Nama event hasil duplikat:', ev.name + ' (salinan)');
-  if (!name) return;
+  const name = await showStudioPrompt('Duplikasi Event', 'Nama event hasil duplikat:', ev.name + ' (salinan)', 'Nama Event', '📋');
+  if (!name || !name.trim()) return;
   if (dirty) await save();
-  const j = await api('/api/studio/events', { json: { name, from: ev.id } });
+  const j = await api('/api/studio/events', { json: { name: name.trim(), from: ev.id } });
   openEvent(j.event.id);
 });
 $('#btnDelete').addEventListener('click', async () => {
-  if (!confirm(`Hapus event "${ev.name}"? (dipindah ke folder events/_trash)`)) return;
+  if (!(await showStudioConfirm('Hapus Event', `Hapus event "${ev.name}"?\n(Dipindah ke folder events/_trash)`, 'Hapus', 'Batal', '🗑️'))) return;
   await api('/api/studio/events/' + encodeURIComponent(ev.id), { method: 'DELETE' });
   ev = null; setDirty(false);
   $('#editor').classList.add('hidden'); $('#emptyState').classList.remove('hidden');
@@ -111,6 +111,7 @@ $('#btnActivate').addEventListener('click', async () => {
 async function save() {
   $('#saveState').textContent = 'Menyimpan…';
   try {
+    delete ev.download_url;
     const j = await api('/api/studio/events/' + encodeURIComponent(ev.id), { method: 'PUT', json: ev });
     ev = j.event;
     setDirty(false);
@@ -166,6 +167,58 @@ function renderInfo() {
   renderLogo();
   renderIntro();
   renderTheme();
+
+  // Kasir & Pembayaran QRIS Kiosk
+  ev.payment = Object.assign({
+    enabled: false,
+    method: 'qr',
+    price_receipt: 15000,
+    price_photo: 30000,
+    timeout_seconds: 120,
+    gateway: 'simulator',
+    qris_image: ''
+  }, ev.payment || {});
+  if ($('#payEnabled')) $('#payEnabled').checked = !!ev.payment.enabled;
+  if ($('#payPriceReceipt')) $('#payPriceReceipt').value = ev.payment.price_receipt ?? 15000;
+  if ($('#payPricePhoto')) $('#payPricePhoto').value = ev.payment.price_photo ?? 30000;
+  if ($('#payTimeout')) $('#payTimeout').value = String(ev.payment.timeout_seconds ?? 120);
+  if ($('#payMethod')) $('#payMethod').value = ev.payment.method || 'qr';
+  if ($('#payGateway')) $('#payGateway').value = ev.payment.gateway || 'simulator';
+  renderPayGateway();
+  renderPayQrisPrev();
+
+  // Softcopy Foto & Auto-Delete Privasi
+  const isQrOn = ev.qr_download !== false;
+  if ($('#qrToggle')) $('#qrToggle').checked = isQrOn;
+  if ($('#autoDeleteWrap')) $('#autoDeleteWrap').style.opacity = isQrOn ? '1' : '0.5';
+  if ($('#downloadAutoDelete')) {
+    $('#downloadAutoDelete').value = String(ev.download_auto_delete ?? 3);
+    $('#downloadAutoDelete').disabled = !isQrOn;
+  }
+}
+
+function renderPayGateway() {
+  const method = ev.payment?.method || 'qr';
+  const showGateway = method === 'qr' || method === 'both';
+  const isStatic = showGateway && ev.payment?.gateway === 'static';
+  const gwField = $('#payGatewayField');
+  if (gwField) gwField.classList.toggle('hidden', !showGateway);
+  const row = $('#payQrisImgRow');
+  if (row) row.classList.toggle('hidden', !isStatic);
+}
+
+function renderPayQrisPrev() {
+  const prev = $('#payQrisPrev');
+  const del = $('#btnPayQrisDel');
+  if (!prev || !del) return;
+  if (ev.payment && ev.payment.qris_image) {
+    prev.src = assetUrl(ev.payment.qris_image);
+    prev.classList.remove('hidden');
+    del.classList.remove('hidden');
+  } else {
+    prev.classList.add('hidden');
+    del.classList.add('hidden');
+  }
 }
 function renderDefaultLayout() {
   const s = $('#defaultLayout');
@@ -183,7 +236,15 @@ $$('#tab-info [data-s]').forEach((el) => el.addEventListener('input', () => {
   ev.social[el.dataset.s] = el.value;
   setDirty(); schedulePreview();
 }));
-$('#qrToggle').addEventListener('change', (e) => { ev.qr_download = e.target.checked; setDirty(); schedulePreview(); });
+if ($('#qrToggle')) {
+  $('#qrToggle').addEventListener('change', (e) => {
+    ev.qr_download = e.target.checked;
+    if ($('#autoDeleteWrap')) $('#autoDeleteWrap').style.opacity = e.target.checked ? '1' : '0.5';
+    if ($('#downloadAutoDelete')) $('#downloadAutoDelete').disabled = !e.target.checked;
+    setDirty();
+    schedulePreview();
+  });
+}
 $('#certTitles').addEventListener('input', (e) => {
   ev.cert_titles = e.target.value.split('\n').map((x) => x.trim()).filter(Boolean);
   setDirty(); schedulePreview();
@@ -197,6 +258,75 @@ $$('#tab-info [data-b]').forEach((el) => el.addEventListener('input', () => {
 $$('#featureChecks [data-f]').forEach((el) => el.addEventListener('change', () => {
   ev.features[el.dataset.f] = el.checked; setDirty(); schedulePreview();
 }));
+
+// Payment & softcopy listeners
+if ($('#payEnabled')) {
+  $('#payEnabled').addEventListener('change', (e) => {
+    ev.payment.enabled = e.target.checked;
+    setDirty();
+  });
+}
+if ($('#payPriceReceipt')) {
+  $('#payPriceReceipt').addEventListener('input', (e) => {
+    ev.payment.price_receipt = parseInt(e.target.value) || 0;
+    setDirty();
+  });
+}
+if ($('#payPricePhoto')) {
+  $('#payPricePhoto').addEventListener('input', (e) => {
+    ev.payment.price_photo = parseInt(e.target.value) || 0;
+    setDirty();
+  });
+}
+if ($('#payTimeout')) {
+  $('#payTimeout').addEventListener('change', (e) => {
+    ev.payment.timeout_seconds = parseInt(e.target.value) || 120;
+    setDirty();
+  });
+}
+if ($('#payMethod')) {
+  $('#payMethod').addEventListener('change', (e) => {
+    ev.payment.method = e.target.value;
+    renderPayGateway();
+    setDirty();
+  });
+}
+if ($('#payGateway')) {
+  $('#payGateway').addEventListener('change', (e) => {
+    ev.payment.gateway = e.target.value;
+    renderPayGateway();
+    setDirty();
+  });
+}
+if ($('#payQrisFile')) {
+  $('#payQrisFile').addEventListener('change', async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      const r = await upload(f, 'qris');
+      ev.payment.qris_image = r.file;
+      setDirty();
+      renderPayQrisPrev();
+    } catch (err) {
+      await showStudioAlert('Upload Gagal', 'Upload QRIS gagal: ' + err.message, '❌');
+    }
+    e.target.value = '';
+  });
+}
+if ($('#btnPayQrisDel')) {
+  $('#btnPayQrisDel').addEventListener('click', () => {
+    ev.payment.qris_image = '';
+    setDirty();
+    renderPayQrisPrev();
+  });
+}
+
+if ($('#downloadAutoDelete')) {
+  $('#downloadAutoDelete').addEventListener('change', (e) => {
+    ev.download_auto_delete = parseInt(e.target.value) || 3;
+    setDirty();
+  });
+}
 // ---------------------------------------------------------------- tema kiosk
 const THEME_PRESETS = {
   krem:  { label: 'Krem klasik', paper: '#F2EFE8', text: '#121212', card: '#FFFFFF', btn: '#121212', btn_text: '#F2EFE8', accent: '#C8410F', printer: '#121212', font: 'modern' },
@@ -261,7 +391,7 @@ $('#bgDim').addEventListener('input', (e) => { $('#bgDimVal').textContent = e.ta
 $('#bgFile').addEventListener('change', async (e) => {
   const f = e.target.files[0]; if (!f) return;
   try { setTheme({ bg_image: (await upload(f, 'bg')).file }, true); }
-  catch (err) { alert('Upload gambar gagal: ' + err.message); }
+  catch (err) { await showStudioAlert('Upload Gagal', 'Upload gambar gagal: ' + err.message, '❌'); }
   e.target.value = '';
 });
 $('#btnBgDel').addEventListener('click', () => setTheme({ bg_image: '' }, true));
@@ -281,9 +411,28 @@ $('#themeFont').addEventListener('change', (e) => {
 });
 $('#btnThemeReset').addEventListener('click', () => { ev.theme = {}; setDirty(); renderTheme(); });
 
-$('#introStyle').addEventListener('change', (e) => { ev.intro_style = e.target.value; setDirty(); });
 function renderIntro() {
-  $('#introStyle').value = ev.intro_style || 'auto';
+  ev.intro_style = 'auto';
+  const out = ev.output || 'thermal';
+  const icon = $('#introAutoIcon');
+  const title = $('#introAutoTitle');
+  const desc = $('#introAutoDesc');
+  if (icon && title && desc) {
+    if (out === 'photo') {
+      icon.textContent = '📸';
+      title.textContent = 'Animasi Intro: Otomatis Mode Foto 4R';
+      desc.textContent = 'Layar kiosk otomatis memutar animasi bilik foto strip 3-2-1 blitz flash & kamera polaroid berwarna.';
+    } else if (out === 'both') {
+      icon.textContent = '✨';
+      title.textContent = 'Animasi Intro: Otomatis Mode Dual (Receipt & 4R)';
+      desc.textContent = 'Layar kiosk otomatis memutar showcase animasi Receipt dan Foto 4R secara bergantian.';
+    } else {
+      icon.textContent = '🧾';
+      title.textContent = 'Animasi Intro: Otomatis Mode Receipt Photobooth';
+      desc.textContent = 'Layar kiosk otomatis memutar animasi mesin printer struk thermal kasir monokrom.';
+    }
+  }
+
   if (!Array.isArray(ev.intro_photos)) {
     ev.intro_photos = ev.intro_photo ? [ev.intro_photo] : [];
   }
@@ -320,7 +469,7 @@ function renderIntro() {
         renderIntro();
         setDirty();
       } catch (err) {
-        alert('Upload foto gagal: ' + err.message);
+        await showStudioAlert('Upload Gagal', 'Upload foto gagal: ' + err.message, '❌');
       }
       e.target.value = '';
     });
@@ -347,7 +496,7 @@ $('#logoFile').addEventListener('change', async (e) => {
   try {
     ev.logo = (await upload(f, 'logo')).file;
     renderLogo(); setDirty(); schedulePreview();
-  } catch (err) { alert('Upload logo gagal: ' + err.message); }
+  } catch (err) { await showStudioAlert('Upload Gagal', 'Upload logo gagal: ' + err.message, '❌'); }
   e.target.value = '';
 });
 $('#btnLogoDel').addEventListener('click', () => { ev.logo = ''; renderLogo(); setDirty(); schedulePreview(); });
@@ -360,7 +509,8 @@ async function upload(file, kind) {
 }
 
 // ---------------------------------------------------------------- daftar template
-const isPhoto = () => !!ev && ev.output === 'photo';
+let studioTplSub = 'thermal';
+const isPhoto = () => !!ev && (ev.output === 'photo' || (ev.output === 'both' && studioTplSub === 'photo'));
 const TK = () => (isPhoto() ? 'photo_templates' : 'templates');
 const DK = () => (isPhoto() ? 'photo_default_template' : 'default_template');
 function allTemplates() {
@@ -416,12 +566,16 @@ function renderTemplateList() {
   });
 }
 
-// ---------------------------------------------------------------- jenis cetak (thermal / foto 4R)
+// ---------------------------------------------------------------- jenis cetak (thermal / foto 4R / both)
 const FRAME_LAYOUTS = [['solo', 'Solo · 1200×1800'], ['duo', 'Duo · 1200×1800'], ['strip', 'Strip · 600×1800'], ['grid', 'Grid · 1200×1800']];
 function renderOutput() {
   const photo = isPhoto();
   document.body.classList.toggle('ev-photo', photo);
-  $$('#outPick [data-out]').forEach((b) => b.classList.toggle('on', b.dataset.out === (photo ? 'photo' : 'thermal')));
+  $$('#outPick [data-out]').forEach((b) => b.classList.toggle('on', b.dataset.out === (ev.output || 'thermal')));
+  const bothPicker = $('#bothTplPicker');
+  if (bothPicker) bothPicker.classList.toggle('hidden', ev.output !== 'both');
+  if ($('#btnBothTplThermal')) $('#btnBothTplThermal').classList.toggle('on', studioTplSub === 'thermal');
+  if ($('#btnBothTplPhoto')) $('#btnBothTplPhoto').classList.toggle('on', studioTplSub === 'photo');
   markOutputLicense();
   $('#photoFrames').innerHTML = FRAME_LAYOUTS.map(([l, label]) => {
     const f = ev.photo_frames[l];
@@ -434,8 +588,8 @@ function renderOutput() {
     try {
       const r = await upload(f, 'photoframe');
       ev.photo_frames[inp.dataset.frame] = r.file; setDirty(); renderOutput(); schedulePreview();
-      if (r.slots) alert(`Bingkai terpasang: ${r.slots} area foto terdeteksi.`);
-    } catch (err) { alert('Upload bingkai gagal: ' + err.message); }
+      if (r.slots) await showStudioAlert('Bingkai Terpasang', `Bingkai terpasang: ${r.slots} area foto terdeteksi.`, '✅');
+    } catch (err) { await showStudioAlert('Upload Gagal', 'Upload bingkai gagal: ' + err.message, '❌'); }
   }));
   $$('#photoFrames [data-unframe]').forEach((b) => b.addEventListener('click', () => {
     delete ev.photo_frames[b.dataset.unframe]; setDirty(); renderOutput(); schedulePreview();
@@ -443,9 +597,33 @@ function renderOutput() {
 }
 $$('#outPick [data-out]').forEach((b) => b.addEventListener('click', () => {
   ev.output = b.dataset.out; setDirty();
+  if (ev.output === 'both') {
+    studioTplSub = 'thermal';
+  }
   selTpl = (isPhoto() ? ev.photo_default_template : ev.default_template) || 'klasik';
-  showListView(); renderOutput(); renderTemplateList(); schedulePreview();
+  showListView(); renderOutput(); renderTemplateList(); renderIntro(); schedulePreview();
 }));
+
+const btnBothTplThermal = $('#btnBothTplThermal');
+if (btnBothTplThermal) {
+  btnBothTplThermal.addEventListener('click', () => {
+    studioTplSub = 'thermal';
+    selTpl = ev.default_template || 'klasik';
+    renderOutput();
+    renderTemplateList();
+    schedulePreview();
+  });
+}
+const btnBothTplPhoto = $('#btnBothTplPhoto');
+if (btnBothTplPhoto) {
+  btnBothTplPhoto.addEventListener('click', () => {
+    studioTplSub = 'photo';
+    selTpl = ev.photo_default_template || 'polaroid';
+    renderOutput();
+    renderTemplateList();
+    schedulePreview();
+  });
+}
 
 // ---------------------------------------------------------------- preset builder
 const blk = (text, font, size, extra = {}) => Object.assign({ text, font, size, spacing: 0, upper: false }, extra);
@@ -476,9 +654,9 @@ const PRESETS = {
     qr: true, qr_size: 120, qr_text: '', pad_top: 34, pad_bottom: 40, after_photos: 26 } },
 };
 
-$('#btnNewBuilder').addEventListener('click', () => {
+$('#btnNewBuilder').addEventListener('click', async () => {
   const keys = Object.keys(PRESETS);
-  const pick = prompt('Mulai dari preset:\n' + keys.map((k, i) => `${i + 1}. ${PRESETS[k].label}`).join('\n') + '\n\nKetik nomor:', '1');
+  const pick = await showStudioPrompt('Pilih Preset Template', 'Mulai dari preset:\n' + keys.map((k, i) => `${i + 1}. ${PRESETS[k].label}`).join('\n') + '\n\nKetik nomor:', '1', 'Nomor preset', '🎨');
   if (!pick) return;
   const key = keys[parseInt(pick, 10) - 1] || keys[0];
   const spec = Object.assign({ id: uid(), name: PRESETS[key].label, kind: 'builder' }, clone(PRESETS[key].spec));
@@ -500,9 +678,9 @@ function showListView() {
   $('#specView').classList.add('hidden');
 }
 $('#btnBackList').addEventListener('click', () => { showListView(); renderTemplateList(); });
-$('#btnDelSpec').addEventListener('click', () => {
+$('#btnDelSpec').addEventListener('click', async () => {
   const s = curSpec();
-  if (!confirm(`Hapus template "${s.name}"?`)) return;
+  if (!(await showStudioConfirm('Hapus Template', `Hapus template "${s.name}"?`, 'Hapus', 'Batal', '🗑️'))) return;
   ev.custom_templates = ev.custom_templates.filter((t) => t.id !== s.id);
   ev.templates = (ev.templates || []).filter((i) => i !== 'c:' + s.id);
   if (ev.default_template === 'c:' + s.id) ev.default_template = 'klasik';
@@ -665,7 +843,7 @@ function buildOverlayForm(s) {
         s.frames[l] = r.file; s.slots[l] = r.slots;
         setDirty(); openSpec(s.id);
         if (pvLayout !== l) setLayout(l);
-      } catch (err) { alert('Upload frame gagal: ' + err.message); }
+      } catch (err) { await showStudioAlert('Upload Gagal', 'Upload frame gagal: ' + err.message, '❌'); }
     });
     const del = box.querySelector('[data-del]');
     if (del) del.addEventListener('click', () => { delete s.frames[l]; delete s.slots[l]; setDirty(); openSpec(s.id); });
@@ -760,10 +938,10 @@ $('#btnDraw').addEventListener('click', async () => {
     $('#drawPhoto').classList.toggle('hidden', !j.winner.photo);
     if (j.winner.photo) $('#drawPhoto').src = j.winner.photo;
     renderDraw(await api(`/api/studio/events/${id}/draw`));
-  } catch (e) { $('#drawNum').textContent = '----'; alert(e.message); }
+  } catch (e) { $('#drawNum').textContent = '----'; await showStudioAlert('Undian', e.message, '⚠️'); }
 });
 $('#btnDrawReset').addEventListener('click', async () => {
-  if (!confirm('Reset undian? Semua nomor bisa keluar lagi.')) return;
+  if (!(await showStudioConfirm('Reset Undian', 'Reset undian? Semua nomor bisa keluar lagi.', 'Reset', 'Batal', '🎲'))) return;
   await api(`/api/studio/events/${encodeURIComponent(ev.id)}/draw`, { method: 'DELETE' });
   $('#drawNum').textContent = '----'; $('#drawPhoto').classList.add('hidden');
   loadGuest();
@@ -778,7 +956,7 @@ function renderPaper(pp) {
 }
 $('#btnPaperSave').addEventListener('click', async () => renderPaper(await api('/api/studio/paper', { json: { roll_m: Number($('#paperRoll').value) } })));
 $('#btnPaperReset').addEventListener('click', async () => {
-  if (!confirm('Sudah pasang roll kertas baru? Penghitung akan direset.')) return;
+  if (!(await showStudioConfirm('Reset Kertas', 'Sudah pasang roll kertas baru? Penghitung akan direset.', 'Ya, Reset', 'Batal', '📄'))) return;
   renderPaper(await api('/api/studio/paper', { json: { reset: true } }));
 });
 
@@ -805,7 +983,7 @@ async function usbInfo() {
   $('#usbInfo').textContent = d ? `Tersambung: ${d.name} (${d.vendorId.toString(16)}:${d.productId.toString(16)})` : 'Belum ada printer USB yang disambungkan di browser ini.';
 }
 $('#btnUsbPair').addEventListener('click', async () => {
-  try { await PBUSB.connect(); } catch (e) { if (e.name !== 'NotFoundError') alert('Gagal: ' + e.message); }
+  try { await PBUSB.connect(); } catch (e) { if (e.name !== 'NotFoundError') await showStudioAlert('Koneksi Gagal', 'Gagal: ' + e.message, '❌'); }
   usbInfo();
 });
 function prStatus(s) {
@@ -816,7 +994,7 @@ function prStatus(s) {
   $('#prMsg').className = 'small ' + (s.ok ? 'okc' : 'warn');
 }
 async function openSettings() {
-  if (dirty && !confirm('Perubahan event belum disimpan. Tetap pindah?')) return;
+  if (dirty && !(await showStudioConfirm('Perubahan Belum Disimpan', 'Perubahan event belum disimpan. Tetap pindah?', 'Pindah', 'Batal', '⚠️'))) return;
   setDirty(false); ev = null;
   $('#editor').classList.add('hidden'); $('#emptyState').classList.add('hidden');
   $('#licenseView').classList.add('hidden');
@@ -849,7 +1027,7 @@ async function openSettings() {
 $('#btnSettings').addEventListener('click', openSettings);
 
 async function openLicense() {
-  if (dirty && !confirm('Perubahan event belum disimpan. Tetap pindah?')) return;
+  if (dirty && !(await showStudioConfirm('Perubahan Belum Disimpan', 'Perubahan event belum disimpan. Tetap pindah?', 'Pindah', 'Batal', '⚠️'))) return;
   setDirty(false); ev = null;
   $('#editor').classList.add('hidden'); $('#emptyState').classList.add('hidden');
   $('#settings').classList.add('hidden');
@@ -922,7 +1100,7 @@ const ppBody = () => ({ printer: { type: $('#ppType').value, name: $('#ppName').
 $('#ppType').addEventListener('change', ppNames);
 $('#btnPpSave').addEventListener('click', async () => {
   try { const r = await api('/api/studio/photo-printer', { method: 'PUT', json: ppBody() }); ppStatus(r.status); }
-  catch (e) { alert('Gagal simpan: ' + e.message); }
+  catch (e) { await showStudioAlert('Gagal Simpan', 'Gagal simpan: ' + e.message, '❌'); }
 });
 $('#btnPpTest').addEventListener('click', async () => {
   $('#ppMsg').textContent = 'Mencetak halaman tes…';
@@ -973,15 +1151,80 @@ $('#httpsToggle').addEventListener('change', async (e) => {
 function showAuth(setup, msg) {
   return new Promise((resolve) => {
     $('#auth').classList.remove('hidden');
+    $('#authForm').classList.remove('hidden');
+    $('#resetPinForm').classList.add('hidden');
+    $('#resetPinSuccessCard')?.classList.add('hidden');
+
     $('#authTitle').textContent = setup ? 'Buat PIN AdsBooth Studio' : 'Masuk AdsBooth Studio';
     $('#authHint').textContent = msg || (setup
       ? 'Pertama kali: buat PIN 4-12 angka untuk mengunci Studio. Simpan baik-baik.'
       : 'Masukkan PIN Studio.');
     $('#authPin2').classList.toggle('hidden', !setup);
     $('#authBtn').textContent = setup ? 'Simpan PIN' : 'Masuk';
+    $('#btnForgotPin').classList.toggle('hidden', setup);
     $('#authMsg').textContent = '';
     $('#authPin').value = ''; $('#authPin2').value = '';
     setTimeout(() => $('#authPin').focus(), 50);
+
+    // Tombol Lupa PIN
+    $('#btnForgotPin').onclick = () => {
+      $('#authForm').classList.add('hidden');
+      $('#resetPinForm').classList.remove('hidden');
+      $('#resetPinSuccessCard')?.classList.add('hidden');
+      $('#resetLicenseKey').value = '';
+      $('#resetPinMsg').textContent = '';
+      setTimeout(() => $('#resetLicenseKey').focus(), 50);
+    };
+
+    // Tombol Batal Reset
+    $('#btnCancelResetPin').onclick = () => {
+      $('#resetPinForm').classList.add('hidden');
+      $('#resetPinSuccessCard')?.classList.add('hidden');
+      $('#authForm').classList.remove('hidden');
+      $('#authMsg').textContent = '';
+      setTimeout(() => $('#authPin').focus(), 50);
+    };
+
+    // Form Submit Reset PIN dengan License Key
+    $('#resetPinForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const licenseKey = $('#resetLicenseKey').value.trim();
+
+      if (!licenseKey) {
+        $('#resetPinMsg').textContent = 'Kode lisensi harus diisi.';
+        return;
+      }
+
+      $('#btnDoResetPin').disabled = true;
+      $('#resetPinMsg').textContent = 'Memverifikasi lisensi & mereset PIN...';
+
+      try {
+        const r = await fetch('/api/studio/reset-pin-license', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ licenseKey, newPin: '1234' })
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) {
+          $('#resetPinMsg').textContent = j.error || 'Gagal memverifikasi lisensi.';
+          $('#btnDoResetPin').disabled = false;
+          return;
+        }
+        $('#btnDoResetPin').disabled = false;
+        // Tampilkan kartu sukses versi aplikasi (BUKAN alert native!)
+        $('#resetPinForm').classList.add('hidden');
+        $('#authForm').classList.add('hidden');
+        $('#resetPinSuccessCard')?.classList.remove('hidden');
+        $('#btnResetPinSuccessOk').onclick = () => {
+          $('#auth').classList.add('hidden');
+          resolve();
+        };
+      } catch (err) {
+        $('#resetPinMsg').textContent = 'Server tidak terhubung.';
+        $('#btnDoResetPin').disabled = false;
+      }
+    };
+
     $('#authForm').onsubmit = async (e) => {
       e.preventDefault();
       const pin = $('#authPin').value.trim();
@@ -1052,12 +1295,199 @@ $('#btnResetLivingUrl').addEventListener('click', async () => {
     $('#livingMsg').style.color = '#c33';
   }
 });
-$('#btnSecPin').addEventListener('click', async () => {
+function showStudioAlert(title, message, icon = '✅', btnText = 'OK') {
+  return new Promise((resolve) => {
+    const modal = $('#studioAppModal');
+    const t = $('#studioModalTitle');
+    const msg = $('#studioModalMessage');
+    const ico = $('#studioModalIcon');
+    const inpWrap = $('#studioModalInputWrap');
+    const btnOk = $('#btnStudioModalOk');
+    const btnCancel = $('#btnStudioModalCancel');
+    if (!modal) {
+      resolve();
+      return;
+    }
+    if (t) t.textContent = title;
+    if (msg) msg.textContent = message;
+    if (inpWrap) inpWrap.classList.add('hidden');
+    if (btnCancel) btnCancel.classList.add('hidden');
+    if (btnOk) {
+      btnOk.textContent = btnText;
+      btnOk.style.display = '';
+    }
+    if (ico) {
+      ico.textContent = icon;
+      if (icon === '❌' || icon === '🛑') {
+        ico.style.background = '#fee2e2';
+        ico.style.color = '#dc2626';
+      } else if (icon === '⚠️') {
+        ico.style.background = '#fef3c7';
+        ico.style.color = '#d97706';
+      } else if (icon === '🗑️') {
+        ico.style.background = '#fee2e2';
+        ico.style.color = '#b91c1c';
+      } else {
+        ico.style.background = '#dcfce7';
+        ico.style.color = '#15803d';
+      }
+    }
+    modal.classList.remove('hidden');
+    const onOk = () => {
+      btnOk?.removeEventListener('click', onOk);
+      modal.classList.add('hidden');
+      resolve();
+    };
+    btnOk?.addEventListener('click', onOk);
+  });
+}
+
+function showStudioConfirm(title, message, okText = 'Ya', cancelText = 'Batal', icon = '❓') {
+  return new Promise((resolve) => {
+    const modal = $('#studioAppModal');
+    const t = $('#studioModalTitle');
+    const msg = $('#studioModalMessage');
+    const ico = $('#studioModalIcon');
+    const inpWrap = $('#studioModalInputWrap');
+    const btnOk = $('#btnStudioModalOk');
+    const btnCancel = $('#btnStudioModalCancel');
+    if (!modal) {
+      resolve(false);
+      return;
+    }
+    if (t) t.textContent = title;
+    if (msg) msg.textContent = message;
+    if (inpWrap) inpWrap.classList.add('hidden');
+    if (ico) {
+      ico.textContent = icon;
+      if (icon === '❌' || icon === '🛑' || icon === '🗑️') {
+        ico.style.background = '#fee2e2';
+        ico.style.color = '#dc2626';
+      } else if (icon === '⚠️') {
+        ico.style.background = '#fef3c7';
+        ico.style.color = '#d97706';
+      } else {
+        ico.style.background = '#e0f2fe';
+        ico.style.color = '#0369a1';
+      }
+    }
+    if (btnOk) btnOk.textContent = okText;
+    if (btnCancel) {
+      btnCancel.textContent = cancelText;
+      btnCancel.classList.remove('hidden');
+    }
+    modal.classList.remove('hidden');
+
+    const cleanUp = () => {
+      btnOk?.removeEventListener('click', onOk);
+      btnCancel?.removeEventListener('click', onCancel);
+      modal.classList.add('hidden');
+    };
+    const onOk = () => {
+      cleanUp();
+      resolve(true);
+    };
+    const onCancel = () => {
+      cleanUp();
+      resolve(false);
+    };
+    btnOk?.addEventListener('click', onOk);
+    btnCancel?.addEventListener('click', onCancel);
+  });
+}
+
+function showStudioPrompt(title, message, defaultValue = '', placeholder = '', icon = '✏️') {
+  return new Promise((resolve) => {
+    const modal = $('#studioAppModal');
+    const t = $('#studioModalTitle');
+    const msg = $('#studioModalMessage');
+    const ico = $('#studioModalIcon');
+    const inpWrap = $('#studioModalInputWrap');
+    const inp = $('#studioModalInput');
+    const btnOk = $('#btnStudioModalOk');
+    const btnCancel = $('#btnStudioModalCancel');
+    if (!modal || !inp) {
+      resolve(null);
+      return;
+    }
+    if (t) t.textContent = title;
+    if (msg) msg.textContent = message;
+    if (ico) {
+      ico.textContent = icon;
+      ico.style.background = '#e0e7ff';
+      ico.style.color = '#4338ca';
+    }
+    if (inpWrap) inpWrap.classList.remove('hidden');
+    inp.placeholder = placeholder || '';
+    inp.value = defaultValue || '';
+    if (btnOk) btnOk.textContent = 'Simpan';
+    if (btnCancel) {
+      btnCancel.textContent = 'Batal';
+      btnCancel.classList.remove('hidden');
+    }
+    modal.classList.remove('hidden');
+    setTimeout(() => {
+      inp.focus();
+      inp.select();
+    }, 100);
+
+    const onKey = (e) => {
+      if (e.key === 'Enter') onOk();
+      if (e.key === 'Escape') onCancel();
+    };
+    const cleanUp = () => {
+      btnOk?.removeEventListener('click', onOk);
+      btnCancel?.removeEventListener('click', onCancel);
+      inp?.removeEventListener('keydown', onKey);
+      modal.classList.add('hidden');
+      if (inpWrap) inpWrap.classList.add('hidden');
+    };
+    const onOk = () => {
+      const val = inp.value;
+      cleanUp();
+      resolve(val);
+    };
+    const onCancel = () => {
+      cleanUp();
+      resolve(null);
+    };
+    btnOk?.addEventListener('click', onOk);
+    btnCancel?.addEventListener('click', onCancel);
+    inp.addEventListener('keydown', onKey);
+  });
+}
+
+// Override dialog bawaan browser di Studio
+window.alert = function(msg) {
+  return showStudioAlert('Pemberitahuan', String(msg || ''), 'ℹ️', 'OK');
+};
+
+$('#btnSecPin')?.addEventListener('click', async () => {
+  const oldPin = ($('#secOld')?.value || '').trim();
+  const newPin = ($('#secNew')?.value || '').trim();
+  const msg = $('#secMsg');
+
+  if (!oldPin) {
+    if (msg) { msg.textContent = 'Masukkan PIN lama terlebih dahulu.'; msg.style.color = '#c33'; }
+    $('#secOld')?.focus();
+    return;
+  }
+  if (!newPin || newPin.length < 4) {
+    if (msg) { msg.textContent = 'PIN baru minimal 4 angka.'; msg.style.color = '#c33'; }
+    $('#secNew')?.focus();
+    return;
+  }
+
   try {
-    await api('/api/studio/security', { method: 'PUT', json: { oldPin: $('#secOld').value, newPin: $('#secNew').value } });
-    $('#secOld').value = ''; $('#secNew').value = '';
-    $('#secMsg').textContent = 'PIN berhasil diganti.';
-  } catch (e) { $('#secMsg').textContent = e.message; }
+    await api('/api/studio/security', { method: 'PUT', json: { oldPin, newPin } });
+    if ($('#secOld')) $('#secOld').value = '';
+    if ($('#secNew')) $('#secNew').value = '';
+    if (msg) { msg.textContent = 'PIN berhasil diganti.'; msg.style.color = '#2F7D3A'; }
+    await showStudioAlert('PIN Berhasil Diganti!', 'PIN Studio Anda telah berhasil diperbarui ke nomor baru. Gunakan PIN baru ini saat masuk ke Studio berikutnya.', '✅');
+  } catch (e) {
+    if (msg) { msg.textContent = e.message || 'Gagal mengganti PIN.'; msg.style.color = '#c33'; }
+    await showStudioAlert('Gagal Mengganti PIN', e.message || 'PIN lama salah atau tidak valid.', '❌');
+  }
 });
 $('#secLocal').addEventListener('change', async (e) => {
   try {
@@ -1073,7 +1503,7 @@ $('#btnLogout').addEventListener('click', async () => {
 // ---------------------------------------------------------------- lisensi
 let LIC = null;
 const LIC_LABEL = { active: 'Aktif', grace: 'Masa tenggang', trial: 'Versi coba', expired: 'Habis', trial_over: 'Masa coba habis', clock: 'Jam salah' };
-const FEAT_NAME = { thermal: 'Struk thermal', photo: 'Foto 4R', living: 'Living Photo' };
+const FEAT_NAME = { thermal: 'Receipt Photobooth', photo: 'Foto 4R', living: 'Living Photo' };
 const fmtDate = (t) => new Date(t * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 async function loadLicense() {
   try { LIC = await api('/api/studio/license'); } catch (e) { $('#licInfo').textContent = 'Gagal memuat: ' + e.message; return; }
@@ -1106,10 +1536,23 @@ async function loadLicense() {
   pill.textContent = s.state === 'trial' ? `VERSI COBA · ${s.trialDaysLeft} hari`
     : s.state === 'active' ? `Lisensi habis ${s.daysLeft} hari lagi` : (LIC_LABEL[s.state] || s.state).toUpperCase();
   markOutputLicense();
+  loadPricingPlans();
 }
 function markOutputLicense() {
   if (!LIC) return;
-  $$('#outPick [data-out]').forEach((b) => b.classList.toggle('nolic', LIC.ok && !(LIC.feat || []).includes(b.dataset.out)));
+  $$('#outPick [data-out]').forEach((b) => {
+    const o = b.dataset.out;
+    const feats = LIC.feat || [];
+    let hasLic = true;
+    if (LIC.ok) {
+      if (o === 'both') {
+        hasLic = feats.includes('both') || (feats.includes('thermal') && feats.includes('photo'));
+      } else {
+        hasLic = feats.includes(o);
+      }
+    }
+    b.classList.toggle('nolic', LIC.ok && !hasLic);
+  });
   const liv = document.querySelector('[data-f="living_photo"]');
   if (liv) liv.closest('label').classList.toggle('nolic-f', LIC.ok && !(LIC.feat || []).includes('living'));
 }
@@ -1125,7 +1568,7 @@ $('#btnLicCopy').addEventListener('click', () => {
       b.textContent = '✓ Tersalin!';
       setTimeout(() => { b.textContent = old; }, 2000);
     },
-    () => { prompt('Salin ID perangkat:', t); });
+    () => { showStudioPrompt('ID Perangkat', 'Salin ID perangkat di bawah ini:', t, '', '📋'); });
 });
 $('#licFile').addEventListener('change', async (e) => {
   const f = e.target.files[0]; if (!f) return;
@@ -1141,10 +1584,121 @@ $('#btnLicSave').addEventListener('click', async () => {
   } catch (e) { $('#licMsg').textContent = e.message; }
 });
 $('#btnLicRemove').addEventListener('click', async () => {
-  if (!confirm('Hapus lisensi dari perangkat ini?')) return;
+  if (!(await showStudioConfirm('Hapus Lisensi', 'Hapus lisensi dari perangkat ini?', 'Hapus', 'Batal', '⚠️'))) return;
   try { await api('/api/studio/license', { method: 'DELETE' }); $('#licMsg').textContent = 'Lisensi dihapus.'; loadLicense(); }
   catch (e) { $('#licMsg').textContent = e.message; }
 });
+
+// ---------------------------------------------------------------- Langganan Online (Midtrans)
+let PRICING_DATA = null;
+let SELECTED_PLAN = 'complete';
+let SELECTED_DAYS = 30;
+let ORDER_POLL_TIMER = null;
+
+function renderPlanChoices() {
+  const container = $('#licPlanChoices');
+  if (!container || !PRICING_DATA) return;
+  const pricing = PRICING_DATA.pricing || {};
+  let html = '';
+  for (const [key, p] of Object.entries(pricing)) {
+    const isSel = key === SELECTED_PLAN;
+    const priceVal = (p.prices && p.prices[SELECTED_DAYS]) || 0;
+    const formatted = new Intl.NumberFormat('id-ID').format(priceVal);
+    html += `
+      <div class="lic-plan-card ${isSel ? 'on' : ''}" data-plan="${esc(key)}">
+        <b style="font-size:14px;display:block;color:var(--ink)">${esc(p.name)}</b>
+        <span style="font-size:11px;color:var(--muted);display:block;margin-top:2px">${esc(p.desc || '')}</span>
+        <div style="font-size:16px;font-weight:700;color:var(--brand, #2563EB);margin-top:8px">Rp ${formatted}</div>
+      </div>
+    `;
+  }
+  container.innerHTML = html;
+  $$('.lic-plan-card').forEach((el) => {
+    el.addEventListener('click', () => {
+      SELECTED_PLAN = el.dataset.plan;
+      renderPlanChoices();
+      updateTotalAmount();
+    });
+  });
+}
+
+function updateTotalAmount() {
+  const totalEl = $('#licTotalAmount');
+  if (!totalEl || !PRICING_DATA) return;
+  const p = (PRICING_DATA.pricing || {})[SELECTED_PLAN];
+  const priceVal = (p && p.prices && p.prices[SELECTED_DAYS]) || 0;
+  totalEl.textContent = 'Rp ' + new Intl.NumberFormat('id-ID').format(priceVal);
+}
+
+async function loadPricingPlans() {
+  try {
+    PRICING_DATA = await api('/api/studio/license/plans');
+    renderPlanChoices();
+    updateTotalAmount();
+  } catch (e) {
+    console.warn('Gagal memuat paket langganan:', e);
+  }
+}
+
+$$('#licDurChoices .lic-dur-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('#licDurChoices .lic-dur-btn').forEach((b) => b.classList.remove('on'));
+    btn.classList.add('on');
+    SELECTED_DAYS = parseInt(btn.dataset.days, 10);
+    renderPlanChoices();
+    updateTotalAmount();
+  });
+});
+
+if ($('#btnLicSubscribe')) {
+  $('#btnLicSubscribe').addEventListener('click', async () => {
+    const btn = $('#btnLicSubscribe');
+    const oldText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Menyiapkan pembayaran...';
+    try {
+      const res = await api('/api/studio/license/create-checkout', {
+        json: {
+          plan: SELECTED_PLAN,
+          days: SELECTED_DAYS,
+          name: ($('#licCustName').value || '').trim()
+        }
+      });
+      if (!res.ok) throw new Error(res.error || 'Gagal membuat pembayaran.');
+
+      // Buka popup / tab checkout Midtrans
+      window.open(res.checkout_url || res.snap_redirect_url, '_blank');
+
+      // Tampilkan notifikasi polling aktivasi
+      const pollNotice = $('#licPollNotice');
+      if (pollNotice) pollNotice.classList.remove('hidden');
+
+      // Mulai polling otomatis ke server
+      if (ORDER_POLL_TIMER) clearInterval(ORDER_POLL_TIMER);
+      ORDER_POLL_TIMER = setInterval(async () => {
+        try {
+          const poll = await api('/api/studio/license/poll-order/' + res.order_id);
+          if (poll.paid && poll.activated) {
+            clearInterval(ORDER_POLL_TIMER);
+            ORDER_POLL_TIMER = null;
+            if (pollNotice) pollNotice.classList.add('hidden');
+            await showStudioAlert('Pembayaran Berhasil!', 'Lisensi perangkat Anda telah aktif secara otomatis.', '🎉');
+            loadLicense();
+          }
+        } catch (err) {
+          console.warn('Polling error:', err);
+        }
+      }, 3000);
+
+    } catch (e) {
+      await showStudioAlert('Kendala Pembayaran', e.message, '⚠️');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = oldText;
+    }
+  });
+}
+
 
 // ---------------------------------------------------------------- init
 (async function init() {

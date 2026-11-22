@@ -1,4 +1,4 @@
-"""Koleksi template struk hitam-putih untuk printer thermal 80mm.
+"""Koleksi template struk hitam-putih untuk printer Receipt Photobooth 80mm.
 
 Setiap template menerima Ctx dan mengembalikan PIL.Image mode 'L' (isi hanya 0/255).
 Semua template mendukung layout: solo (1), duo (2), strip (3), grid (4 foto).
@@ -166,7 +166,7 @@ EN_RX = [(_re.compile(a), b) for a, b in [
     (r"^Sebuah momen langka berhasil diabadikan di (.*?)\. Menurut saksi mata.*$",
      r"A rare moment was captured at \1. According to witnesses, the smiles seen were one hundred "
      r"percent genuine and completely unforced. The editors confirm this photo was printed directly "
-     r"on thermal paper, with no filter other than happiness. As of press time, the line in front of "
+     r"on Receipt Photobooth paper, with no filter other than happiness. As of press time, the line in front of "
      r"the booth keeps growing."),
     (r"^(\d+) x POSE ANDALAN$", r"\1 x SIGNATURE POSE"),
     (r"^CATATAN: (.*)$", r"NOTE: \1"),
@@ -271,7 +271,7 @@ def F(name, size):
 class Ctx:
     def __init__(self, photos, layout, stylize_fn, event="NAMA EVENT", caption="",
                  number=None, qr=None, logo=None, width=576, now=None, logo_src=None, asset_dir=None,
-                 social=None, opts=None, ph_cache=None, footer="TERIMA KASIH"):
+                 social=None, opts=None, ph_cache=None, footer="TERIMA KASIH", has_living=False):
         self.photos = photos
         self.layout = layout
         self.n = {"solo": 1, "duo": 2, "strip": 3, "grid": 4, "feed": 9}.get(layout, 3)
@@ -289,6 +289,7 @@ class Ctx:
         self.opts = opts or {}        # pilihan teks (gelar sertifikat, rute boarding, dll.)
         self._ph = ph_cache if ph_cache is not None else {}   # bisa dibagi antar template (lebih cepat)
         self.footer = (footer or "").strip() or "TERIMA KASIH"
+        self.has_living = has_living
 
     # foto yang sudah dijadikan 1-bit sesuai gaya
     def ph(self, i, w, h):
@@ -436,6 +437,11 @@ class Paper:
 
     def qr_row(self, c, text_lines=("Scan untuk unduh", "versi digital", "berwarna."), size=170, x=0):
         if c.qr is None:
+            if getattr(c, "logo", None) is not None and not getattr(c, "has_living", False):
+                lg = c.logo.copy()
+                lg.thumbnail((int(self.W * 0.25), 45))
+                self.paste(lg, (self.W - lg.width) / 2, self.y)
+                self.y += lg.height + 12
             return self.y
         q = qr_fit(c.qr, size)
         self.paste(q, x, self.y)
@@ -446,6 +452,11 @@ class Paper:
             self.text(x + size + 22, ty, t, f)
             ty += lh
         self.y += size
+        if getattr(c, "logo", None) is not None and not getattr(c, "has_living", False):
+            lg = c.logo.copy()
+            lg.thumbnail((int(self.W * 0.25), 45))
+            self.paste(lg, (self.W - lg.width) / 2, self.y + 10)
+            self.y += lg.height + 18
         return self.y
 
     def finish(self, bottom_pad=40):
@@ -495,9 +506,6 @@ def put_photos(p, c, rects, border=0, frame_gap=0):
 def t_klasik(c):
     p = Paper(c.W)
     p.y = 24
-    if c.logo is not None:
-        p.paste(c.logo, (c.W - c.logo.width) / 2, p.y)
-        p.y += c.logo.height + 18
     p.para_center(c.event.upper(), F("black", 46), line_gap=10)
     p.y = p.center("PHOTOBOOTH", F("mono", 20), y=p.y + 4, spacing=8) + 12
     p.y = p.center(f"{c.date_num}  —  {c.time}", F("mono", 20)) + 22
@@ -767,7 +775,7 @@ def t_koran(c):
     # artikel 2 kolom
     body = (f"Sebuah momen langka berhasil diabadikan di {c.event}. Menurut saksi mata, senyum "
             "yang terlihat seratus persen asli dan tanpa paksaan. Redaksi memastikan foto ini "
-            "dicetak langsung di atas kertas thermal, tanpa filter apa pun kecuali kebahagiaan. "
+            "dicetak langsung di atas kertas Receipt Photobooth, tanpa filter apa pun kecuali kebahagiaan. "
             "Hingga berita ini diturunkan, antrean di depan booth terus bertambah.")
     fb = F("serif", 18)
     colw = (W - 2 * M - 24) // 2
@@ -1991,45 +1999,46 @@ def t_boarding(c):
 
 
 def t_sertifikat(c):
-    rnd = _rnd(c, "cert")
-    p = Paper(c.W)
-    W, L, R = c.W, 50, c.W - 50
-    p.y = 52
-    p.y = p.center("SERTIFIKAT", F("serifk", 54)) + 10
-    p.y = p.center(f"No. {c.no}/PB/{c.now.year}", F("mono", 16)) + 18
-    p.y = p.ornament(p.y) + 22
-    p.y = p.center("Dengan ini menyatakan bahwa", F("serif", 21)) + 20
-    rects, p.y = slots(c.layout, L, p.y, R - L, gap=12)
-    put_photos(p, c, rects, border=2, frame_gap=5)
-    p.y += 26
-    who = c.caption or "Pemegang sertifikat ini"
-    p.para_center(who, F("hand", 44), max_w=R - L)
-    p.y += 6
-    p.y = p.center("telah resmi dinyatakan sebagai", F("serif", 21)) + 16
-    titles = [t for t in (c.opts.get("cert_titles") or GELAR) if t.strip()] or GELAR
-    title, sub = split_title(tr(c.opts.get("cert_title") or rnd.choice(titles)))
-    p.para_center(title.upper(), F("black", 40), max_w=R - L, line_gap=6)
-    if sub:
-        p.y += 2
-        p.para_center(f"({sub})", F("hand", 32), max_w=R - L, line_gap=4)
-    p.y += 10
-    p.y = p.center(f"Ditetapkan di {c.event}", F("serif", 19)) + 6
-    p.y = p.center(c.date_long, F("serif", 19)) + 34
-    sy = p.y
-    _stamp(p, L + 80, sy + 70, 66, "RESMI", "PHOTOBOOTH")
-    _scribble(p, R - 210, sy + 60, 200, c.no)
-    p.d.rectangle((R - 220, sy + 92, R, sy + 93), fill=K)
-    p.center("Ketua Panitia Senyum", F("serif", 16), y=sy + 102, x0=R - 220, x1=R)
-    p.y = sy + 160
-    p.d.rectangle((6, 14, W - 7, p.y), outline=K, width=4)
-    p.d.rectangle((18, 26, W - 19, p.y - 12), outline=K, width=1)
-    for cx, cy in [(18, 26), (W - 19, 26), (18, p.y - 12), (W - 19, p.y - 12)]:
-        p.diamond(cx, cy, 9)
-        p.diamond(cx, cy, 4, fill=P)
-    p.y += 24
-    if c.qr is not None:
-        p.qr_row(c, size=130, x=M)
-    return p.finish()
+    with no_translate():
+        rnd = _rnd(c, "cert")
+        p = Paper(c.W)
+        W, L, R = c.W, 50, c.W - 50
+        p.y = 52
+        p.y = p.center("SERTIFIKAT", F("serifk", 54)) + 10
+        p.y = p.center(f"No. {c.no}/PB/{c.now.year}", F("mono", 16)) + 18
+        p.y = p.ornament(p.y) + 22
+        p.y = p.center("Dengan ini menyatakan bahwa", F("serif", 21)) + 20
+        rects, p.y = slots(c.layout, L, p.y, R - L, gap=12)
+        put_photos(p, c, rects, border=2, frame_gap=5)
+        p.y += 26
+        who = c.caption or "Pemegang sertifikat ini"
+        p.para_center(who, F("hand", 44), max_w=R - L)
+        p.y += 6
+        p.y = p.center("telah resmi dinyatakan sebagai", F("serif", 21)) + 16
+        titles = [t for t in (c.opts.get("cert_titles") or GELAR) if t.strip()] or GELAR
+        title, sub = split_title(c.opts.get("cert_title") or rnd.choice(titles))
+        p.para_center(title.upper(), F("black", 40), max_w=R - L, line_gap=6)
+        if sub:
+            p.y += 2
+            p.para_center(f"({sub})", F("hand", 32), max_w=R - L, line_gap=4)
+        p.y += 10
+        p.y = p.center(f"Ditetapkan di {c.event}", F("serif", 19)) + 6
+        p.y = p.center(c.date_long, F("serif", 19)) + 34
+        sy = p.y
+        _stamp(p, L + 80, sy + 70, 66, "RESMI", "PHOTOBOOTH")
+        _scribble(p, R - 210, sy + 60, 200, c.no)
+        p.d.rectangle((R - 220, sy + 92, R, sy + 93), fill=K)
+        p.center("Ketua Panitia Senyum", F("serif", 16), y=sy + 102, x0=R - 220, x1=R)
+        p.y = sy + 160
+        p.d.rectangle((6, 14, W - 7, p.y), outline=K, width=4)
+        p.d.rectangle((18, 26, W - 19, p.y - 12), outline=K, width=1)
+        for cx, cy in [(18, 26), (W - 19, 26), (18, p.y - 12), (W - 19, p.y - 12)]:
+            p.diamond(cx, cy, 9)
+            p.diamond(cx, cy, 4, fill=P)
+        p.y += 24
+        if c.qr is not None:
+            p.qr_row(c, size=130, x=M)
+        return p.finish()
 
 
 def t_resep(c):

@@ -39,11 +39,11 @@ Tempel kodenya di **AdsBooth Studio → ⚙ Printer & tablet → Lisensi**.
 
 | Paket (`--plan`) | Isi |
 |---|---|
-| `thermal` | struk thermal 80mm |
+| `thermal` | Receipt Photobooth 80mm |
 | `photo` | foto 4R berwarna |
-| `complete` | struk + foto 4R + Living Photo |
+| `complete` | Receipt Photobooth + foto 4R + Living Photo |
 
-Add-on: `--add living` (Living Photo untuk paket thermal/photo).
+Add-on: `--add living` (Living Photo untuk paket Receipt Photobooth / photo).
 
 ---
 
@@ -62,6 +62,27 @@ Add-on: `--add living` (Living Photo untuk paket thermal/photo).
    Pelanggan tempel/buka di Studio → **Aktifkan**. Kiosk langsung normal tanpa restart.
 
 Semua kode yang pernah diterbitkan tercatat di `%USERPROFILE%\.adsbooth-license\issued.csv`.
+
+---
+
+## 3b. Alur Otomatis (Langganan Online via Midtrans)
+
+Kini AdsBooth mendukung sistem pembayaran & aktivasi mandiri tanpa Anda perlu melayani manual:
+
+1. Jalankan `license_server/server.py` di VPS (atau lokal dengan ngrok).
+2. Isi kunci Midtrans di `license_server/config.json` dan pasang Webhook Midtrans ke `https://lisensi.domainanda.com/api/midtrans-webhook`.
+3. Di `config.json` aplikasi AdsBooth, atur `"license_server_url": "https://lisensi.domainanda.com"`.
+4. **Pengalaman Pelanggan**:
+   - Pelanggan buka **AdsBooth Studio → Lisensi & Aktivasi**.
+   - Muncul pilihan paket (Thermal, Foto 4R, Complete) & durasi (1 Bulan / 1 Tahun).
+   - Klik **Bayar & Aktifkan Otomatis** → Jendela pembayaran Midtrans (QRIS / VA) terbuka.
+   - Pelanggan bayar di HP.
+   - Server lisensi menerima notifikasi lunas → otomatis membuat token lisensi Ed25519.
+   - Studio di PC pelanggan langsung mendeteksi pembayaran dan **mengaktifkan lisensi seketika**.
+   - Kode lisensi juga tetap tampil di halaman sukses Midtrans untuk salin-tempel manual jika diperlukan.
+   - Panduan lengkap deploy ada di [`license_server/README.md`](license_server/README.md).
+
+---
 
 ### Perpanjangan (langganan bulanan)
 Terbitkan kode baru dengan `--days 30` (atau `--until 2027-02-28`), kirim, pelanggan tempel di Studio.
@@ -93,7 +114,7 @@ Instal ulang Windows di PC yang sama biasanya juga mengubah ID.
 | "Kode lisensi tidak sah" | kode terpotong saat copy-paste | kirim sebagai file `.lic` |
 | "Kode lisensi ini sudah kedaluwarsa" | kode lama dipakai lagi | terbitkan kode baru |
 | "Jam perangkat mundur" / "System clock is incorrect" | tanggal PC salah atau pernah dimundurkan | betulkan jam; kalau tetap terkunci, terbitkan kode baru (otomatis memulihkan) |
-| "Mode not included" | event memakai mode di luar paket (mis. foto 4R di paket thermal) | ganti jenis cetak di Studio, atau upgrade paket |
+| "Mode not included" | event memakai mode di luar paket (mis. foto 4R di paket Receipt Photobooth) | ganti jenis cetak di Studio, atau upgrade paket |
 
 Cek isi sebuah kode: `python license_admin.py verify <kode>`.
 

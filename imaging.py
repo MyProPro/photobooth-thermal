@@ -1,4 +1,4 @@
-"""Komposisi struk foto 1-bit untuk printer thermal 80mm (576 dot)."""
+"""Komposisi struk foto 1-bit untuk printer Receipt Photobooth 80mm (576 dot)."""
 import os
 from datetime import datetime
 
@@ -168,10 +168,59 @@ def _dashed(d, y, x0, x1, dash=14, gap=10, h=4):
     return y + h
 
 
+def make_qr_with_logo(url, logo=None, box_size=1, border=1, target_size=None, as_rgb=False):
+    """
+    Buat QR code dengan opsi logo di tengah.
+    Menggunakan ERROR_CORRECT_H (kapasitas koreksi ~30%) agar QR code tetap 100% terbaca
+    meskipun ada logo di tengahnya.
+    """
+    import qrcode
+    ec = qrcode.constants.ERROR_CORRECT_H if logo else qrcode.constants.ERROR_CORRECT_M
+    q = qrcode.QRCode(border=border, box_size=box_size, error_correction=ec)
+    q.add_data(url)
+    q.make(fit=True)
+    qr = q.make_image(fill_color="black", back_color="white").convert("RGBA")
+
+    if target_size:
+        k = max(1, target_size // qr.width)
+        qr = qr.resize((qr.width * k, qr.height * k), Image.NEAREST)
+
+    if logo:
+        try:
+            if isinstance(logo, str) and os.path.exists(logo):
+                lg = Image.open(logo).convert("RGBA")
+            elif hasattr(logo, "convert"):
+                lg = logo.convert("RGBA")
+            else:
+                lg = None
+
+            if lg:
+                max_dim = int(qr.width * 0.22)
+                lg = lg.copy()
+                lg.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+
+                pad = max(2, int(qr.width * 0.02))
+                box_w = lg.width + pad * 2
+                box_h = lg.height + pad * 2
+                badge = Image.new("RGBA", (box_w, box_h), (255, 255, 255, 255))
+                badge.paste(lg, (pad, pad), lg)
+
+                px = (qr.width - box_w) // 2
+                py = (qr.height - box_h) // 2
+                qr.paste(badge, (px, py))
+        except Exception:
+            pass
+
+    if as_rgb:
+        return qr.convert("RGB")
+    return qr.convert("L").point(lambda v: 255 if v > 127 else 0)
+
+
 def compose_receipt(photos, layout="strip", style="dither", caption="", show_logo=True,
                     event_name="NAMA EVENT", logo_path=None, qr_url=None, number=None,
                     width=576, brightness=1.0, footer="TERIMA KASIH", template="klasik",
-                    custom=None, asset_dir=None, now=None, social=None, opts=None, ph_cache=None):
+                    custom=None, asset_dir=None, now=None, social=None, opts=None, ph_cache=None,
+                    has_living=False):
     """photos: list PIL.Image. Return PIL.Image mode '1' lebar `width`."""
     import templates as T
 
@@ -188,16 +237,13 @@ def compose_receipt(photos, layout="strip", style="dither", caption="", show_log
 
     qr = None
     if qr_url and qrcode:
-        q = qrcode.QRCode(border=1, box_size=1, error_correction=qrcode.constants.ERROR_CORRECT_M)
-        q.add_data(qr_url)
-        q.make(fit=True)
-        qr = q.make_image(fill_color="black", back_color="white").convert("L")
+        qr = make_qr_with_logo(qr_url, logo=logo_src if show_logo else None, box_size=1, border=1)
 
     ctx = T.Ctx(list(photos), layout if layout in LAYOUTS else "strip",
                 lambda im, size: stylize(im, size, style, brightness),
                 event=event_name, caption=caption, number=number, qr=qr, logo=logo, width=width,
                 logo_src=logo_src, asset_dir=asset_dir, now=now, social=social, opts=opts,
-                ph_cache=ph_cache, footer=footer)
+                ph_cache=ph_cache, footer=footer, has_living=has_living)
     return T.render(template, ctx, custom).convert("1", dither=Image.NONE)
 
 
@@ -207,7 +253,7 @@ def stylize_sample(img, style, width=576, brightness=1.0):
 
 # ---------- blok tambahan di bawah struk (undian, pose, buku tamu) ----------
 
-def append_extras(img, extras, width=576):
+def append_extras(img, extras, width=576, logo_path=None):
     """img: struk mode '1'. extras: {'lucky': '0127', 'poses': [...], 'guestbook': {name, message, signature(PIL)}}."""
     if not extras or not any(extras.get(k) for k in ("lucky", "poses", "guestbook", "living")):
         return img
@@ -256,7 +302,7 @@ def append_extras(img, extras, width=576):
         p.y += h + 10
         p.y = p.center("Simpan struk ini untuk undian doorprize", T.F("sans", 17)) + 10
     if extras.get("living"):
-        p.y = living_block(p, extras["living"], L, R)
+        p.y = living_block(p, extras["living"], L, R, logo_path=logo_path)
     block = p.finish(bottom_pad=24).convert("1", dither=Image.NONE)
     out = Image.new("1", (width, img.height + block.height), 1)
     out.paste(img, (0, 0))
@@ -264,17 +310,20 @@ def append_extras(img, extras, width=576):
     return out
 
 
-def living_block(p, url, L, R):
-    """QR Living Photo (unik per cetakan) + petunjuk singkat. QR ±2,3 cm supaya mudah di-scan."""
-    import qrcode
+def living_block(p, url, L, R, logo_path=None):
+    """QR Living Photo (unik per cetakan) + petunjuk singkat + logo kecil di bawah QR."""
     import templates as T
+
+    logo_src = None
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo_src = Image.open(logo_path).convert("RGBA")
+        except Exception:
+            logo_src = None
+
     p.y = p.dashed(h=3, x0=L, x1=R) + 18
-    q = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=1, border=1)
-    q.add_data(url)
-    q.make(fit=True)
-    m = q.make_image(fill_color="black", back_color="white").convert("L")
-    k = max(4, 184 // m.width)                       # modul utuh -> tajam di printer thermal
-    m = m.resize((m.width * k, m.height * k), Image.NEAREST).point(lambda v: 255 if v > 127 else 0).convert("1")
+    m = make_qr_with_logo(url, logo=logo_src, target_size=184).convert("1")
+
     top = p.y
     p.img.paste(m, (L, top))
     x = L + m.width + 18
@@ -284,10 +333,38 @@ def living_block(p, url, L, R):
         big -= 2                                     # judul selalu muat di samping QR
     p.text(x, top + 38 + (46 - big) // 2, "Scan untuk putar", T.F("bebas", big))
     p.text(x, top + 82, "video kamu", T.F("bebas", big))
-    for i, line in enumerate(p.wrap("Scan pakai kamera HP lalu pilih video sekali. Video diputar tiap kali di-scan, tersimpan di HP kamu saja.",
-                                     T.F("sans", 16), R - x)):
+    desc_lines = p.wrap("Scan pakai kamera HP lalu pilih video sekali. Video diputar tiap kali di-scan, tersimpan di HP kamu saja.",
+                        T.F("sans", 16), R - x)
+    for i, line in enumerate(desc_lines):
         p.text(x, top + 132 + i * 21, line, T.F("sans", 16))
-    return max(top + m.height, top + 132 + 21 * 3) + 14
+
+    text_bottom = top + 132 + len(desc_lines) * 21
+    qr_bottom = top + m.height
+
+    # Gambar logo tepat di bawah qrcode video living (rata dengan teks di sampingnya)
+    logo_bottom = qr_bottom
+    if logo_src:
+        try:
+            lg = logo_src.copy()
+            # Lebar logo proporsional dengan lebar QR code agar pas tepat di bawahnya
+            lg.thumbnail((int(m.width * 0.92), 42), Image.Resampling.LANCZOS)
+            if lg.mode in ("RGBA", "LA"):
+                bg = Image.new("RGB", lg.size, "white")
+                bg.paste(lg, mask=lg.split()[-1])
+                lg = bg
+            lg = ImageOps.grayscale(lg).convert("1").convert("L")
+
+            # Posisikan horizontal tepat di tengah kolom QR code (di bawah QR code, bukan di tengah kertas)
+            x_logo = L + (m.width - lg.width) // 2
+            # Posisikan vertikal agar sejajar / sama rata dengan bagian bawah teks di sampingnya
+            y_logo = max(qr_bottom + 8, text_bottom - lg.height)
+            p.paste(lg, x_logo, y_logo)
+            logo_bottom = y_logo + lg.height
+        except Exception:
+            pass
+
+    p.y = max(text_bottom, logo_bottom) + 16
+    return p.y
 
 
 def host_copy(img, width=576, label="ARSIP TUAN RUMAH"):

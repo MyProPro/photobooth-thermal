@@ -1,4 +1,4 @@
-"""AdsBooth (struk thermal 80mm & foto 4R) — server Flask.
+"""AdsBooth (Receipt Photobooth 80mm & foto 4R) — server Flask.
 
 Jalankan:  python app.py
   Kiosk  : http://localhost:5000
@@ -36,7 +36,7 @@ from imaging import LAYOUTS, append_extras, compose_receipt, host_copy, stylize,
 from printer import TYPES as PRINTER_TYPES, PaperCounter, ThermalPrinter, discover as discover_printers
 from printer import PHOTO_TYPES, PhotoPrinter, list_photo_printers
 from samples import _illustration, sample_photos
-from version import APP_NAME, LIVING_BASE_URL, VERSION
+from version import APP_NAME, LIVING_BASE_URL, SOFTCOPY_BASE_URL, VERSION
 
 BASE = P.BASE          # folder program (kode, static, fonts) - boleh ditimpa saat update
 DATA = P.DATA          # folder data (config, event, foto, database, log) - tidak tersentuh update
@@ -81,13 +81,15 @@ PRINTER = ThermalPrinter(CFG.get("printer", {}), OUT, counter=PAPER)
 PHOTO_PRINTER = PhotoPrinter(CFG.get("photo_printer", {}), OUT)
 
 
-def is_photo(ev):
-    """Event diset 'Foto 4R berwarna' (bukan thermal)."""
+def is_photo(ev, p=None):
+    """Event diset 'Foto 4R berwarna' (bukan thermal), atau sesi payload memilih photo."""
+    if p and isinstance(p, dict) and p.get("output"):
+        return p["output"] == "photo"
     return (ev or {}).get("output") == "photo"
 
 
-def printer_for(ev):
-    return PHOTO_PRINTER if is_photo(ev) else PRINTER
+def printer_for(ev, p=None):
+    return PHOTO_PRINTER if is_photo(ev, p) else PRINTER
 _counter_lock = threading.Lock()
 
 # SQLite: catatan tambahan untuk statistik/ekspor (file tetap sumber utama)
@@ -143,11 +145,24 @@ def lan_ip():
 
 
 def base_url():
-    return (CFG.get("public_base_url") or f"http://{lan_ip()}:{CFG.get('port', 5000)}").rstrip("/")
+    url = CFG.get("public_base_url") or CFG.get("download_url") or f"http://{lan_ip()}:{CFG.get('port', 5000)}"
+    return url.rstrip("/")
 
 
 def decode_image(data_url):
+    if isinstance(data_url, str) and data_url.startswith("/api/dummy/"):
+        try:
+            idx = int(data_url.split("/")[-1].split(".")[0])
+            if idx not in _dummy_cache:
+                api_dummy(idx)
+            if idx in _dummy_cache:
+                return Image.open(io.BytesIO(_dummy_cache[idx])).convert("RGB")
+        except Exception:
+            pass
     raw = data_url.split(",", 1)[1] if "," in data_url else data_url
+    missing_padding = len(raw) % 4
+    if missing_padding:
+        raw += "=" * (4 - missing_padding)
     return Image.open(io.BytesIO(base64.b64decode(raw))).convert("RGB")
 
 
@@ -263,15 +278,15 @@ def render_receipt(*a, **kw):
     return LIC.watermark(img) if LIC.status()["demo"] else img
 
 
-def license_block(ev):
+def license_block(ev, p=None):
     """None kalau boleh cetak; kalau tidak, pesan alasannya (lisensi habis / paket tidak mencakup mode ini)."""
     s = LIC.status()
     if not s["ok"]:
         return s.get("message") or "Perangkat ini belum berlisensi."
-    need = "photo" if is_photo(ev) else "thermal"
+    need = "photo" if is_photo(ev, p) else "thermal"
     if need not in s["feat"]:
         return ("Paket lisensi tidak mencakup mode foto 4R." if need == "photo"
-                else "Paket lisensi tidak mencakup mode struk thermal.")
+                else "Paket lisensi tidak mencakup mode Receipt Photobooth.")
     return None
 
 
@@ -288,7 +303,7 @@ def _render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_ove
         social["username"] = p["username"]
     if p.get("website") is not None:
         social["website"] = p["website"]
-    if is_photo(ev):
+    if is_photo(ev, p):
         logo = ev.get("logo")
         style = p.get("style") if p.get("style") in PH.STYLE_IDS else "warna"
         return PH.compose_photo(
@@ -323,6 +338,7 @@ def _render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_ove
         social=social,
         opts=template_opts(ev, p),
         ph_cache=ph_cache,
+        has_living=features(ev)["living_photo"],
     )
 
 
@@ -384,6 +400,45 @@ def living_url(ev, code):
     return f"{base}#{signed}"
 
 
+SOFTCOPY_DEFAULT = SOFTCOPY_BASE_URL
+
+
+def softcopy_url(sid: str, ev=None) -> str:
+    """Link QR Softcopy foto: halaman statis (docs/d/ di GitHub Pages / domain sendiri) atau lokal server."""
+    if ev is None:
+        ev, _ = current_event()
+    if not qr_on(ev):
+        return None
+    base = (CFG.get("softcopy_base_url") or CFG.get("public_base_url") or SOFTCOPY_DEFAULT).strip()
+    if base.endswith("/index.html"):
+        base = base[:-10]
+    elif base.endswith("index.html"):
+        base = base[:-10]
+    if not base.endswith("/") and "#" not in base and "?" not in base:
+        base += "/"
+
+    if sid == "preview":
+        return f"{base}#s=preview"
+
+    local_host = f"{lan_ip()}:{CFG.get('port', 5000)}"
+    if local_host in base or "localhost" in base or "127.0.0.1" in base:
+        return f"{base.rstrip('/')}/{sid}"
+
+    # Nama event untuk SSID Wi-Fi: (Nama Event) AdsBooth
+    ev_name = (ev.get("event_name") or ev.get("name") or "").strip()
+    wifi_name = f"({ev_name}) AdsBooth" if ev_name else "AdsBooth Wi-Fi"
+
+    import urllib.parse
+    auto_del = int((ev or {}).get("download_auto_delete", 3) or 3)
+    params = {
+        "s": sid,
+        "h": f"http://{lan_ip()}:{CFG.get('port', 5000)}",
+        "w": wifi_name,
+        "exp": auto_del
+    }
+    return f"{base}#{urllib.parse.urlencode(params)}"
+
+
 def extras_from_payload(p, ev, lucky=None, code=None):
     ft = features(ev)
     ex = {}
@@ -407,12 +462,15 @@ def extras_from_payload(p, ev, lucky=None, code=None):
 def receipt_from_payload(p, qr_url=None, number=None, lucky=None, with_extras=True, code=None):
     ev, asset_dir = current_event()
     photos = [decode_image(x) for x in p.get("photos", [])]
-    if is_photo(ev) and features(ev)["living_photo"]:
+    if is_photo(ev, p) and features(ev)["living_photo"]:
         qr_url = living_url(ev, code or "preview")     # foto 4R: QR video di pojok kanan bawah
     img = render_receipt(photos, p, ev, asset_dir, qr_url, number, lucky=lucky)
     ex = extras_from_payload(p, ev, lucky, code) if with_extras else {}
-    if ex and not is_photo(ev):   # mode foto: buku tamu tetap tersimpan, tidak ikut dicetak
-        img = append_extras(img, ex, int(CFG.get("paper_px", 576)))
+    if ex and not is_photo(ev, p):   # mode foto: buku tamu tetap tersimpan, tidak ikut dicetak
+        logo = ev.get("logo")
+        logo_path = os.path.join(asset_dir, logo) if (logo and asset_dir) else None
+        show_logo = p.get("showLogo", True)
+        img = append_extras(img, ex, int(CFG.get("paper_px", 576)), logo_path=logo_path if show_logo else None)
     return img, photos, ex
 
 
@@ -426,10 +484,14 @@ def qr_on(ev):
 def preview_qr(ev=None):
     if ev is None:
         ev, _ = current_event()
-    return base_url() + "/d/preview" if qr_on(ev) else None
+    return softcopy_url("preview", ev) if qr_on(ev) else None
 
 
 # ---------- kiosk ----------
+
+@app.get("/favicon.ico")
+def favicon():
+    return send_from_directory(os.path.join(BASE, "static"), "favicon.ico", mimetype="image/vnd.microsoft.icon")
 
 @app.get("/")
 def index():
@@ -464,10 +526,17 @@ def api_config():
         "hiresTimeoutMs": int(CFG.get("hires_timeout_ms", 1500)),
         "features": features(ev),
         "printerMode": printer_for(ev).mode,
-        "output": "photo" if is_photo(ev) else "thermal",
+        "output": ev.get("output", "thermal"),
+        "payment": ev.get("payment") or {
+            "enabled": False, "method": "qr", "price_receipt": 15000, "price_photo": 30000,
+            "timeout_seconds": 120, "gateway": "simulator", "qris_image": ""
+        },
+        "downloadUrl": softcopy_url("preview", ev) or "",
+        "downloadAutoDelete": int(ev.get("download_auto_delete", 3)),
         "introStyle": ev.get("intro_style") or "auto",
+        "logo": f"/api/event-asset/{ev.get('logo')}" if (ev.get("logo") and ev.get("id")) else None,
         "version": VERSION,
-        "styles": ([{"id": s[0], "name": s[1], "desc": s[2]} for s in PH.STYLES] if is_photo(ev) else None),
+        "styles": ([{"id": s[0], "name": s[1], "desc": s[2]} for s in PH.STYLES] if (is_photo(ev) or ev.get("output") == "both") else None),
         "renderWorkers": int(CFG.get("render_workers", 3)),
         "certTitles": cert_titles(ev),
         "theme": ev.get("theme") or {},
@@ -601,7 +670,7 @@ def paper_info():
 def api_stylize():
     p = request.get_json(force=True)
     ev, _ = current_event()
-    if is_photo(ev):
+    if is_photo(ev, p):
         im = PH.style_photo(decode_image(p["photo"]), p.get("style", "warna"))
         im.thumbnail((900, 900))
         return jsonify({"image": to_data_url(im, "JPEG")})
@@ -616,7 +685,7 @@ _STYLE_SAMPLE_CACHE = {}
 @app.get("/api/sample-styles")
 def api_sample_styles():
     ev, asset_dir = current_event()
-    mode = "photo" if is_photo(ev) else "thermal"
+    mode = request.args.get("mode") or request.args.get("output") or ("photo" if is_photo(ev) else "thermal")
     brightness = float(CFG.get("brightness", 1.0))
 
     # Cek apakah ada foto intro dari event aktif
@@ -741,15 +810,18 @@ def api_templates_render():
 @app.post("/api/print")
 def api_print():
     p = request.get_json(force=True)
-    ev, _ = current_event()
-    blocked = license_block(ev)
+    ev, asset_dir = current_event()
+    blocked = license_block(ev, p)
     if blocked:
         return jsonify({"ok": False, "error": blocked, "license": True}), 403
     sid = uuid.uuid4().hex[:10]
     number = next_number()
     ft = features(ev)
     lucky = pick_lucky(ev, p.get("lucky"), reserve=False) if ft["lucky_draw"] else None
-    qr = f"{base_url()}/d/{sid}" if qr_on(ev) else None
+    
+    # QR unduh softcopy foto digital: memanggil softcopy_url() dari version.py
+    qr = softcopy_url(sid, ev) if qr_on(ev) else None
+
     try:
         img, photos, ex = receipt_from_payload(p, qr_url=qr, number=number, lucky=lucky, code=sid)
         folder = os.path.join(OUT, "sessions", sid)
@@ -757,14 +829,28 @@ def api_print():
         for i, ph in enumerate(photos, 1):
             ph.save(os.path.join(folder, f"foto_{i}.jpg"), quality=92)
         img.save(os.path.join(folder, "struk.png"))
-        if is_photo(ev):
+        if is_photo(ev, p):
             img.save(os.path.join(folder, "hasil_cetak.jpg"), quality=93)
+            img.save(os.path.join(folder, "softcopy_color.jpg"), quality=93)
+        else:
+            # Mode Receipt Photobooth: generate softcopy berwarna resolusi tinggi dengan template
+            try:
+                sc = PH.compose_photo(photos, layout=p.get("layout", "strip"), style="warna",
+                                      caption=p.get("caption", ""), show_logo=bool(p.get("showLogo", True)),
+                                      event_name=p.get("event_name") or ev.get("event_name", ""),
+                                      logo_path=os.path.join(asset_dir, ev.get("logo")) if ev.get("logo") else None,
+                                      template=p.get("template", "klasik"), theme=ev.get("theme"),
+                                      footer=p.get("footer", ""))
+                sc.save(os.path.join(folder, "softcopy_color.jpg"), quality=93)
+            except Exception:
+                img.convert("RGB").save(os.path.join(folder, "softcopy_color.jpg"), quality=93)
+
         gb = ex.get("guestbook") or {}
         if gb.get("signature") is not None:
             gb["signature"].convert("RGBA").save(os.path.join(folder, "ttd.png"))
         meta = {"id": sid, "event": ev.get("id", ""), "number": number, "time": int(time.time()),
                 "template": p.get("template"), "layout": p.get("layout"), "lucky": lucky,
-                "living": ex.get("living"),
+                "living": ex.get("living"), "output": p.get("output", "thermal"),
                 "poses": ex.get("poses") or [], "caption": p.get("caption", ""),
                 "guestbook": {"name": gb.get("name", ""), "message": gb.get("message", ""),
                               "signature": gb.get("signature") is not None} if gb else None}
@@ -780,7 +866,7 @@ def api_print():
             json.dump(meta, f, ensure_ascii=False)
         db_safe(DB.add_session, meta)
         jobs = []
-        if is_photo(ev):
+        if is_photo(ev, p):
             PHOTO_PRINTER.print_image(img, copies=copies + (1 if ft["host_copy"] else 0))
         else:
             PRINTER.print_image(img, copies=copies, sink=jobs)
@@ -793,8 +879,10 @@ def api_print():
     resp = {"ok": True, "id": sid, "number": number, "lucky": lucky,
             "jobs": [base64.b64encode(j).decode() for j in jobs]}
     if qr:
-        import qrcode
-        resp["qr"] = to_data_url(qrcode.make(qr, border=2).convert("RGB"))
+        from imaging import make_qr_with_logo
+        logo = ev.get("logo")
+        logo_path = os.path.join(asset_dir, logo) if (logo and asset_dir) else None
+        resp["qr"] = to_data_url(make_qr_with_logo(qr, logo=logo_path, box_size=6, border=2, as_rgb=True))
         resp["url"] = qr
     return jsonify(resp)
 
@@ -816,6 +904,115 @@ def api_reprint(sid):
     except Exception as e:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(e)}), 500
     return jsonify({"ok": True, "jobs": [base64.b64encode(j).decode() for j in jobs]})
+
+
+# ---------- Pembayaran Kiosk (QRIS / Kasir) ----------
+_PAYMENTS = {}
+_PAY_LOCK = threading.Lock()
+
+
+@app.post("/api/payment/create")
+def api_payment_create():
+    p = request.get_json(force=True) or {}
+    ev, _ = current_event()
+    cfg_pay = (ev or {}).get("payment") or {}
+    if not cfg_pay.get("enabled"):
+        return jsonify({"ok": True, "required": False})
+
+    mode = p.get("output", "thermal")
+    copies = max(1, min(int(p.get("copies", 1)), int(CFG.get("max_copies", 2))))
+    method = p.get("method") or cfg_pay.get("method", "qr")
+    price_key = "price_photo" if mode == "photo" else "price_receipt"
+    price_per_item = int(cfg_pay.get(price_key) or (30000 if mode == "photo" else 15000))
+    total_amount = price_per_item * copies
+    timeout_sec = int(cfg_pay.get("timeout_seconds") or 120)
+
+    tx_id = f"PAY-{uuid.uuid4().hex[:8].upper()}"
+
+    # Generate QR data (QRIS)
+    qris_raw = f"00020101021226610014ID.LINKAJA.WWW01189360091800000000000215{tx_id}52045812530336054{str(total_amount).zfill(2)}5802ID5908ADSBOOTH6007JAKARTA62070703A016304"
+    if (cfg_pay.get("gateway") in ("static", "qris_static")) and cfg_pay.get("qris_image"):
+        asset_dir = EV.path(ev.get("id", ""))
+        img_p = os.path.join(asset_dir, cfg_pay["qris_image"])
+        if os.path.exists(img_p):
+            qr_img_data = f"/api/event-asset/{cfg_pay['qris_image']}"
+        else:
+            from imaging import make_qr_with_logo
+            qr_obj = make_qr_with_logo(qris_raw, box_size=6, border=2, as_rgb=True)
+            qr_img_data = to_data_url(qr_obj, "PNG")
+    else:
+        from imaging import make_qr_with_logo
+        qr_obj = make_qr_with_logo(qris_raw, box_size=6, border=2, as_rgb=True)
+        qr_img_data = to_data_url(qr_obj, "PNG")
+
+    with _PAY_LOCK:
+        _PAYMENTS[tx_id] = {
+            "id": tx_id,
+            "amount": total_amount,
+            "status": "pending",
+            "created": time.time(),
+            "expires": time.time() + timeout_sec,
+            "copies": copies,
+            "output": mode,
+            "method": method,
+            "gateway": cfg_pay.get("gateway", "simulator"),
+        }
+
+    return jsonify({
+        "ok": True,
+        "required": True,
+        "tx_id": tx_id,
+        "amount": total_amount,
+        "amount_formatted": f"Rp {total_amount:,}".replace(",", "."),
+        "price_per_item": price_per_item,
+        "price_per_item_formatted": f"Rp {price_per_item:,}".replace(",", "."),
+        "timeout_seconds": timeout_sec,
+        "method": method,
+        "qr": qr_img_data,
+        "qr_image": qr_img_data,
+        "gateway": cfg_pay.get("gateway", "simulator"),
+    })
+
+
+@app.get("/api/payment/status/<tx_id>")
+def api_payment_status(tx_id):
+    with _PAY_LOCK:
+        item = _PAYMENTS.get(tx_id)
+        if not item:
+            return jsonify({"ok": False, "error": "Transaksi tidak ditemukan"}), 404
+        if item["status"] == "pending" and time.time() > item["expires"]:
+            item["status"] = "expired"
+        return jsonify({
+            "ok": True,
+            "status": item["status"],
+            "amount": item["amount"],
+            "tx_id": tx_id,
+        })
+
+
+@app.post("/api/payment/simulate/<tx_id>")
+def api_payment_simulate(tx_id):
+    """Simulasi pembayaran sukses (untuk demo / operator test)."""
+    with _PAY_LOCK:
+        item = _PAYMENTS.get(tx_id)
+        if not item:
+            return jsonify({"ok": False, "error": "Transaksi tidak ditemukan"}), 404
+        item["status"] = "paid"
+        item["paid_at"] = time.time()
+        return jsonify({"ok": True, "status": "paid"})
+
+
+@app.post("/api/payment/confirm-manual/<tx_id>")
+def api_payment_confirm_manual(tx_id):
+    """Konfirmasi pembayaran manual / kasir tunai oleh staf atau tamu."""
+    with _PAY_LOCK:
+        item = _PAYMENTS.get(tx_id)
+        if not item:
+            return jsonify({"ok": False, "error": "Transaksi tidak ditemukan"}), 404
+        item["status"] = "paid"
+        item["paid_method"] = "manual"
+        item["paid_at"] = time.time()
+        return jsonify({"ok": True, "status": "paid"})
 
 
 # ---------- AdsBooth Studio ----------
@@ -929,6 +1126,36 @@ def studio_setup_pin():
     return jsonify({"ok": True})
 
 
+def check_license_match(key):
+    """Cek apakah key adalah kode lisensi yang valid untuk perangkat ini, token lisensi terpasang, atau ID perangkat."""
+    k = "".join(str(key or "").split())
+    if not k:
+        return False, "Kode lisensi kosong."
+
+    # 1. Cek token yang sudah tersimpan di license.key
+    installed = "".join((LIC._read_token() or "").split())
+    if installed and k == installed:
+        return True, "Lisensi terpasang cocok"
+
+    # 2. Cek apakah token lisensi baru yang sah untuk perangkat ini
+    try:
+        parsed = LIC.parse(k)
+        try:
+            LIC.install(k)
+        except Exception:
+            pass
+        return True, parsed.get("name", "Lisensi sah")
+    except Exception:
+        pass
+
+    # 3. Cek apakah cocok dengan Device ID perangkat ini (khusus mode coba / recovery di perangkat lokal)
+    dev = LIC.device_id()
+    if dev and k.upper() == dev.upper():
+        return True, "ID Perangkat cocok"
+
+    return False, "Kode lisensi atau ID perangkat tidak cocok"
+
+
 @app.post("/api/studio/login")
 def studio_login():
     ip = request.remote_addr or ""
@@ -936,20 +1163,92 @@ def studio_login():
         return jsonify({"ok": False, "error": "Studio hanya bisa dibuka dari perangkat ini."}), 403
     if _locked(ip):
         return jsonify({"ok": False, "error": "Terlalu banyak PIN salah. Coba lagi 5 menit lagi."}), 429
-    pin = str((request.get_json(force=True) or {}).get("pin", ""))
-    if not pin_is_set() or not check_pin(pin):
-        _register_fail(ip)
-        return jsonify({"ok": False, "error": "PIN salah."}), 401
+    pin = str((request.get_json(force=True) or {}).get("pin", "")).strip()
+
+    # Cek 1: Apakah PIN benar?
+    if pin_is_set() and check_pin(pin):
+        with _FAILS_LOCK:
+            _FAILS.pop(ip, None)
+        _login()
+        return jsonify({"ok": True})
+
+    # Cek 2: Apakah kode lisensi atau ID perangkat dimasukkan langsung?
+    ok, info = check_license_match(pin)
+    if ok:
+        with _FAILS_LOCK:
+            _FAILS.pop(ip, None)
+        _login()
+        log.info("Masuk Studio via kode lisensi dari %s (%s)", ip, info)
+        return jsonify({"ok": True, "viaLicense": True})
+
+    _register_fail(ip)
+    return jsonify({"ok": False, "error": "PIN salah. Jika lupa, masukkan Kode Lisensi perangkat."}), 401
+
+
+@app.post("/api/studio/reset-pin-license")
+def studio_reset_pin_license():
+    """Reset PIN Studio menggunakan Kode Lisensi.
+    Hanya bisa dilakukan dari perangkat ini (localhost) untuk keamanan."""
+    if not is_local_request():
+        return jsonify({"ok": False, "error": "Reset PIN hanya bisa dilakukan langsung dari komputer ini."}), 403
+
+    payload = request.get_json(force=True) or {}
+    license_key = str(payload.get("licenseKey", "")).strip()
+    new_pin = str(payload.get("newPin", "")).strip()
+
+    if not license_key:
+        return jsonify({"ok": False, "error": "Kode lisensi harus diisi."}), 400
+
+    # Default PIN jika tidak diisi adalah "1234"
+    if not new_pin:
+        new_pin = "1234"
+    elif not (new_pin.isdigit() and 4 <= len(new_pin) <= 12):
+        return jsonify({"ok": False, "error": "PIN baru harus 4-12 angka."}), 400
+
+    ok, info = check_license_match(license_key)
+    if not ok:
+        return jsonify({"ok": False, "error": f"Kode lisensi tidak valid: {info}"}), 400
+
+    # Reset dan simpan PIN baru
+    CFG["studio_pin_hash"] = hash_pin(new_pin)
+    save_config()
     with _FAILS_LOCK:
-        _FAILS.pop(ip, None)
+        _FAILS.pop(request.remote_addr or "", None)
     _login()
-    return jsonify({"ok": True})
+    log.info("PIN Studio berhasil di-reset menggunakan kode lisensi (%s)", info)
+    return jsonify({"ok": True, "pin": new_pin, "message": f"PIN berhasil di-reset ke {new_pin}!"})
 
 
 @app.post("/api/studio/logout")
 def studio_logout():
     session.clear()
     return jsonify({"ok": True})
+
+
+@app.post("/api/admin/shutdown")
+def admin_shutdown():
+    """Matikan AdsBooth server & aplikasi. Hanya bisa dipanggil dari localhost."""
+    ip = request.remote_addr or ""
+    if not is_local_request():
+        return jsonify({"ok": False, "error": "Shut Down hanya bisa dilakukan langsung dari komputer ini."}), 403
+
+    payload = request.get_json(force=True) or {}
+    pin = str(payload.get("pin", "")).strip()
+
+    # Verifikasi PIN atau kode lisensi
+    ok = (pin_is_set() and check_pin(pin)) or check_license_match(pin)[0]
+    if not ok:
+        _register_fail(ip)
+        return jsonify({"ok": False, "error": "PIN salah."}), 401
+
+    log.info("Perintah Shut Down diterima dari admin di %s. Mematikan AdsBooth...", ip)
+
+    def do_shutdown():
+        time.sleep(0.8)
+        os._exit(0)
+
+    threading.Thread(target=do_shutdown, daemon=True).start()
+    return jsonify({"ok": True, "message": "AdsBooth sedang dimatikan..."})
 
 
 @app.get("/api/studio/security")
@@ -1029,6 +1328,79 @@ def studio_license_remove():
     LIC.remove()
     app.logger.info("lisensi dihapus dari perangkat")
     return jsonify({"ok": True})
+
+
+@app.get("/api/studio/license/plans")
+@studio_auth
+def studio_license_plans():
+    """Ambil daftar paket & harga dari server lisensi (atau default jika offline)."""
+    server_url = str(CFG.get("license_server_url", "http://localhost:8080")).rstrip("/")
+    import requests
+    try:
+        r = requests.get(f"{server_url}/api/pricing", timeout=3)
+        if r.status_code == 200:
+            data = r.json()
+            data["server_url"] = server_url
+            return jsonify(data)
+    except Exception:
+        pass
+    return jsonify({
+        "ok": True,
+        "pricing": {
+            "thermal": {"name": "Paket Thermal (80mm)", "desc": "Struk receipt photobooth 80mm", "prices": {"30": 150000, "365": 1200000}},
+            "photo": {"name": "Paket Foto 4R", "desc": "Cetak foto berwarna 4R (10x15 cm)", "prices": {"30": 250000, "365": 2000000}},
+            "complete": {"name": "Paket Lengkap (All-in)", "desc": "Struk thermal + Foto 4R + Living Photo", "prices": {"30": 350000, "365": 2800000}}
+        },
+        "server_url": server_url,
+        "server_available": False
+    })
+
+
+@app.post("/api/studio/license/create-checkout")
+@studio_auth
+def studio_license_create_checkout():
+    """Request transaksi Midtrans ke server lisensi."""
+    payload = request.get_json(force=True) or {}
+    server_url = str(CFG.get("license_server_url", "http://localhost:8080")).rstrip("/")
+    import requests
+    body = {
+        "device_id": LIC.device_id(),
+        "plan": payload.get("plan", "complete"),
+        "days": int(payload.get("days", 30)),
+        "name": payload.get("name", ""),
+        "email": payload.get("email", ""),
+        "phone": payload.get("phone", "")
+    }
+    try:
+        r = requests.post(f"{server_url}/api/create-transaction", json=body, timeout=10)
+        data = r.json()
+        if r.status_code == 200 and data.get("ok"):
+            return jsonify(data)
+        return jsonify({"ok": False, "error": data.get("error", "Gagal menghubungi server pembayaran")}), 400
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Tidak dapat terhubung ke License Server ({server_url}): {e}"}), 502
+
+
+@app.get("/api/studio/license/poll-order/<order_id>")
+@studio_auth
+def studio_license_poll_order(order_id):
+    """Cek status order di server lisensi. Jika sudah dibayar, otomatis pasang token lisensi!"""
+    server_url = str(CFG.get("license_server_url", "http://localhost:8080")).rstrip("/")
+    import requests
+    try:
+        r = requests.get(f"{server_url}/api/check-order/{order_id}", timeout=5)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("ok") and data.get("status") == "paid" and data.get("license_token"):
+                # Otomatis install token ke perangkat ini
+                LIC.install(data["license_token"])
+                app.logger.info("Auto-activated license from order %s: %s", order_id, data.get("plan"))
+                return jsonify({"ok": True, "paid": True, "activated": True, "status": LIC.status(force=True)})
+            return jsonify({"ok": True, "paid": False, "status": data.get("status")})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 502
+    return jsonify({"ok": False, "error": "Order tidak ditemukan"}), 404
+
 
 
 @app.get("/api/studio/log")
@@ -1196,7 +1568,7 @@ def studio_preview():
     tid = p.get("template") or ("c:" + spec["id"] if spec else "klasik")
     ft = features(ev)
     asset_dir = EV.path(eid)
-    if is_photo(ev):
+    if is_photo(ev, p):
         n = {"solo": 1, "duo": 2, "strip": 3, "grid": 4}[layout]
         qr = living_url(ev, "preview") if ft["living_photo"] else preview_qr(ev)
         img = render_receipt(sample_photos(9, ev, asset_dir)[:n], {"layout": layout, "template": tid, "showLogo": True,
@@ -1215,7 +1587,9 @@ def studio_preview():
     if ft["living_photo"]:
         ex["living"] = living_url(ev, "preview")
     if ex:
-        img = append_extras(img, ex, int(CFG.get("paper_px", 576)))
+        logo = ev.get("logo")
+        logo_path = os.path.join(asset_dir, logo) if (logo and asset_dir) else None
+        img = append_extras(img, ex, int(CFG.get("paper_px", 576)), logo_path=logo_path)
     return jsonify({"image": to_data_url(img), "height": img.height})
 
 
@@ -1556,32 +1930,240 @@ def studio_paper_set():
 
 # ---------- halaman unduh untuk tamu (dibuka dari QR) ----------
 
-@app.get("/d/<sid>")
-def download_page(sid):
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
+
+
+@app.route("/d/<path:subpath>", methods=["OPTIONS"])
+@app.route("/api/<path:subpath>", methods=["OPTIONS"])
+def options_cors(subpath):
+    resp = jsonify({"ok": True})
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "*"
+    return resp
+
+
+@app.get("/d/<sid>/info")
+@app.get("/api/download/<sid>")
+def download_info(sid):
+    ev, _ = current_event()
+    if not qr_on(ev):
+        return jsonify({"ok": False, "error": "disabled"}), 403
     sid = os.path.basename(sid)
     folder = os.path.join(OUT, "sessions", sid)
     if not os.path.isdir(folder):
-        return "<h2 style='font-family:sans-serif'>Photo not found.</h2>", 404
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    auto_del_min = int(ev.get("download_auto_delete", 3) or 3)
+    folder_mtime = os.path.getmtime(folder)
+    timeout_sec = auto_del_min * 60
+    rem_sec = max(0, int(folder_mtime + timeout_sec - time.time()))
+    if rem_sec <= 0:
+        import shutil
+        shutil.rmtree(folder, ignore_errors=True)
+        return jsonify({"ok": False, "error": "expired"}), 404
+
+    main_file = "softcopy_color.jpg" if os.path.exists(os.path.join(folder, "softcopy_color.jpg")) else ("hasil_cetak.jpg" if os.path.exists(os.path.join(folder, "hasil_cetak.jpg")) else "struk.png")
+    raw_files = sorted(f for f in os.listdir(folder) if f.startswith("foto_"))
+
+    return jsonify({
+        "ok": True,
+        "id": sid,
+        "title": ev.get("event_name", "AdsBooth"),
+        "main_file": main_file,
+        "raw_files": raw_files,
+        "rem_sec": rem_sec
+    })
+
+
+@app.get("/d")
+@app.get("/d/")
+@app.get("/d/<sid>")
+def download_page(sid=None):
     ev, _ = current_event()
-    title = ev.get("event_name", "")
-    files = sorted(f for f in os.listdir(folder) if f.startswith("foto_"))
-    if os.path.exists(os.path.join(folder, "hasil_cetak.jpg")):   # mode foto 4R: hasil cetak di paling atas
-        files.insert(0, "hasil_cetak.jpg")
-    items = "".join(
-        f"<a href='/d/{sid}/{f}' download><img src='/d/{sid}/{f}' alt='{f}'></a>" for f in files)
-    return f"""<!doctype html><html lang="en"><meta charset="utf-8">
+    if not qr_on(ev):
+        return """<!doctype html><html lang="id"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Your photos — {title}</title>
-<style>body{{margin:0;font-family:system-ui,sans-serif;background:#F2EFE8;color:#121212;padding:20px}}
-h1{{font-size:24px}}img{{width:100%;border-radius:12px;margin:0 0 12px;display:block}}
-p{{color:#3F3B36}}</style>
-<h1>{title} · AdsBooth</h1><p>Long-press / tap a photo to save it.</p>{items}</html>"""
+<title>Download Dinonaktifkan — AdsBooth</title>
+<style>body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#F2EFE8;color:#121212;display:flex;align-items:center;justify-content:center;height:100vh;padding:24px;box-sizing:border-box;text-align:center}
+.box{background:#fff;padding:32px 24px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,.08);max-width:380px}
+h2{margin:0 0 10px;font-size:20px}p{color:#666;font-size:14px;line-height:1.5;margin:0}</style>
+<div class="box"><div style="font-size:42px;margin-bottom:12px">🚫</div><h2>Download Dinonaktifkan</h2><p>Fitur unduh foto digital dinonaktifkan oleh penyelenggara booth.</p></div></html>""", 403
+
+    docs_d = os.path.join(BASE, "docs", "d", "index.html")
+    if os.path.exists(docs_d):
+        return send_from_directory(os.path.join(BASE, "docs", "d"), "index.html")
+
+    if not sid:
+        return redirect("/")
+
+    sid = os.path.basename(sid)
+    folder = os.path.join(OUT, "sessions", sid)
+    if not os.path.isdir(folder):
+        return """<!doctype html><html lang="id"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Foto Tidak Ditemukan — AdsBooth</title>
+<style>body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#F2EFE8;color:#121212;display:flex;align-items:center;justify-content:center;height:100vh;padding:24px;box-sizing:border-box;text-align:center}
+.box{background:#fff;padding:32px 24px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,.08);max-width:380px}
+h2{margin:0 0 10px;font-size:20px}p{color:#666;font-size:14px;line-height:1.5;margin:0}</style>
+<div class="box"><div style="font-size:42px;margin-bottom:12px">🔒</div><h2>Foto Sudah Terhapus</h2><p>Demi menjaga privasi Anda, foto sesi ini telah otomatis terhapus permanen dari sistem.</p></div></html>""", 404
+
+    title = ev.get("event_name", "AdsBooth")
+    auto_del_min = int(ev.get("download_auto_delete", 3) or 3)
+    folder_mtime = os.path.getmtime(folder)
+    timeout_sec = auto_del_min * 60
+    rem_sec = max(0, int(folder_mtime + timeout_sec - time.time()))
+
+    # Cek apakah sudah expired
+    if rem_sec <= 0:
+        import shutil
+        shutil.rmtree(folder, ignore_errors=True)
+        return """<!doctype html><html lang="id"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Foto Kadaluwarsa — AdsBooth</title>
+<style>body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:#F2EFE8;color:#121212;display:flex;align-items:center;justify-content:center;height:100vh;padding:24px;box-sizing:border-box;text-align:center}
+.box{background:#fff;padding:32px 24px;border-radius:20px;box-shadow:0 10px 25px rgba(0,0,0,.08);max-width:380px}
+h2{margin:0 0 10px;font-size:20px}p{color:#666;font-size:14px;line-height:1.5;margin:0}</style>
+<div class="box"><div style="font-size:42px;margin-bottom:12px">⌛</div><h2>Batas Waktu Habis</h2><p>Foto telah terhapus otomatis demi keamanan privasi Anda.</p></div></html>""", 404
+
+    # Cari foto utama dengan template (softcopy)
+    main_file = None
+    if os.path.exists(os.path.join(folder, "softcopy_color.jpg")):
+        main_file = "softcopy_color.jpg"
+    elif os.path.exists(os.path.join(folder, "hasil_cetak.jpg")):
+        main_file = "hasil_cetak.jpg"
+    elif os.path.exists(os.path.join(folder, "struk.png")):
+        main_file = "struk.png"
+
+    raw_files = sorted(f for f in os.listdir(folder) if f.startswith("foto_"))
+
+    return f"""<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Download Foto — {title}</title>
+<style>
+  *{{box-sizing:border-box}}
+  body{{margin:0;background:#F4F1EA;color:#18181B;font-family:system-ui,-apple-system,sans-serif;padding:20px 16px 40px}}
+  .wrap{{max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:18px}}
+  .card{{background:#fff;border-radius:22px;padding:20px;box-shadow:0 8px 30px rgba(0,0,0,.06);text-align:center}}
+  .badge-app{{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.08em;background:#18181B;color:#fff;padding:4px 12px;border-radius:99px;margin-bottom:8px}}
+  h1{{font-size:22px;margin:4px 0 6px;letter-spacing:-.02em}}
+  .lead{{font-size:13px;color:#71717A;margin:0 0 16px}}
+  .img-frame{{border-radius:14px;overflow:hidden;background:#000;box-shadow:0 6px 18px rgba(0,0,0,.1);margin-bottom:16px}}
+  .img-frame img{{width:100%;display:block;height:auto}}
+  .btn{{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:54px;border-radius:14px;font-weight:700;font-size:16px;text-decoration:none;cursor:pointer;border:0;transition:all .15s}}
+  .btn-primary{{background:#059669;color:#fff;box-shadow:0 4px 14px rgba(5,150,105,.35)}}
+  .btn-primary:active{{transform:scale(.98)}}
+  .btn-danger{{background:#FEE2E2;color:#DC2626;margin-top:10px;font-size:14px;height:46px}}
+  .btn-danger:active{{background:#FECACA}}
+  .privacy-box{{background:#FEF3C7;border:1px solid #FDE68A;border-radius:14px;padding:12px 14px;font-size:12px;color:#92400E;display:flex;align-items:center;gap:10px;text-align:left}}
+  .timer-pill{{font-family:monospace;font-size:14px;font-weight:700;background:#D97706;color:#fff;padding:3px 8px;border-radius:6px;white-space:nowrap}}
+  .sec-title{{font-size:14px;font-weight:700;color:#71717A;text-align:left;margin:10px 0 6px}}
+  .raw-grid{{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}}
+  .raw-item{{border-radius:12px;overflow:hidden;background:#E4E4E7;position:relative}}
+  .raw-item img{{width:100%;height:100%;object-fit:cover;display:block}}
+  .raw-down{{position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,.65);color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;text-decoration:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <span class="badge-app">ADSBOOTH DIGITAL</span>
+    <h1>{title}</h1>
+    <p class="lead">Softcopy foto berkualitas tinggi dengan bingkai pilihan Anda.</p>
+    
+    <div class="privacy-box">
+      <span>🔒</span>
+      <div>Foto ini otomatis terhapus dalam: <span class="timer-pill" id="delTimer">--:--</span> untuk melindungi privasi Anda.</div>
+    </div>
+
+    {f'<div class="img-frame" style="margin-top:16px"><img src="/d/{sid}/{main_file}" alt="Foto Anda"></div>' if main_file else ''}
+    
+    {f'<a class="btn btn-primary" href="/d/{sid}/{main_file}" download="AdsBooth-{sid}.jpg">📥 Download Softcopy Berwarna</a>' if main_file else ''}
+    <button class="btn btn-danger" id="btnDelNow" type="button">🗑️ Hapus Foto Saya Sekarang</button>
+  </div>
+
+  {f'<div class="sec-title">Foto Satuan (Raw Shots):</div><div class="raw-grid">' + "".join(f'<div class="raw-item"><img src="/d/{sid}/{rf}" alt=""><a class="raw-down" href="/d/{sid}/{rf}" download="{rf}">Download</a></div>' for rf in raw_files) + '</div>' if raw_files else ''}
+</div>
+
+<script>
+  let rem = {rem_sec};
+  const el = document.getElementById('delTimer');
+  function tick() {{
+    if (rem <= 0) {{
+      location.reload();
+      return;
+    }}
+    const m = Math.floor(rem / 60);
+    const s = rem % 60;
+    el.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    rem--;
+  }}
+  tick();
+  setInterval(tick, 1000);
+
+  document.getElementById('btnDelNow').addEventListener('click', async () => {{
+    if (!confirm('Apakah Anda yakin ingin menghapus foto Anda sekarang dari server?')) return;
+    try {{
+      await fetch('/d/{sid}/delete', {{ method: 'POST' }});
+      alert('Foto Anda telah berhasil dihapus.');
+      location.reload();
+    }} catch(e) {{
+      alert('Gagal menghapus foto.');
+    }}
+  }});
+</script>
+</body>
+</html>"""
+
+
+@app.post("/d/<sid>/delete")
+def download_delete(sid):
+    sid = os.path.basename(sid)
+    folder = os.path.join(OUT, "sessions", sid)
+    if os.path.isdir(folder):
+        import shutil
+        shutil.rmtree(folder, ignore_errors=True)
+        return jsonify({"ok": True, "message": "Foto berhasil dihapus"})
+    return jsonify({"ok": True})
 
 
 @app.get("/d/<sid>/<fname>")
 def download_file(sid, fname):
     folder = os.path.join(OUT, "sessions", os.path.basename(sid))
     return send_from_directory(folder, os.path.basename(fname))
+
+
+# Background worker untuk membersihkan sesi lama secara otomatis
+def _session_cleanup_worker():
+    while True:
+        time.sleep(30)
+        try:
+            ev, _ = current_event()
+            auto_del_min = int((ev or {}).get("download_auto_delete", 3) or 3)
+            if auto_del_min <= 0:
+                continue
+            cutoff = time.time() - (auto_del_min * 60)
+            sess_dir = os.path.join(OUT, "sessions")
+            if os.path.isdir(sess_dir):
+                for sid in os.listdir(sess_dir):
+                    sf = os.path.join(sess_dir, sid)
+                    if os.path.isdir(sf):
+                        mtime = os.path.getmtime(sf)
+                        if mtime < cutoff:
+                            import shutil
+                            shutil.rmtree(sf, ignore_errors=True)
+        except Exception:
+            pass
+
+threading.Thread(target=_session_cleanup_worker, daemon=True).start()
 
 
 def ensure_cert(ip):

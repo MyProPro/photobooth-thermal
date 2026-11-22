@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>AdsBooth</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <meta name="theme-color" content="#121212">
 <meta name="mobile-web-app-capable" content="yes">
@@ -18,21 +20,23 @@
 <div id="bgPat" aria-hidden="true"></div>
 <div id="app">
   <header class="topbar">
-    <span class="mono b"><span id="eventName">EVENT NAME</span> · PHOTOBOOTH</span>
-    <span class="mono status-indicator" id="stepLabel">
-      <span class="dot" id="statusDot"></span>
-      <svg class="printer-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;margin-right:6px"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-      <span id="statusText">CHECKING PRINTER…</span>
-    </span>
+    <div class="topbar-left">
+      <img id="topbarLogo" class="topbar-logo hidden" alt="Logo">
+    </div>
+    <div class="topbar-right">
+      <span class="mono topbar-clock" id="topbarClock"></span>
+    </div>
   </header>
 
   <!-- 1. Sambutan -->
   <section class="screen active intro" id="s-welcome">
     <div class="intro-bg" id="introBg" aria-hidden="true"></div>
-    <span class="intro-status hidden" id="introStatus"></span>
     <header class="intro-head">
       <img id="introLogo" class="intro-logo hidden" alt="">
-      <h1 id="introName">EVENT NAME</h1>
+      <div class="intro-dual-badge hidden" id="introDualBadge">
+        <span class="idb-pill" id="idPillReceipt">🧾 Receipt Photobooth</span>
+        <span class="idb-pill" id="idPillPhoto">📸 4R Photobooth</span>
+      </div>
     </header>
 
     <div class="intro-fit" id="introFit">
@@ -70,36 +74,41 @@
     </div>
     </div>
 
-    <button class="intro-cta" id="btnStart" type="button" aria-label="Start">
+    <button class="intro-cta" id="btnStart" type="button" aria-label="Start Here">
       <span class="ring"></span>
-      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.6"></circle></svg>
+      <span class="intro-cta-text">Start<br>Here</span>
     </button>
+    <div class="intro-prompt hidden" id="introPrompt"></div>
     <button class="btn ghost small-btn hidden" id="btnUsb" type="button" style="align-self:center">Connect USB printer</button>
   </section>
 
   <!-- 2. Layout -->
   <section class="screen" id="s-layout">
-    <div class="grow"></div>
+    <h1>Choose Photo Layout</h1>
+    <p class="lead">Select your preferred frame layout</p>
     <div class="grid3 grid-layouts" id="layoutOptions">
       <button class="opt" data-layout="solo"><div class="thumb solo"><i></i></div><b>Solo</b><span>1 big photo</span></button>
       <button class="opt" data-layout="duo"><div class="thumb duo"><i></i><i></i></div><b>Duo</b><span>2 photos</span></button>
       <button class="opt" data-layout="strip"><div class="thumb strip"><i></i><i></i><i></i></div><b>Strip</b><span data-photo="3 photos · 2 strips">3 photos</span></button>
       <button class="opt" data-layout="grid"><div class="thumb grid"><i></i><i></i><i></i><i></i></div><b>Grid</b><span>4 photos</span></button>
     </div>
-    <div class="grow"></div>
     <div class="nav"><button class="btn ghost btn-back" data-go="welcome" aria-label="Back"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button></div>
   </section>
 
   <!-- 3. Gaya -->
   <section class="screen" id="s-style">
     <h1 data-photo="Photo style">Print style</h1>
-    <p class="lead" data-photo="Pick a color mood for your photo.">Thermal printers only print black. Pick how your photo turns into dots.</p>
+    <p class="lead" data-photo="Pick a color mood for your photo.">Receipt Photobooth only prints black. Pick how your photo turns into dots.</p>
     <div class="preview-box" hidden><img id="stylePreview" alt="Print preview"><span class="tag mono" id="styleTag">PREVIEW · DITHER</span></div>
-    <div class="grid4 style-grid" id="styleOptions">
-      <button class="opt sm" data-style="dither"><b>Dither</b><span>Fine detail, closest to a photo</span></button>
-      <button class="opt sm" data-style="halftone"><b>Halftone</b><span>Big newspaper-style dots</span></button>
-      <button class="opt sm" data-style="kontras"><b>Contrast</b><span>Deep black, bold silhouette</span></button>
-      <button class="opt sm" data-style="sketsa"><b>Sketch</b><span>Lines like a pencil drawing</span></button>
+    <div class="style-stage" id="styleStage">
+      <button class="style-arrow prev off" id="stylePrev" type="button" aria-label="Previous styles"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <div class="style-grid" id="styleOptions">
+        <button class="opt sm" data-style="dither"><b>Dither</b><span>Fine detail, closest to a photo</span></button>
+        <button class="opt sm" data-style="halftone"><b>Halftone</b><span>Big newspaper-style dots</span></button>
+        <button class="opt sm" data-style="kontras"><b>Contrast</b><span>Deep black, bold silhouette</span></button>
+        <button class="opt sm" data-style="sketsa"><b>Sketch</b><span>Lines like a pencil drawing</span></button>
+      </div>
+      <button class="style-arrow next off" id="styleNext" type="button" aria-label="Next styles"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
     </div>
     <!-- pesan & opsi logo disembunyikan (pesan kosong, logo selalu tampil) -->
     <div hidden>
@@ -112,7 +121,7 @@
   </section>
 
   <!-- 4. Kamera -->
-  <section class="screen dark" id="s-camera">
+  <section class="screen" id="s-camera">
     <div class="row-between">
       <span class="mono">↑ LOOK AT THE CAMERA ABOVE THE SCREEN</span>
       <span class="chip mono" id="shotLabel">PHOTO 1 OF 3</span>
@@ -139,7 +148,7 @@
       <div class="thumbs" id="thumbs"></div>
       <button class="shutter" id="btnShutter" aria-label="Shoot now"><span></span></button>
     </div>
-    <button class="btn ghost light small-btn" id="btnCancel" aria-label="Print Style"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span data-photo="Photo Style">Print Style</span></button>
+    <button class="btn ghost small-btn" id="btnCancel" aria-label="Print Style"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span data-photo="Photo Style">Print Style</span></button>
   </section>
 
   <!-- 4b. Pilih template -->
@@ -160,15 +169,28 @@
     <h1>Looks good?</h1>
     <p class="lead">What you see here is exactly what gets printed.</p>
     <div class="review">
-      <div class="paper"><img id="receiptPreview" alt="Print preview"><div class="loading mono" id="previewLoading">CREATING PREVIEW…</div></div>
-      <div class="col review-col">
-        <div class="retake-header" id="retakeHeader">
-          <span class="mono" style="font-size:12px;font-weight:700;color:var(--muted)">PHOTOS</span>
-          <span class="mono chip-retake" id="retakeQuota">Retake: 2 of 2 left</span>
+      <!-- Sisi Kiri: Carousel Preview Hasil Cetak -->
+      <div class="review-preview-wrap">
+        <div class="paper-stage">
+          <button class="paper-nav-btn prev" id="revTplPrev" type="button" aria-label="Template Sebelumnya">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div class="paper" id="paperReview">
+            <img id="receiptPreview" alt="Print preview">
+            <div class="loading mono" id="previewLoading">CREATING PREVIEW…</div>
+          </div>
+          <button class="paper-nav-btn next" id="revTplNext" type="button" aria-label="Template Berikutnya">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
         </div>
-        <div id="shotList" class="col gap"></div>
-        <button class="btn ghost tpl-change" data-go="template">Change template</button>
-        <div class="cert-pick hidden" id="certPick"><b>Pick a certificate title</b><div class="chips" id="certChips"></div></div>
+        <div class="review-tpl-meta">
+          <b id="revTplName">Template</b>
+          <span class="mono" id="revTplCount">1 / 1</span>
+        </div>
+      </div>
+
+      <!-- Sisi Kanan: Kontrol (Tanpa retake & tanpa change template, pas satu layar) -->
+      <div class="col review-col">
         <details class="edit-panel" id="editPanel">
           <summary class="btn ghost edit-toggle">✏️ Edit text &amp; brightness</summary>
           <div class="card compact edit-form">
@@ -187,7 +209,19 @@
             <button type="button" class="btn ghost small-btn" id="btnResetEdit" style="align-self:flex-end">Reset to default</button>
           </div>
         </details>
-        <div class="grow"></div>
+
+        <!-- Pilihan Gelar Sertifikat (Carousel Horizontal di bawah Edit Text) -->
+        <div class="cert-pick hidden" id="certPick">
+          <div class="cert-pick-header">
+            <span class="cert-pick-title">🎓 Predikat Sertifikat</span>
+            <span class="cert-active-name mono" id="certActiveName">-</span>
+          </div>
+          <div class="cert-carousel-wrap">
+            <button type="button" class="cert-nav-btn prev" id="certNavPrev" aria-label="Geser Kiri">‹</button>
+            <div class="cert-chips-track" id="certChips"></div>
+            <button type="button" class="cert-nav-btn next" id="certNavNext" aria-label="Geser Kanan">›</button>
+          </div>
+        </div>
         <div class="card compact row-between">
           <div><b class="h3">Copies</b><div class="muted">Max <span id="maxCopies">2</span> <span data-photo="prints">prints</span></div></div>
           <div class="stepper">
@@ -196,8 +230,55 @@
             <button class="round dark" id="copyInc" aria-label="More copies">+</button>
           </div>
         </div>
+
+        <!-- Box Pembayaran Kiosk (Mendukung QR Code & Manual Kasir) -->
+        <div class="payment-card hidden" id="paymentCard">
+          <div class="pay-header">
+            <div>
+              <span class="pay-tag mono" id="payTagText">PEMBAYARAN</span>
+              <div class="pay-total" id="payTotalText">Rp 15.000</div>
+              <div class="pay-detail muted" id="payDetailText">1 Lembar Receipt Photobooth</div>
+            </div>
+            <div class="pay-timer mono" id="payTimerBadge">
+              <span id="payTimerSecs">02:00</span>
+            </div>
+          </div>
+
+          <!-- Tab Pilihan Metode (tampil jika method === 'both') -->
+          <div class="pay-tabs hidden" id="payTabs">
+            <button type="button" class="pay-tab on" id="btnPayTabQr">📱 QRIS</button>
+            <button type="button" class="pay-tab" id="btnPayTabManual">💵 Tunai / Kasir</button>
+          </div>
+
+          <!-- Opsi 1: QR Code Box (Ukuran ringkas & compact) -->
+          <div class="pay-qr-box" id="payQrBox">
+            <img id="payQrImg" alt="QRIS Code">
+            <p class="pay-hint">Scan QRIS menggunakan mobile banking / e-wallet apa saja.</p>
+          </div>
+
+          <!-- Opsi 2: Manual Box (Kasir Tunai) -->
+          <div class="pay-manual-box hidden" id="payManualBox">
+            <div class="pay-manual-icon">💵</div>
+            <b class="pay-manual-title">Pembayaran Tunai ke Kasir</b>
+            <p class="pay-hint">Silakan bayar ke kasir / operator booth, lalu tekan tombol di bawah:</p>
+            <button type="button" class="btn primary small-btn" id="btnConfirmManualPay" style="width:100%;margin-top:8px;font-weight:700">✓ Sudah Bayar ke Kasir</button>
+          </div>
+
+          <!-- Simulasi Bayar Sukses (Mode Demo / Simulator) -->
+          <div class="pay-sim-box" id="paySimBox">
+            <button class="btn small-btn" id="btnSimulatePay" type="button">⚡ Simulasi Bayar Sukses (Demo / Test)</button>
+          </div>
+        </div>
+
+        <div class="pay-success-card hidden" id="paySuccessCard">
+          <div class="pay-check">✓</div>
+          <div>
+            <b>Pembayaran Diterima!</b>
+            <span class="muted" style="display:block;font-size:13px">Foto Anda sudah terkunci &amp; siap dicetak.</span>
+          </div>
+        </div>
+
         <button class="btn accent xl" id="btnPrint">Print now</button>
-        <button class="btn ghost" id="btnRetakeAll">Retake all photos</button>
       </div>
     </div>
   </section>
@@ -224,6 +305,15 @@
     <div class="row-between mono"><span>PROGRESS</span><b id="pct">0%</b></div>
     <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div id="bar"></div></div>
     <div class="warn">⚠ Don’t pull the paper. Wait until it’s cut automatically.</div>
+
+    <!-- QR Ambil Softcopy Langsung saat Klik Print -->
+    <div class="card qr-card hidden" id="printingQrCard" style="margin-top:16px;text-align:left;display:flex;align-items:center;gap:16px">
+      <img id="printingQrImg" alt="QR Code Softcopy" style="width:110px;height:110px;flex-shrink:0;border-radius:10px">
+      <div>
+        <b class="h3" style="font-size:18px;display:block;margin-bottom:4px">Ambil Softcopy Berwarna!</b>
+        <p class="muted" style="font-size:13px;margin:0">Scan QR ini dengan HP untuk download softcopy berwarna berbingkai. Foto otomatis terhapus dalam 3 menit.</p>
+      </div>
+    </div>
     <div id="printError" class="error hidden">
       <b>Printing failed.</b> <span id="printErrorMsg"></span>
       <button class="btn ghost hidden" id="btnUsbErr" type="button">Connect USB printer</button>
@@ -245,6 +335,31 @@
     <div class="nav"><button class="btn ghost" id="btnReprint">Print again</button><button class="btn primary" id="btnFinish">Done</button></div>
     <div class="mono muted center">BACK TO START IN <span id="resetSecs">15</span> SECONDS</div>
   </section>
+
+  <!-- Modal Pilihan Mode: Receipt Photobooth vs 4R Photobooth -->
+  <div class="mode-modal hidden" id="modePickerModal" role="dialog" aria-modal="true">
+    <div class="mode-box">
+      <h2>Pilih Pengalaman Foto Anda</h2>
+      <p class="muted" style="margin:4px 0 20px">Silakan pilih jenis cetakan yang Anda inginkan:</p>
+      <div class="mode-cards">
+        <button type="button" class="mode-card" data-mode="thermal">
+          <div class="mode-badge">MONOCHROME RETRO</div>
+          <div class="mode-icon">🧾</div>
+          <h3>Receipt Photobooth</h3>
+          <p>Kertas struk kasir hitam-putih estetik, gaya cetak dither unik.</p>
+          <span class="mode-btn">Pilih Receipt →</span>
+        </button>
+        <button type="button" class="mode-card" data-mode="photo">
+          <div class="mode-badge">COLOR GLOSSY</div>
+          <div class="mode-icon">📸</div>
+          <h3>4R Photobooth</h3>
+          <p>Cetak foto warna tajam kertas foto 4R asli, frame polaroid &amp; strip.</p>
+          <span class="mode-btn">Pilih Foto 4R →</span>
+        </button>
+      </div>
+      <button class="btn ghost small-btn" id="btnCancelMode" type="button" style="margin-top:20px">Batal</button>
+    </div>
+  </div>
 </div>
 
 <!-- keyboard layar (popup) -->
@@ -260,8 +375,6 @@
 </div>
 
 <canvas id="cap" class="hidden"></canvas>
-<script src="/static/webusb.js"></script>
-<script src="/static/app.js"></script>
 <div id="licLock" class="lic-lock hidden" role="alertdialog" aria-live="assertive">
   <div class="lic-box">
     <div class="lic-ico" aria-hidden="true">🔒</div>
@@ -273,21 +386,103 @@
 </div>
 <div id="secretAdminTap" style="position:fixed;top:0;right:0;width:90px;height:90px;z-index:999;-webkit-tap-highlight-color:transparent;" aria-hidden="true"></div>
 
-<!-- Modal PIN Akses Studio -->
-<div id="adminPinModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.68);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">
-  <div style="background:#fff;border-radius:18px;max-width:360px;width:100%;padding:26px;box-shadow:0 20px 50px rgba(0,0,0,.25);text-align:center">
-    <div style="font-size:36px;margin-bottom:8px">⚙️</div>
-    <b style="font-size:20px;display:block;font-family:'Space Grotesk',sans-serif">Akses Studio Admin</b>
-    <p class="muted small" style="margin:6px 0 16px">Masukkan PIN untuk membuka halaman pengaturan Studio.</p>
-    <input type="password" id="adminPinInput" inputmode="numeric" maxlength="12" placeholder="••••" style="font-size:26px;letter-spacing:.3em;text-align:center;width:100%;padding:12px;border:2px solid var(--line);border-radius:12px;margin-bottom:8px;font-family:'JetBrains Mono',monospace" autocomplete="off">
-    <div id="adminPinErr" class="small warn hidden" style="margin-bottom:12px">PIN salah, silakan coba lagi.</div>
-    <div class="row" style="gap:10px;margin-top:10px">
-      <button type="button" class="btn ghost" id="btnAdminPinCancel" style="flex:1;justify-content:center;padding:12px">Batal</button>
-      <button type="button" class="btn primary" id="btnAdminPinSubmit" style="flex:1;justify-content:center;padding:12px">Buka Studio</button>
+<!-- Modal Menu Admin: Studio & Shut Down -->
+<div id="adminPinModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(8px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:22px;max-width:390px;width:100%;padding:28px 24px;box-shadow:0 25px 60px rgba(0,0,0,.35);text-align:center;position:relative">
+    <button type="button" id="btnAdminModalClose" style="position:absolute;top:14px;right:14px;background:transparent;border:0;font-size:22px;cursor:pointer;color:var(--muted);width:34px;height:34px;border-radius:50%;display:grid;place-items:center" aria-label="Tutup">✕</button>
+    
+    <!-- View 1: Menu Admin Utama (Input PIN, Studio, Shut Down) -->
+    <div id="adminPinView">
+      <div style="font-size:36px;margin-bottom:6px">⚙️</div>
+      <b style="font-size:22px;display:block;font-family:'Space Grotesk',sans-serif">Menu Admin AdsBooth</b>
+      <p class="muted small" style="margin:4px 0 16px">Masukkan PIN untuk membuka Studio atau mematikan sistem:</p>
+      <input type="password" id="adminPinInput" placeholder="PIN Admin / Lisensi" style="font-size:18px;text-align:center;width:100%;padding:13px;border:2px solid var(--line);border-radius:12px;margin-bottom:8px;font-family:'JetBrains Mono',monospace" autocomplete="off">
+      <div id="adminPinErr" class="small warn hidden" style="margin-bottom:12px">PIN salah, silakan coba lagi.</div>
+      
+      <div class="col" style="gap:10px;margin-top:10px">
+        <button type="button" class="btn primary" id="btnAdminPinSubmit" style="width:100%;justify-content:center;padding:13px;font-size:16px;font-weight:700">⚙️ Buka Studio</button>
+        <button type="button" class="btn danger" id="btnAdminShutdown" style="width:100%;justify-content:center;padding:13px;font-size:16px;font-weight:700;background:#dc2626;color:#fff;border:none">🛑 Shut Down (Matikan AdsBooth)</button>
+      </div>
+
+      <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;padding:0 6px">
+        <button type="button" id="btnAdminForgotPin" style="background:transparent;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:13px;padding:4px">Lupa PIN?</button>
+        <button type="button" id="btnAdminPinCancel" style="background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:4px">Batal</button>
+      </div>
+    </div>
+
+    <!-- View 2: Konfirmasi Matikan Sistem (Modal versi Aplikasi Modern) -->
+    <div id="adminShutdownConfirmView" class="hidden">
+      <div style="width:68px;height:68px;border-radius:50%;background:#fee2e2;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:32px;margin:4px auto 14px">🛑</div>
+      <b style="font-size:21px;display:block;font-family:'Space Grotesk',sans-serif;color:#111">Matikan AdsBooth?</b>
+      <p style="font-size:15px;color:#1f2937;margin:10px 0 6px;line-height:1.45;font-weight:600">
+        Yakin ingin mematikan sistem AdsBooth sekarang?
+      </p>
+      <p class="muted small" style="margin:0 0 22px;line-height:1.4;color:#6b7280">
+        Seluruh server photobooth dan tampilan layar kiosk akan dinonaktifkan.
+      </p>
+
+      <div class="col" style="gap:10px">
+        <button type="button" class="btn danger" id="btnConfirmShutdownYes" style="width:100%;justify-content:center;padding:13px;font-size:15px;font-weight:700;background:#dc2626;color:#fff;border:none;border-radius:12px;box-shadow:0 4px 14px rgba(220,38,38,.35);cursor:pointer">
+          🛑 Ya, Matikan Sekarang
+        </button>
+        <button type="button" class="btn ghost" id="btnConfirmShutdownNo" style="width:100%;justify-content:center;padding:12px;font-size:14px;font-weight:600;border:1px solid var(--line,#e5e7eb);background:transparent;border-radius:12px;cursor:pointer;color:#374151">
+          Batal
+        </button>
+      </div>
+    </div>
+
+    <!-- View 3: Lupa PIN (Reset via Lisensi) -->
+    <div id="adminLicenseView" class="hidden">
+      <div style="font-size:36px;margin-bottom:6px">🔑</div>
+      <b style="font-size:22px;display:block;font-family:'Space Grotesk',sans-serif">Reset PIN Lisensi</b>
+      <p class="muted small" style="margin:6px 0 16px">Masukkan <b>Kode Lisensi</b> perangkat ini. PIN akan otomatis direset ke <b>1234</b>.</p>
+      <textarea id="adminLicenseInput" rows="3" placeholder="Paste kode lisensi atau ID perangkat di sini..." style="font-size:13px;width:100%;padding:10px;border:2px solid var(--line);border-radius:12px;margin-bottom:8px;font-family:'JetBrains Mono',monospace;resize:none" autocomplete="off"></textarea>
+      <div id="adminLicenseErr" class="small warn hidden" style="margin-bottom:12px">Kode lisensi tidak valid.</div>
+      <div class="row" style="gap:10px;margin-top:10px">
+        <button type="button" class="btn ghost" id="btnAdminLicenseBack" style="flex:1;justify-content:center;padding:12px">Kembali</button>
+        <button type="button" class="btn primary" id="btnAdminLicenseSubmit" style="flex:1.5;justify-content:center;padding:12px">Buka Studio</button>
+      </div>
+    </div>
+
+    <!-- View 4: Sukses Reset PIN (Versi Aplikasi Tanpa Native Alert) -->
+    <div id="adminLicenseSuccessView" class="hidden">
+      <div style="width:64px;height:64px;border-radius:50%;background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center;font-size:32px;margin:4px auto 14px">✅</div>
+      <b style="font-size:21px;display:block;font-family:'Space Grotesk',sans-serif;color:#111">PIN Berhasil Direset!</b>
+      <p style="font-size:15px;color:#1f2937;margin:10px 0 6px;line-height:1.45">
+        PIN berhasil direset ke <b style="font-family:monospace;font-size:16px;background:#f3f4f6;padding:2px 8px;border-radius:6px">1234</b>
+      </p>
+      <p class="muted small" style="margin:0 0 20px;color:#6b7280;font-size:13px">
+        Anda dapat menggantinya kapan saja di menu Pengaturan Studio.
+      </p>
+      <button type="button" class="btn primary" id="btnAdminLicenseSuccessOk" style="width:100%;justify-content:center;padding:12px;font-size:15px;font-weight:700">
+        Buka Studio
+      </button>
     </div>
   </div>
 </div>
 
-<span id="demoBadge" class="demo-badge hidden">DEMO</span>
+<!-- Modal Notifikasi Aplikasi Kiosk (Pengganti alert & dialog native) -->
+<div id="kioskAppModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px" aria-modal="true" role="dialog">
+  <div style="background:#fff;border-radius:24px;max-width:390px;width:100%;padding:28px 24px;box-shadow:0 25px 60px rgba(0,0,0,.35);text-align:center;position:relative">
+    <div id="kioskModalIcon" style="width:64px;height:64px;border-radius:50%;background:#fee2e2;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px">⏱️</div>
+    <b id="kioskModalTitle" style="font-size:21px;display:block;font-family:'Space Grotesk',sans-serif;color:#111;margin-bottom:8px">Waktu Pembayaran Habis</b>
+    <p id="kioskModalMessage" style="font-size:15px;color:#374151;margin:0 0 22px;line-height:1.48">Waktu batas pembayaran telah habis. Kiosk kembali ke awal.</p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button type="button" class="btn ghost hidden" id="btnKioskModalCancel" style="flex:1;justify-content:center;padding:12px;font-size:14px;font-weight:600;border:1px solid var(--line,#e5e7eb);border-radius:12px;background:transparent;color:#374151">Batal</button>
+      <button type="button" class="btn primary" id="btnKioskModalOk" style="flex:1;justify-content:center;padding:13px;font-size:15px;font-weight:700;border-radius:12px">Kembali ke Awal</button>
+    </div>
+  </div>
+</div>
+
+<!-- Indicator Status Printer (Kecil di Pojok Kanan Bawah) -->
+<div class="bottom-printer-indicator mono status-indicator" id="stepLabel" title="Status Printer">
+  <span class="dot" id="statusDot"></span>
+  <svg class="printer-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:4px"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+  <span id="statusText">CHECKING…</span>
+</div>
+
+<span id="demoBadge" class="demo-badge hidden" style="display:none!important"></span>
+<script src="/static/webusb.js"></script>
+<script src="/static/app.js"></script>
 </body>
 </html>
