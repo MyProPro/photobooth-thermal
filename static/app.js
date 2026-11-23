@@ -2006,7 +2006,11 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-function openAdminPinModal() {
+async function openAdminPinModal() {
+  try {
+    const _st = await api('/api/studio/session');
+    if (_st && _st.needSetup) { window.location.href = '/studio'; return; }
+  } catch (_) {}
   const m = $('#adminPinModal');
   const inp = $('#adminPinInput');
   const err = $('#adminPinErr');
