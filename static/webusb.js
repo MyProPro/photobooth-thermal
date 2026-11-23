@@ -46,7 +46,16 @@
   async function connect() {
     if (isAndroidApp()) {
       window.AndroidUsbPrinter.requestPermission();
-      await new Promise((r) => setTimeout(r, 600));
+      for (let i = 0; i < 5; i++) {
+        await new Promise((r) => setTimeout(r, 400));
+        const p = await paired();
+        if (p && p.hasPermission) return p;
+      }
+      const raw = window.AndroidUsbPrinter.getStatus();
+      const st = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (st && st.message) {
+        throw new Error(st.message);
+      }
       return paired();
     }
     if (!supported()) throw new Error('Browser ini tidak mendukung WebUSB (gunakan Chrome di Android atau APK AdsBooth)');

@@ -85,7 +85,7 @@ object UsbPrinterBridge {
         val manager = usbManager ?: return null
         val deviceList = manager.deviceList
         if (deviceList.isEmpty()) {
-            lastStatusMessage = "Tidak ada perangkat USB tercolok (pastikan kabel OTG terpasang)"
+            lastStatusMessage = "Tidak ada perangkat USB terdeteksi. Pastikan kabel OTG tercolok dan opsi 'Koneksi OTG' di Pengaturan Android sudah aktif."
             return null
         }
 
@@ -94,7 +94,7 @@ object UsbPrinterBridge {
             for (i in 0 until dev.interfaceCount) {
                 val iface = dev.getInterface(i)
                 if (iface.interfaceClass == UsbConstants.USB_CLASS_PRINTER) {
-                    lastStatusMessage = "Printer terdeteksi: ${dev.productName ?: dev.deviceName}"
+                    lastStatusMessage = "Printer terdeteksi: ${dev.productName ?: dev.deviceName} (Class 7)"
                     return dev
                 }
             }
@@ -103,7 +103,7 @@ object UsbPrinterBridge {
         // Cek 2: Vendor Epson (0x04b8)
         for (dev in deviceList.values) {
             if (dev.vendorId == 0x04b8) {
-                lastStatusMessage = "Printer Epson terdeteksi (VID 0x04b8): ${dev.productName ?: dev.deviceName}"
+                lastStatusMessage = "Printer Epson terdeteksi: ${dev.productName ?: dev.deviceName} (VID 0x04b8)"
                 return dev
             }
         }
@@ -123,7 +123,8 @@ object UsbPrinterBridge {
             }
         }
 
-        lastStatusMessage = "Perangkat USB tercolok tetapi bukan printer yang dikenali"
+        val names = deviceList.values.joinToString { "${it.productName ?: it.deviceName} (VID:0x${Integer.toHexString(it.vendorId)})" }
+        lastStatusMessage = "Perangkat USB tercolok tapi bukan printer yang dikenali ($names)"
         return null
     }
 
@@ -151,15 +152,25 @@ object UsbPrinterBridge {
         }
 
         this.permissionCallback = onResult
-        val flag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            PendingIntent.FLAG_MUTABLE
-        } else {
-            0
+        try {
+            val flag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_MUTABLE
+            } else {
+                0
+            }
+            // Di Android 12+ (SDK 31+), PendingIntent MUTABLE wajib memiliki intent eksplisit (setPackage)
+            val intent = Intent(ACTION_USB_PERMISSION).apply {
+                setPackage(act.packageName)
+            }
+            val permissionIntent = PendingIntent.getBroadcast(
+                act, 0, intent, flag
+            )
+            manager.requestPermission(dev, permissionIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal meminta izin USB: ${e.message}", e)
+            lastStatusMessage = "Gagal meminta izin USB: ${e.message}"
+            onResult?.invoke(false)
         }
-        val permissionIntent = PendingIntent.getBroadcast(
-            act, 0, Intent(ACTION_USB_PERMISSION), flag
-        )
-        manager.requestPermission(dev, permissionIntent)
     }
 
     @JvmStatic

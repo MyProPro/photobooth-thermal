@@ -93,17 +93,15 @@ class ThermalPrinter:
     def status(self):
         if self.mode == "file":
             return {"ok": True, "mode": "file", "message": "Mode tes (tanpa printer)"}
-        if self.mode == "webusb":
-            return {"ok": True, "mode": "webusb", "message": "Dicetak lewat Chrome di tablet (USB OTG)"}
-        if self.mode == "android_usb":
+        if self.mode in ("webusb", "android_usb"):
             bridge = get_android_usb_bridge()
-            if not bridge:
-                return {"ok": False, "mode": "android_usb", "message": "Modul USB Android aktif di aplikasi APK"}
-            try:
-                st = json.loads(str(bridge.getStatusJson()))
-                return {"ok": bool(st.get("ok")), "mode": "android_usb", "message": st.get("message", "Status USB Android")}
-            except Exception as e:  # noqa: BLE001
-                return {"ok": False, "mode": "android_usb", "message": f"Error status USB: {e}"}
+            if bridge:
+                try:
+                    st = json.loads(str(bridge.getStatusJson()))
+                    return {"ok": bool(st.get("ok")), "mode": self.mode, "message": st.get("message", "Status USB Android")}
+                except Exception as e:  # noqa: BLE001
+                    return {"ok": False, "mode": self.mode, "message": f"Error status USB Android: {e}"}
+            return {"ok": True, "mode": "webusb", "message": "Dicetak lewat Chrome di tablet (USB OTG)"}
         try:
             if self.mode == "win32":
                 import win32print
@@ -199,11 +197,7 @@ class ThermalPrinter:
                 self.counter.add(img.height, int(self.cfg.get("feed_lines", 3)))
         if self.mode == "file":
             return path
-        if self.mode == "webusb":
-            if sink is not None:
-                sink.append(self.escpos_bytes(img, copies))
-            return path
-        if self.mode == "android_usb":
+        if self.mode in ("webusb", "android_usb"):
             data = self.escpos_bytes(img, copies)
             bridge = get_android_usb_bridge()
             if bridge:
@@ -217,9 +211,8 @@ class ThermalPrinter:
                     except Exception:
                         pass
                     raise RuntimeError(f"Gagal mencetak ke USB Android ({st_msg or 'periksa kabel OTG atau izin USB'})")
-            else:
-                if sink is not None:
-                    sink.append(data)
+            elif sink is not None:
+                sink.append(data)
             return path
         if self.mode == "network":
             data = self.escpos_bytes(img, copies)
