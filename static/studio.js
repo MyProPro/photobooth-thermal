@@ -525,6 +525,17 @@ function enabledIds() {
   const cur = ev[TK()];
   return (cur && cur.length) ? cur.filter((i) => all.includes(i)) : all;
 }
+const isMobileStudio = () => window.matchMedia('(max-width:600px)').matches;
+async function renderInlinePreview(t, el) {
+  try {
+    const j = await api('/api/studio/preview', { json: {
+      eventId: ev.id, event: ev, template: t.id, spec: t.spec || null,
+      layout: pvLayout, caption: ($('#pvCaption') ? $('#pvCaption').value : '') } });
+    el.innerHTML = `<img src="${j.image}" alt="Preview ${esc(t.name)}">`;
+  } catch (e) {
+    el.innerHTML = `<div class="small warn" style="padding:8px">Preview gagal: ${esc(e.message)}</div>`;
+  }
+}
 function renderTemplateList() {
   const all = allTemplates();
   const en = enabledIds();
@@ -550,7 +561,7 @@ function renderTemplateList() {
       if (!list.includes(ev[DK()])) ev[DK()] = list[0];
       setDirty(); renderTemplateList();
     });
-    row.querySelector('.name').addEventListener('click', () => { selTpl = t.id; renderTemplateList(); schedulePreview(); });
+    row.querySelector('.name').addEventListener('click', () => { selTpl = t.id; renderTemplateList(); if (!isMobileStudio()) schedulePreview(); });
     row.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
       const act = b.dataset.act;
       if (act === 'default') { ev[DK()] = t.id; if (!en.includes(t.id)) ev[TK()] = [...en, t.id]; }
@@ -563,6 +574,13 @@ function renderTemplateList() {
       setDirty(); renderTemplateList();
     }));
     box.appendChild(row);
+    if (t.id === selTpl && isMobileStudio()) {
+      const pv = document.createElement('div');
+      pv.className = 'tpl-inline-pv';
+      pv.innerHTML = '<div class="small muted" style="padding:8px">Memuat preview...</div>';
+      box.appendChild(pv);
+      renderInlinePreview(t, pv);
+    }
   });
 }
 
@@ -1314,8 +1332,10 @@ async function loadSecurity() {
     $('#cfgLivingUrl').value = a.livingBaseUrl || '';
     $('#cfgLivingUrl').placeholder = a.livingDefault || 'https://mypropro.github.io/adsbooth/v/';
   }
-  $('#aboutInfo').innerHTML = `<b>${esc(a.app)} v${esc(a.version)}</b><br>Folder data: <span class="mono">${esc(a.dataDir)}</span> (${esc(a.mode)})<br>`
-    + `Folder program: <span class="mono">${esc(a.programDir)}</span><br>${esc(a.os)} · Python ${esc(a.python)} · server ${esc(a.server)}`;
+  $('#aboutInfo').innerHTML = `<b style="font-size:17px">${esc(a.app)}</b> <span class="badge">v${esc(a.version)}</span>`
+    + (a.updateAvailable
+        ? `<br><span class="badge warn" style="margin-top:6px">Update tersedia: v${esc(a.latest || '')}</span>`
+        : `<br><span class="small muted" style="display:inline-block;margin-top:6px">Versi terpasang (terbaru)</span>`);
 }
 $('#btnSaveLivingUrl').addEventListener('click', async () => {
   const url = ($('#cfgLivingUrl').value || '').trim();
