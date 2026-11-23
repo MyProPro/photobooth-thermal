@@ -23,3 +23,16 @@ license.key
 # hasil build installer
 build/
 dist/
+
+# profil browser kiosk/studio (cache, cookie, login)
+browser-kiosk/
+browser-studio/
+
+# database pesanan lisensi
+license_server/orders.db
+*.db
+
+# file debug
+scratch_*.png
+scratch/
+nuitka-crash-report.xml
