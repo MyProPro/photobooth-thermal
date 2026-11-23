@@ -16,16 +16,7 @@ android {
         versionName = "0.1"
 
         ndk {
-            // tablet nyata = arm64; armeabi-v7a utk tablet lama; x86_64 utk emulator
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
-
-        python {
-            version = "3.12"
-            pip {
-                install("Flask")
-                install("waitress")
-            }
         }
     }
 
@@ -38,6 +29,16 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { viewBinding = false }
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.12"
+        pip {
+            install("Flask")
+            install("waitress")
+        }
+    }
 }
 
 dependencies {
