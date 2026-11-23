@@ -334,8 +334,14 @@ body.ev-photo .thermal-only{display:none!important}
               <div style="flex:1;min-width:240px">
                 <div class="small">Scan QR ini dari tablet, atau ketik:</div>
                 <div class="mono" id="kioskUrl" style="font-size:16px;font-weight:700;margin:6px 0 10px;word-break:break-all">-</div>
+                <label class="check"><input type="checkbox" id="lanToggle"> Izinkan akses dari Wi-Fi lokal (HP / tablet lain)</label>
+                <p class="hint" id="lanHint">Kalau dimatikan, kiosk &amp; Studio hanya bisa dibuka dari komputer ini.</p>
                 <label class="check"><input type="checkbox" id="httpsToggle"> Aktifkan HTTPS (wajib untuk kamera Android / iPad)</label>
-                <p class="hint" id="httpsHint">Setelah diubah, restart server (tutup lalu jalankan run.bat).</p>
+                <p class="hint" id="httpsHint">Setelah diubah, tekan Restart server.</p>
+                <div class="row" style="margin-top:10px;gap:10px;align-items:center;flex-wrap:wrap">
+                  <button class="btn" id="btnRestartServer" type="button">🔄 Restart server</button>
+                  <span class="small" id="restartMsg"></span>
+                </div>
               </div>
             </div>
             <ul class="small" style="margin:12px 0 0;padding-left:18px;line-height:1.6">

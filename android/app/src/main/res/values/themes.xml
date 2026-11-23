@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.AdsBooth" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:statusBarColor">#121212</item>
+    </style>
+</resources>

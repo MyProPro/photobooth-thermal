@@ -1836,6 +1836,7 @@ $('#btnReprint').addEventListener('click', async () => {
 });
 
 // ---------- status printer ----------
+let lastPrinterOk = null;   // status printer terakhir yang diketahui (dipakai saat server tidak merespons)
 async function pollStatus() {
   try {
     const r = await fetch('/api/status');
@@ -1853,6 +1854,7 @@ async function pollStatus() {
     if (s.mode === 'webusb') {
       const d = await PBUSB.paired().catch(() => null);
       $('#btnUsb').classList.toggle('hidden', !!d);
+      lastPrinterOk = !!d;
       if (!d) {
         $('#introStatus').textContent = 'USB PRINTER NOT CONNECTED'; $('#introStatus').classList.remove('hidden');
         $('#statusDot').className = 'dot warn';
@@ -1862,13 +1864,16 @@ async function pollStatus() {
     } else {
       $('#btnUsb').classList.add('hidden');
     }
+    if (s.mode !== 'webusb') lastPrinterOk = !!s.ok;
     $('#statusDot').className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
     $('#statusText').textContent = !s.ok ? 'PRINTER NOT CONNECTED'
       : (low ? `PAPER LOW (${s.paper.left_m} m)` : (s.mode === 'file' ? 'TEST MODE (NO PRINTER)' : 'PRINTER READY'));
     $('#statusText').title = s.message || '';
   } catch (e) {
     $('#statusDot').className = 'dot bad';
-    $('#statusText').textContent = 'SERVER NOT CONNECTED';
+    // server mati -> status printer tidak bisa dicek; pakai status terakhir yang diketahui
+    $('#statusText').textContent = lastPrinterOk ? 'SERVER NOT CONNECTED' : 'SERVER & PRINTER NOT CONNECTED';
+    $('#statusText').title = 'Server tidak merespons (/api/status gagal) - cek app.py / koneksi ke PC server';
   }
 }
 

@@ -1021,8 +1021,20 @@ async function openSettings() {
   $('#kioskQr').src = k.kiosk_qr; $('#kioskUrl').textContent = k.kiosk;
   $('#httpsToggle').checked = k.https_enabled;
   $('#httpsHint').textContent = k.https_enabled
-    ? 'HTTPS aktif. Tablet: buka alamat di atas. Matikan lalu restart server kalau tidak perlu.'
-    : 'Tanpa HTTPS, kamera hanya jalan kalau kiosk dibuka di PC server sendiri. Setelah diubah, restart server.';
+    ? 'HTTPS aktif. Tablet: buka alamat di atas.'
+    : 'Tanpa HTTPS, kamera hanya jalan kalau kiosk dibuka di PC server sendiri.';
+  $('#httpsHint').className = 'hint';
+  $('#lanToggle').checked = k.lan_enabled;
+  $('#lanToggle').disabled = k.lan_enabled && !k.is_local;   // mematikan Wi-Fi hanya dari komputer server
+  $('#lanHint').textContent = k.lan_enabled
+    ? (k.is_local ? 'Aktif: HP / tablet di Wi-Fi yang sama bisa membuka kiosk lewat alamat di atas.'
+                  : 'Aktif. Untuk mematikan, buka Studio langsung di komputer server.')
+    : 'Nonaktif: kiosk & Studio hanya bisa dibuka dari komputer ini (localhost).';
+  $('#lanHint').className = 'hint';
+  if (k.lan_enabled !== k.lan_running) {
+    $('#lanHint').textContent += ' Perubahan belum berlaku - tekan Restart server.';
+    $('#lanHint').className = 'hint warn';
+  }
 }
 $('#btnSettings').addEventListener('click', openSettings);
 
@@ -1143,8 +1155,41 @@ $('#btnSavePrinter').addEventListener('click', async () => {
 });
 $('#httpsToggle').addEventListener('change', async (e) => {
   await api('/api/studio/connect', { method: 'PUT', json: { https_enabled: e.target.checked } });
-  $('#httpsHint').textContent = 'Tersimpan. Restart server (tutup lalu jalankan run.bat) supaya berlaku.';
+  $('#httpsHint').textContent = 'Tersimpan. Tekan Restart server supaya berlaku.';
   $('#httpsHint').className = 'hint warn';
+});
+$('#lanToggle').addEventListener('change', async (e) => {
+  try {
+    await api('/api/studio/connect', { method: 'PUT', json: { lan_enabled: e.target.checked } });
+    $('#lanHint').textContent = 'Tersimpan. Tekan Restart server supaya berlaku.'
+      + (e.target.checked ? '' : ' Tablet / HP lain yang sedang membuka kiosk akan terputus.');
+    $('#lanHint').className = 'hint warn';
+  } catch (err) {
+    e.target.checked = !e.target.checked;
+    $('#lanHint').textContent = err.message;
+    $('#lanHint').className = 'hint warn';
+  }
+});
+$('#btnRestartServer').addEventListener('click', async () => {
+  const ok = await showStudioConfirm('Restart Server',
+    'Server akan berhenti sebentar (sekitar 5-10 detik). Kiosk yang sedang dipakai tamu ikut terputus sebentar lalu tersambung lagi. Lanjutkan?',
+    'Restart', 'Batal', '🔄');
+  if (!ok) return;
+  const btn = $('#btnRestartServer'), msg = $('#restartMsg');
+  btn.disabled = true; msg.className = 'small'; msg.textContent = 'Merestart server…';
+  try { await api('/api/studio/restart', { method: 'POST', json: {} }); }
+  catch (err) { btn.disabled = false; msg.className = 'small warn'; msg.textContent = 'Gagal: ' + err.message; return; }
+  await new Promise((r) => setTimeout(r, 3000));          // tunggu server lama benar-benar mati
+  const end = Date.now() + 60000;
+  while (Date.now() < end) {
+    try {
+      const r = await fetch('/api/status', { cache: 'no-store' });
+      if (r.ok) { msg.textContent = 'Server sudah jalan lagi. Memuat ulang…'; setTimeout(() => location.reload(), 600); return; }
+    } catch (_) { /* masih restart */ }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  btn.disabled = false; msg.className = 'small warn';
+  msg.textContent = 'Server belum kembali setelah 60 detik. Cek jendela server / jalankan run.bat lagi.';
 });
 
 // ---------------------------------------------------------------- PIN Studio

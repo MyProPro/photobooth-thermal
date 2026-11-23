@@ -133,6 +133,56 @@ app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
 
 # ---------- helper ----------
 
+RUN_HOST = "0.0.0.0"     # alamat yang benar-benar dipakai server saat ini (diisi di main())
+
+
+def lan_enabled():
+    """Akses dari perangkat lain di Wi-Fi/LAN lokal (default: aktif)."""
+    return bool(CFG.get("lan_access", True))
+
+
+def restart_server():
+    """Jalankan ulang server dengan perintah yang sama, lalu tutup proses ini.
+    - Linux systemd (Restart=always): cukup keluar, systemd yang menyalakan lagi.
+    - Windows/Linux biasa (run.bat, python app.py, adsbooth.exe): jalankan salinan baru dulu,
+      salinan baru menunggu port kosong, baru proses lama keluar."""
+    import subprocess
+    time.sleep(0.8)                                     # beri waktu respons HTTP terkirim
+    if os.environ.get("INVOCATION_ID"):                 # dijalankan oleh systemd
+        os._exit(3)
+    if "__compiled__" in globals() or getattr(sys, "frozen", False):   # adsbooth.exe (Nuitka)
+        exe = os.path.abspath(sys.argv[0]) if os.path.exists(sys.argv[0]) else sys.executable
+        cmd = [exe, "--server"]                         # browser kiosk/studio sudah terbuka, cukup server
+    else:
+        script = os.path.abspath(sys.argv[0] or __file__)
+        cmd = [sys.executable, script]
+        if os.path.basename(script).lower().startswith("launcher"):
+            cmd.append("--server")
+    env = dict(os.environ, ADSBOOTH_RESTARTED="1")
+    try:
+        subprocess.Popen(cmd, cwd=os.getcwd(), env=env, close_fds=True)
+    except Exception:  # noqa: BLE001
+        log.exception("Gagal menjalankan ulang server")
+        return
+    log.info("Server lama ditutup, server baru dijalankan: %s", cmd)
+    os._exit(0)
+
+
+def _wait_port_free(ports, seconds=30):
+    """Dipakai setelah restart: tunggu proses lama melepas port."""
+    end = time.time() + seconds
+    for prt in ports:
+        while time.time() < end:
+            t = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                t.bind(("0.0.0.0", prt))
+                break
+            except OSError:
+                time.sleep(0.5)
+            finally:
+                t.close()
+
+
 def lan_ip():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -1729,21 +1779,42 @@ def studio_connect():
     urls = {"lan_ip": ip, "http": f"http://{ip}:{port}",
             "https": f"https://{ip}:{int(https.get('port', 5443))}" if https.get("enabled") else None}
     kiosk = (urls["https"] or urls["http"]) + "/?kiosk=1"
+    lan = lan_enabled()
+    if not lan:
+        kiosk = f"http://localhost:{port}/?kiosk=1"
     urls["kiosk"] = kiosk
     urls["kiosk_qr"] = to_data_url(qrcode.make(kiosk, border=2).convert("RGB"))
     urls["https_enabled"] = bool(https.get("enabled"))
+    urls["lan_enabled"] = lan
+    urls["lan_running"] = RUN_HOST == "0.0.0.0"
+    urls["is_local"] = is_local_request()
     return jsonify(urls)
 
 
 @app.put("/api/studio/connect")
 @studio_auth
 def studio_connect_save():
-    p = request.get_json(force=True)
-    https = dict(CFG.get("https") or {"enabled": False, "port": 5443})
-    https["enabled"] = bool(p.get("https_enabled"))
-    CFG["https"] = https
+    p = request.get_json(force=True) or {}
+    if "lan_enabled" in p:
+        if not p.get("lan_enabled") and not is_local_request():
+            return jsonify({"ok": False, "error": "Akses Wi-Fi hanya bisa dimatikan langsung dari komputer server, "
+                                                  "supaya Studio tidak terkunci dari perangkat ini."}), 403
+        CFG["lan_access"] = bool(p.get("lan_enabled"))
+    if "https_enabled" in p:
+        https = dict(CFG.get("https") or {"enabled": False, "port": 5443})
+        https["enabled"] = bool(p.get("https_enabled"))
+        CFG["https"] = https
     save_config()
     return jsonify({"ok": True, "restart": True})
+
+
+@app.post("/api/studio/restart")
+@studio_auth
+def studio_restart():
+    """Restart server supaya pengaturan jaringan (Wi-Fi lokal / HTTPS) berlaku."""
+    log.info("Restart server diminta dari Studio (%s)", request.remote_addr)
+    threading.Thread(target=restart_server, daemon=True).start()
+    return jsonify({"ok": True, "message": "Server sedang restart..."})
 
 
 # ---------- sesi, buku tamu, undian, slideshow, kertas ----------
@@ -2218,22 +2289,30 @@ def main():
         save_config()
         print("PIN Studio disimpan.")
         return
-    global SERVER_NAME
+    global SERVER_NAME, RUN_HOST
     from werkzeug.serving import make_server
 
     port = int(CFG.get("port", 5000))
     ip = lan_ip()
     https = CFG.get("https") or {}
+    host = "0.0.0.0" if lan_enabled() else "127.0.0.1"
+    RUN_HOST = host
+    if os.environ.pop("ADSBOOTH_RESTARTED", None):
+        time.sleep(1.0)
+        _wait_port_free([port] + ([int(https.get("port", 5443))] if https.get("enabled") else []))
     print("=" * 60)
     print(f" {APP_NAME} v{VERSION}")
     print(f" Kiosk  : http://localhost:{port}        Studio: http://localhost:{port}/studio")
-    print(f" Jaringan: http://{ip}:{port}")
+    if host == "0.0.0.0":
+        print(f" Jaringan: http://{ip}:{port}")
+    else:
+        print(" Jaringan: NONAKTIF (akses Wi-Fi lokal dimatikan di Studio - hanya perangkat ini)")
     print(f" Data   : {DATA}  ({P.MODE})")
     if https.get("enabled"):
         hport = int(https.get("port", 5443))
         cert, key = ensure_cert(ip)
         print(f" Tablet (HTTPS, kamera): https://{ip}:{hport}/?kiosk=1")
-        srv = make_server("0.0.0.0", hport, app, threaded=True, ssl_context=(cert, key))
+        srv = make_server(host, hport, app, threaded=True, ssl_context=(cert, key))
         threading.Thread(target=srv.serve_forever, daemon=True).start()
     print(f" QR tamu: {base_url()}")
     if not pin_is_set():
@@ -2243,10 +2322,10 @@ def main():
     try:
         from waitress import serve
         SERVER_NAME = "waitress"
-        serve(app, host="0.0.0.0", port=port, threads=12, channel_timeout=120, ident=None)
+        serve(app, host=host, port=port, threads=12, channel_timeout=120, ident=None)
     except ImportError:
         log.warning("waitress belum terpasang (pip install waitress) - pakai server bawaan Flask")
-        app.run(host="0.0.0.0", port=port, threaded=True)
+        app.run(host=host, port=port, threaded=True)
 
 
 if __name__ == "__main__":
