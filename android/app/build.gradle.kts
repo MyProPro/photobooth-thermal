@@ -25,10 +25,6 @@ android {
             pip {
                 install("Flask")
                 install("waitress")
-                install("qrcode")
-                install("requests")
-                install("Pillow")
-                install("cryptography")
             }
         }
     }
