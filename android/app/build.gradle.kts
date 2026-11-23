@@ -37,6 +37,10 @@ chaquopy {
         pip {
             install("Flask")
             install("waitress")
+            install("Pillow")
+            install("qrcode")
+            install("requests")
+            install("cryptography")
         }
     }
 }

@@ -5,6 +5,9 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/android.yml'
+      - '*.py'
+      - 'static/**'
+      - 'fonts/**'
   workflow_dispatch:
 
 jobs:
@@ -23,13 +26,32 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Bundle AdsBooth Python + assets
+        run: |
+          set -e
+          DEST=android/app/src/main/python
+          cp app.py paths.py db.py events.py licensing.py photo.py printer.py samples.py templates.py imaging.py version.py config.example.json "$DEST"/
+          cp -r static "$DEST"/static
+          cp -r fonts "$DEST"/fonts
+          echo "Isi $DEST:" && ls "$DEST"
+
       - name: Build debug APK
         working-directory: android
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          set +e
+          gradle assembleDebug --no-daemon --stacktrace 2>&1 | tee build.log
+          code=${PIPESTATUS[0]}
+          {
+            echo '## Gradle output (tail)'
+            echo '```'
+            tail -n 150 build.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: adsbooth-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn

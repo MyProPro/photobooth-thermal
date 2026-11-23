@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
     private lateinit var status: TextView
     private val kioskUrl = "http://127.0.0.1:5000/?kiosk=1"
+    private val probeUrl = "http://127.0.0.1:5000/api/config"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,15 +66,15 @@ class MainActivity : ComponentActivity() {
 
     private fun waitThenLoad() {
         thread(isDaemon = true) {
-            val deadline = System.currentTimeMillis() + 60000
+            val deadline = System.currentTimeMillis() + 90000
             while (System.currentTimeMillis() < deadline) {
                 try {
-                    val c = URL("http://127.0.0.1:5000/api/ping").openConnection() as HttpURLConnection
+                    val c = URL(probeUrl).openConnection() as HttpURLConnection
                     c.connectTimeout = 1000
                     c.readTimeout = 1000
                     val code = c.responseCode
                     c.disconnect()
-                    if (code == 200) {
+                    if (code in 200..499) {
                         runOnUiThread {
                             status.visibility = View.GONE
                             web.loadUrl(kioskUrl)
