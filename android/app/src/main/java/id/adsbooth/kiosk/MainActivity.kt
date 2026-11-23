@@ -37,6 +37,8 @@ class MainActivity : ComponentActivity() {
         web.settings.domStorageEnabled = true
         web.settings.mediaPlaybackRequiresUserGesture = false
         web.webViewClient = WebViewClient()
+        web.addJavascriptInterface(AndroidPrintInterface(this), "AndroidUsbPrinter")
+        UsbPrinterBridge.init(this)
         web.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {
                 runOnUiThread { request.grant(request.resources) }
@@ -104,6 +106,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        UsbPrinterBridge.destroy(this)
         web.destroy()
         super.onDestroy()
     }

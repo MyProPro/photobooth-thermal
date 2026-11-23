@@ -16,7 +16,16 @@ import socket
 import threading
 from datetime import datetime
 
-TYPES = ["file", "win32", "usb", "network", "serial", "device", "webusb"]
+TYPES = ["file", "win32", "usb", "network", "serial", "device", "webusb", "android_usb"]
+
+
+def get_android_usb_bridge():
+    """Ambil jembatan Kotlin UsbPrinterBridge saat dijalankan di dalam APK Android."""
+    try:
+        from java import jclass
+        return jclass("id.adsbooth.kiosk.UsbPrinterBridge")
+    except Exception:
+        return None
 
 
 class PaperCounter:
@@ -86,6 +95,15 @@ class ThermalPrinter:
             return {"ok": True, "mode": "file", "message": "Mode tes (tanpa printer)"}
         if self.mode == "webusb":
             return {"ok": True, "mode": "webusb", "message": "Dicetak lewat Chrome di tablet (USB OTG)"}
+        if self.mode == "android_usb":
+            bridge = get_android_usb_bridge()
+            if not bridge:
+                return {"ok": False, "mode": "android_usb", "message": "Modul USB Android aktif di aplikasi APK"}
+            try:
+                st = json.loads(str(bridge.getStatusJson()))
+                return {"ok": bool(st.get("ok")), "mode": "android_usb", "message": st.get("message", "Status USB Android")}
+            except Exception as e:  # noqa: BLE001
+                return {"ok": False, "mode": "android_usb", "message": f"Error status USB: {e}"}
         try:
             if self.mode == "win32":
                 import win32print
@@ -100,9 +118,12 @@ class ThermalPrinter:
                     return {"ok": False, "mode": "device", "message": f"Tidak ada izin tulis ke {path} (jalankan install-autostart.sh / udev)"}
                 return {"ok": True, "mode": "device", "message": "Printer siap"}
             if self.mode == "network":
-                with socket.create_connection((self.cfg["host"], int(self.cfg.get("port", 9100))), timeout=3):
+                host = self.cfg.get("host")
+                if not host:
+                    return {"ok": False, "mode": "network", "message": "IP printer LAN/Wi-Fi belum diisi"}
+                with socket.create_connection((host, int(self.cfg.get("port", 9100))), timeout=3):
                     pass
-                return {"ok": True, "mode": "network", "message": "Printer siap"}
+                return {"ok": True, "mode": "network", "message": f"Printer LAN/Wi-Fi siap ({host}:9100)"}
             with self.lock:
                 p = self._make()
                 p.open()
@@ -111,21 +132,65 @@ class ThermalPrinter:
         except Exception as e:  # noqa: BLE001
             return {"ok": False, "mode": self.mode, "message": str(e) or e.__class__.__name__}
 
-    def escpos_bytes(self, img, copies=1):
-        """Data ESC/POS mentah untuk gambar ini (dipakai mode webusb)."""
-        from escpos.printer import Dummy
-        p = Dummy(profile=self.cfg.get("profile") or None)
+    def _escpos_raster_builtin(self, img, copies=1):
+        """Generator ESC/POS murni (GS v 0) tanpa dependensi library eksternal.
+        Sangat andal untuk Epson TM-T82/TM-T82X/TM-m30 di Android/Linux/Windows."""
+        im = img.convert("1")
+        w, h = im.size
+        w_bytes = (w + 7) // 8
+        if w % 8 != 0:
+            from PIL import Image as PImg
+            pad = PImg.new("1", (w_bytes * 8, h), 1)
+            pad.paste(im, (0, 0))
+            im = pad
+
+        raw = im.tobytes()
+        # Invert: di PIL mode 1, 0=hitam 1=putih. Di ESC/POS thermal, bit 1 = bakar dot hitam.
+        inv = bytes((~b) & 0xFF for b in raw)
+        feed = int(self.cfg.get("feed_lines", 3))
+        cut = bool(self.cfg.get("cut", True))
+        frag_h = int(self.cfg.get("fragment_height", 256))
+
+        single = bytearray(b"\x1b@")  # ESC @ (init)
+        for y in range(0, h, frag_h):
+            lines = min(frag_h, h - y)
+            start = y * w_bytes
+            end = start + lines * w_bytes
+            chunk = inv[start:end]
+            xL = w_bytes & 0xFF
+            xH = (w_bytes >> 8) & 0xFF
+            yL = lines & 0xFF
+            yH = (lines >> 8) & 0xFF
+            single.extend(b"\x1dv0\x00" + bytes([xL, xH, yL, yH]) + chunk)
+
+        if feed > 0:
+            single.extend(b"\n" * feed)
+        if cut:
+            single.extend(b"\x1dV\x41\x03")  # GS V 65 3 (feed & partial cut)
+
+        out = bytearray()
         for _ in range(max(1, copies)):
-            p.image(img, impl=self.cfg.get("impl", "bitImageRaster"),
-                    fragment_height=int(self.cfg.get("fragment_height", 256)))
-            p.text("\n" * int(self.cfg.get("feed_lines", 3)))
-            if self.cfg.get("cut", True):
-                p.cut()
-        return p.output
+            out.extend(single)
+        return bytes(out)
+
+    def escpos_bytes(self, img, copies=1):
+        """Data ESC/POS mentah untuk gambar ini (dipakai mode webusb, android_usb, network)."""
+        try:
+            from escpos.printer import Dummy
+            p = Dummy(profile=self.cfg.get("profile") or None)
+            for _ in range(max(1, copies)):
+                p.image(img, impl=self.cfg.get("impl", "bitImageRaster"),
+                        fragment_height=int(self.cfg.get("fragment_height", 256)))
+                p.text("\n" * int(self.cfg.get("feed_lines", 3)))
+                if self.cfg.get("cut", True):
+                    p.cut()
+            return p.output
+        except Exception:
+            return self._escpos_raster_builtin(img, copies)
 
     def print_image(self, img, copies=1, sink=None):
         """img: PIL Image mode '1'. Selalu simpan salinan PNG di output/prints.
-        Mode webusb: data ESC/POS dimasukkan ke `sink` (list) untuk dikirim browser."""
+        Mode webusb & android_usb: data ESC/POS disalurkan ke USB printer."""
         os.makedirs(os.path.join(self.out_dir, "prints"), exist_ok=True)
         path = os.path.join(self.out_dir, "prints", datetime.now().strftime("%Y%m%d_%H%M%S_%f") + ".png")
         img.save(path)
@@ -137,6 +202,33 @@ class ThermalPrinter:
         if self.mode == "webusb":
             if sink is not None:
                 sink.append(self.escpos_bytes(img, copies))
+            return path
+        if self.mode == "android_usb":
+            data = self.escpos_bytes(img, copies)
+            bridge = get_android_usb_bridge()
+            if bridge:
+                import base64
+                b64 = base64.b64encode(data).decode("ascii")
+                ok = bool(bridge.printBase64(b64))
+                if not ok:
+                    st_msg = ""
+                    try:
+                        st_msg = json.loads(str(bridge.getStatusJson())).get("message", "")
+                    except Exception:
+                        pass
+                    raise RuntimeError(f"Gagal mencetak ke USB Android ({st_msg or 'periksa kabel OTG atau izin USB'})")
+            else:
+                if sink is not None:
+                    sink.append(data)
+            return path
+        if self.mode == "network":
+            data = self.escpos_bytes(img, copies)
+            host = self.cfg.get("host")
+            port = int(self.cfg.get("port", 9100))
+            if not host:
+                raise RuntimeError("IP printer LAN/Wi-Fi belum diisi di konfigurasi")
+            with socket.create_connection((host, port), timeout=10) as s:
+                s.sendall(data)
             return path
         with self.lock:
             p = self._make()
@@ -163,7 +255,13 @@ def list_windows_printers_raw(win32print):
 
 
 def discover():
-    out = {"windows": [], "serial": [], "usb": [], "devices": [], "notes": []}
+    out = {"windows": [], "serial": [], "usb": [], "devices": [], "notes": [], "android_usb": None}
+    bridge = get_android_usb_bridge()
+    if bridge:
+        try:
+            out["android_usb"] = json.loads(str(bridge.getStatusJson()))
+        except Exception:
+            pass
     import glob
     out["devices"] = sorted(glob.glob("/dev/usb/lp*"))
     try:

@@ -992,13 +992,19 @@ const prVal = () => ({
 });
 function prGroups() {
   const t = $('#prType').value;
-  $$('.pr-group').forEach((g) => g.classList.toggle('hidden', g.dataset.type !== t));
-  if (t === 'webusb') usbInfo();
+  $$('.pr-group').forEach((g) => g.classList.toggle('hidden', g.dataset.type !== t && !(g.dataset.type === 'webusb' && t === 'android_usb')));
+  if (t === 'webusb' || t === 'android_usb') usbInfo();
 }
 async function usbInfo() {
-  if (!PBUSB.supported()) { $('#usbInfo').textContent = 'Browser ini tidak mendukung WebUSB (buka di Chrome di tablet Android).'; return; }
+  if (!PBUSB.supported()) { $('#usbInfo').textContent = 'Browser ini tidak mendukung USB printer (buka di Chrome di tablet Android atau pasang APK AdsBooth).'; return; }
   const d = await PBUSB.paired().catch(() => null);
-  $('#usbInfo').textContent = d ? `Tersambung: ${d.name} (${d.vendorId.toString(16)}:${d.productId.toString(16)})` : 'Belum ada printer USB yang disambungkan di browser ini.';
+  if (d) {
+    const permNote = d.hasPermission === false ? ' (Perlu izin USB: klik Sambungkan)' : '';
+    const idStr = (d.vendorId && d.productId) ? ` [${d.vendorId}:${d.productId}]` : '';
+    $('#usbInfo').textContent = `Tersambung: ${d.name}${idStr}${permNote}`;
+  } else {
+    $('#usbInfo').textContent = 'Belum ada printer USB yang disambungkan (pastikan kabel OTG tercolok).';
+  }
 }
 $('#btnUsbPair').addEventListener('click', async () => {
   try { await PBUSB.connect(); } catch (e) { if (e.name !== 'NotFoundError') await showStudioAlert('Koneksi Gagal', 'Gagal: ' + e.message, '❌'); }

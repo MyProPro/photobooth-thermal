@@ -1,8 +1,10 @@
-// Cetak ke printer Receipt Photobooth USB yang dicolok ke tablet Android (kabel OTG) lewat WebUSB.
-// Dipakai saat printer.type = "webusb". Server mengirim data ESC/POS (base64), file ini meneruskannya ke printer.
-// Butuh Chrome di Android dan halaman dibuka lewat localhost atau HTTPS.
+// Cetak ke printer Receipt Photobooth USB yang dicolok ke tablet Android (kabel OTG).
+// Mendukung:
+// 1. Aplikasi Android APK langsung (lewat jembatan Kotlin AndroidUsbPrinter)
+// 2. Browser Google Chrome di Android lewat WebUSB standard
 (function () {
-  const supported = () => !!(navigator.usb && navigator.usb.requestDevice);
+  const isAndroidApp = () => typeof window.AndroidUsbPrinter !== 'undefined';
+  const supported = () => isAndroidApp() || !!(navigator.usb && navigator.usb.requestDevice);
   let device = null;
   let out = null; // { iface, alt, ep }
 
@@ -34,15 +36,20 @@
 
   async function getDevice() {
     if (device && device.opened && out) return device;
-    if (!supported()) throw new Error('This browser does not support WebUSB (use Chrome on Android)');
+    if (!supported()) throw new Error('Browser atau perangkat ini tidak mendukung USB OTG printer');
     const list = await navigator.usb.getDevices();
-    if (!list.length) throw new Error('USB printer not connected. Tap "Connect USB printer".');
+    if (!list.length) throw new Error('Printer USB belum tersambung. Tekan "Sambungkan printer USB".');
     return prepare(list[0]);
   }
 
-  // Harus dipanggil dari klik (gesture) pengguna.
+  // Dipanggil saat klik tombol "Sambungkan printer USB"
   async function connect() {
-    if (!supported()) throw new Error('This browser does not support WebUSB (use Chrome on Android)');
+    if (isAndroidApp()) {
+      window.AndroidUsbPrinter.requestPermission();
+      await new Promise((r) => setTimeout(r, 600));
+      return paired();
+    }
+    if (!supported()) throw new Error('Browser ini tidak mendukung WebUSB (gunakan Chrome di Android atau APK AdsBooth)');
     const dev = await navigator.usb.requestDevice({ filters: [] });
     await prepare(dev);
     return info();
@@ -55,6 +62,23 @@
   }
 
   async function paired() {
+    if (isAndroidApp()) {
+      try {
+        const raw = window.AndroidUsbPrinter.getStatus();
+        const st = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (st && st.connected) {
+          return {
+            name: st.device_name || 'Printer USB (OTG)',
+            vendorId: st.vendor_id || '',
+            productId: st.product_id || '',
+            hasPermission: !!st.has_permission
+          };
+        }
+      } catch (e) {
+        console.warn('Error reading AndroidUsbPrinter status', e);
+      }
+      return null;
+    }
     if (!supported()) return null;
     if (device) return info();
     const list = await navigator.usb.getDevices();
@@ -82,12 +106,21 @@
 
   // jobs: array base64 dari server
   async function printJobs(jobs) {
+    if (isAndroidApp()) {
+      for (const j of jobs || []) {
+        const ok = window.AndroidUsbPrinter.printBase64(j);
+        if (!ok) {
+          throw new Error('Gagal mengirim ke printer USB OTG (pastikan kabel OTG tercolok dan izin USB diberikan)');
+        }
+      }
+      return;
+    }
     for (const j of jobs || []) await writeBytes(b64ToBytes(j));
   }
 
-  if (supported()) {
+  if (typeof navigator !== 'undefined' && navigator.usb) {
     navigator.usb.addEventListener('disconnect', (e) => { if (e.device === device) { device = null; out = null; } });
   }
 
-  window.PBUSB = { supported, connect, paired, printJobs };
+  window.PBUSB = { supported, isAndroidApp, connect, paired, printJobs };
 })();

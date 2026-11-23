@@ -5,10 +5,9 @@ Chaquopy, dengan WebView sebagai layar kiosk. Di-build otomatis oleh GitHub
 Actions (lihat .github/workflows/android.yml) - tidak perlu Android Studio.
 
 ## Tahapan
-- Tahap 1 (SEKARANG): APK bukti-konsep. Menjalankan Flask + halaman tes kamera.
-  Membuktikan Chaquopy + Flask + WebView + kamera jalan di tablet.
-- Tahap 1b: menjalankan app.py AdsBooth penuh (kiosk asli, belum cetak).
-- Tahap 2: jembatan Kotlin USB OTG untuk cetak ke printer thermal USB.
+- Tahap 1: APK bukti-konsep (Flask + WebView + kamera di tablet).
+- Tahap 1b: menjalankan app.py AdsBooth penuh.
+- Tahap 2 (SUDAH): Jembatan Kotlin UsbPrinterBridge (USB OTG) & cetak socket LAN/Wi-Fi (port 9100) untuk printer thermal ESC/POS (Epson TM-T82/X dan printer sejenis).
 - Tahap 3: foreground service, kunci layar penuh, ikon, cegah keluar aplikasi.
 
 ## Cara ambil APK
