@@ -322,10 +322,15 @@ def print_lang(ev):
     return "en" if str(ev.get("print_lang") or "").lower() == "en" else "id"
 
 
+def apply_watermark(img):
+    """Beri tanda pita DEMO di bagian paling bawah jika belum berlisensi."""
+    return LIC.watermark(img) if LIC.status()["demo"] else img
+
+
 def render_receipt(*a, **kw):
     """Render hasil cetak; versi coba (belum berlisensi) diberi tanda DEMO."""
     img = _render_receipt(*a, **kw)
-    return LIC.watermark(img) if LIC.status()["demo"] else img
+    return apply_watermark(img)
 
 
 def license_block(ev, p=None):
@@ -514,13 +519,14 @@ def receipt_from_payload(p, qr_url=None, number=None, lucky=None, with_extras=Tr
     photos = [decode_image(x) for x in p.get("photos", [])]
     if is_photo(ev, p) and features(ev)["living_photo"]:
         qr_url = living_url(ev, code or "preview")     # foto 4R: QR video di pojok kanan bawah
-    img = render_receipt(photos, p, ev, asset_dir, qr_url, number, lucky=lucky)
+    img = _render_receipt(photos, p, ev, asset_dir, qr_url, number, lucky=lucky)
     ex = extras_from_payload(p, ev, lucky, code) if with_extras else {}
     if ex and not is_photo(ev, p):   # mode foto: buku tamu tetap tersimpan, tidak ikut dicetak
         logo = ev.get("logo")
         logo_path = os.path.join(asset_dir, logo) if (logo and asset_dir) else None
         show_logo = p.get("showLogo", True)
         img = append_extras(img, ex, int(CFG.get("paper_px", 576)), logo_path=logo_path if show_logo else None)
+    img = apply_watermark(img)
     return img, photos, ex
 
 
@@ -1648,12 +1654,13 @@ def studio_preview():
     if is_photo(ev, p):
         n = {"solo": 1, "duo": 2, "strip": 3, "grid": 4}[layout]
         qr = living_url(ev, "preview") if ft["living_photo"] else preview_qr(ev)
-        img = render_receipt(sample_photos(9, ev, asset_dir)[:n], {"layout": layout, "template": tid, "showLogo": True,
+        img = _render_receipt(sample_photos(9, ev, asset_dir)[:n], {"layout": layout, "template": tid, "showLogo": True,
                                                      "caption": p.get("caption", "Selamat ya!"), "style": "warna"},
                              ev, asset_dir, qr, number=127, lucky="0127" if ft["lucky_draw"] else None)
+        img = apply_watermark(img)
         img.thumbnail((800, 1200))
         return jsonify({"image": to_data_url(img, "JPEG"), "height": img.height})
-    img = render_receipt(sample_photos(9, ev, asset_dir), {"layout": layout, "template": tid,
+    img = _render_receipt(sample_photos(9, ev, asset_dir), {"layout": layout, "template": tid,
                                             "caption": p.get("caption", "Happy birthday!"),
                                             "showLogo": True, "style": p.get("style", "dither")},
                          ev, asset_dir, preview_qr(ev), number=127, spec_override=spec)
@@ -1667,6 +1674,7 @@ def studio_preview():
         logo = ev.get("logo")
         logo_path = os.path.join(asset_dir, logo) if (logo and asset_dir) else None
         img = append_extras(img, ex, int(CFG.get("paper_px", 576)), logo_path=logo_path)
+    img = apply_watermark(img)
     return jsonify({"image": to_data_url(img), "height": img.height})
 
 
