@@ -672,9 +672,14 @@ body.ev-photo .thermal-only{display:none!important}
         <div class="sec">Softcopy Foto &amp; Auto-Delete Privasi</div>
         <div class="card" style="padding:16px">
           <label class="check" style="font-weight:600;font-size:15px;cursor:pointer">
-            <input type="checkbox" id="qrToggle"> Aktifkan Download Softcopy Foto
+            <input type="checkbox" id="qrToggle"> Aktifkan Download Softcopy Foto (di Layar Selesai)
           </label>
-          <p class="hint" style="margin:4px 0 14px 24px">Tamu dapat mengunduh softcopy foto berwarna resolusi tinggi lewat QR di struk &amp; layar Selesai.</p>
+          <p class="hint" style="margin:4px 0 14px 24px">Tamu dapat mengunduh softcopy foto berwarna resolusi tinggi lewat QR di layar Selesai.</p>
+
+          <label class="check" style="font-weight:600;font-size:15px;cursor:pointer;margin-top:8px">
+            <input type="checkbox" id="printQrToggle"> Cetak QR Download di Kertas Struk / Foto Fisik
+          </label>
+          <p class="hint" style="margin:4px 0 14px 24px">Nonaktifkan (bawaan) agar hasil cetak foto bersih tanpa kotak QR.</p>
           <div id="autoDeleteWrap" style="padding-top:14px;border-top:1px solid var(--line);max-width:360px">
             <label class="field"><span>Hapus Otomatis File di Server Setelah</span>
               <select id="downloadAutoDelete">

@@ -524,8 +524,17 @@ def receipt_from_payload(p, qr_url=None, number=None, lucky=None, with_extras=Tr
     return img, photos, ex
 
 
-def qr_on(ev):
-    """QR unduh: config.json = saklar utama; event bisa mematikan untuk event itu saja."""
+def print_qr_on(ev=None):
+    """Cek apakah QR download dicetak di kertas struk/foto fisik. Bawaan = False (hasil cetak bersih tanpa QR)."""
+    if ev is None:
+        ev, _ = current_event()
+    return bool((ev or {}).get("print_qr", CFG.get("print_qr", False)))
+
+
+def qr_on(ev=None):
+    """QR unduh (di layar kiosk): config.json = saklar utama; event bisa mematikan untuk event itu saja."""
+    if ev is None:
+        ev, _ = current_event()
     if not CFG.get("qr_download", True):
         return False
     return (ev or {}).get("qr_download", True) is not False
@@ -534,7 +543,7 @@ def qr_on(ev):
 def preview_qr(ev=None):
     if ev is None:
         ev, _ = current_event()
-    return softcopy_url("preview", ev) if qr_on(ev) else None
+    return softcopy_url("preview", ev) if print_qr_on(ev) else None
 
 
 # ---------- kiosk ----------
@@ -871,9 +880,10 @@ def api_print():
     
     # QR unduh softcopy foto digital: memanggil softcopy_url() dari version.py
     qr = softcopy_url(sid, ev) if qr_on(ev) else None
+    qr_for_print = qr if print_qr_on(ev) else None
 
     try:
-        img, photos, ex = receipt_from_payload(p, qr_url=qr, number=number, lucky=lucky, code=sid)
+        img, photos, ex = receipt_from_payload(p, qr_url=qr_for_print, number=number, lucky=lucky, code=sid)
         folder = os.path.join(OUT, "sessions", sid)
         os.makedirs(folder, exist_ok=True)
         for i, ph in enumerate(photos, 1):

@@ -45,6 +45,7 @@ DEFAULT = {
     },
     "download_auto_delete": 3, # menit auto-delete di server
     "qr_download": True,       # QR unduh foto digital (tamu harus satu Wi-Fi dengan server)
+    "print_qr": False,         # Cetak QR download di kertas foto/struk (bawaan: False, bersih tanpa QR)
     "features": {"guestbook": False, "lucky_draw": False, "pose_challenge": False, "host_copy": False,
                  "living_photo": False},
     "living_url": "",          # alamat halaman Living Photo (kosong = bawaan produk / config)

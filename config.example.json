@@ -16,6 +16,7 @@
   "mirror": true,
   "dummy_camera": false,
   "qr_download": true,
+  "print_qr": false,
 
   "studio_local_only": false,
   "paper_roll_m": 50,

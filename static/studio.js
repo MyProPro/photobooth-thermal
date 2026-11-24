@@ -154,6 +154,7 @@ function renderInfo() {
   ev.social = Object.assign({ username: '', display: '{event}', website: '', bio: '{date_long}' }, ev.social || {});
   $$('#tab-info [data-s]').forEach((el) => { el.value = ev.social[el.dataset.s] ?? ''; });
   $('#qrToggle').checked = ev.qr_download !== false;
+  if ($('#printQrToggle')) $('#printQrToggle').checked = !!ev.print_qr;
   ev.features = Object.assign({ guestbook: false, lucky_draw: false, pose_challenge: false, host_copy: false, living_photo: false }, ev.features || {});
   $$('#featureChecks [data-f]').forEach((el) => { el.checked = !!ev.features[el.dataset.f]; });
   $('#certTitles').value = (ev.cert_titles && ev.cert_titles.length ? ev.cert_titles : META.certTitles).join('\n');
@@ -251,6 +252,13 @@ if ($('#qrToggle')) {
     ev.qr_download = e.target.checked;
     if ($('#autoDeleteWrap')) $('#autoDeleteWrap').style.opacity = e.target.checked ? '1' : '0.5';
     if ($('#downloadAutoDelete')) $('#downloadAutoDelete').disabled = !e.target.checked;
+    setDirty();
+    schedulePreview();
+  });
+}
+if ($('#printQrToggle')) {
+  $('#printQrToggle').addEventListener('change', (e) => {
+    ev.print_qr = e.target.checked;
     setDirty();
     schedulePreview();
   });
