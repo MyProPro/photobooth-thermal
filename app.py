@@ -790,7 +790,7 @@ def api_sample_styles():
             styled = ImageOps_fit(styled, (360, 640))
             out[sid] = to_data_url(styled, "JPEG")
     else:
-        for sid in ["dither", "halftone", "kontras", "sketsa", "ascii", "mewarnai"]:
+        for sid in ["bw", "dither", "halftone", "kontras", "sketsa", "ascii", "mewarnai"]:
             styled = stylize(im, (360, 640), sid, brightness=brightness)
             out[sid] = to_data_url(styled, "PNG")
 

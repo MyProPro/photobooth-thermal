@@ -16,7 +16,7 @@ let skipCountdown = false, shooting = false;
 function freshState() {
   if (S.paymentTimer) { clearInterval(S.paymentTimer); S.paymentTimer = null; }
   if (S.paymentPollTimer) { clearInterval(S.paymentPollTimer); S.paymentPollTimer = null; }
-  S = { layout: CFG.defaultLayout || 'strip', copies: 1, style: (CFG.styles && CFG.styles[0].id) || 'dither', caption: '', showLogo: true,
+  S = { layout: CFG.defaultLayout || 'strip', copies: 1, style: (CFG.styles && CFG.styles[0].id) || 'bw', caption: '', showLogo: true,
         photos: [], lastPrint: null, printed: 0, template: CFG.defaultTemplate, photoVer: 0, tplKey: '',
         poses: [], guestbook: null, certTitle: '', pendingJobs: null,
         eventName: CFG.eventName || '', footer: CFG.footer || '',
@@ -828,8 +828,8 @@ function applyOutputMode(mode) {
       S.style = 'warna';
     }
   } else {
-    if (!['dither', 'halftone', 'kontras', 'sketsa', 'ascii', 'mewarnai'].includes(S.style)) {
-      S.style = 'dither';
+    if (!['bw', 'dither', 'halftone', 'kontras', 'sketsa', 'ascii', 'mewarnai'].includes(S.style)) {
+      S.style = 'bw';
     }
   }
   renderOptions();

@@ -130,6 +130,10 @@ def stylize(img, size, style="dither", brightness=1.0):
         e = g.filter(ImageFilter.GaussianBlur(1)).filter(ImageFilter.FIND_EDGES)
         e = ImageOps.invert(ImageOps.autocontrast(e))
         out = e.point(lambda v: WHITE if v > 200 else BLACK)
+    elif style == "bw":
+        # Hitam-putih murni / natural tanpa efek filter atau unsharp mask berlebih
+        g = ImageOps.autocontrast(g, cutoff=1)
+        out = g.convert("1").convert("L")
     else:  # dither Floyd–Steinberg
         g = g.filter(ImageFilter.UnsharpMask(radius=2, percent=80))
         out = g.convert("1").convert("L")
