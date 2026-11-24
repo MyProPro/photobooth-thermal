@@ -1885,6 +1885,7 @@ $('#btnReprint').addEventListener('click', async () => {
 // ---------- status printer ----------
 let lastPrinterOk = null;   // status printer terakhir yang diketahui (dipakai saat server tidak merespons)
 let lastPrinterStatus = null; // objek status printer terakhir dari /api/status
+let lastServerError = null; // pesan error saat fetch /api/status gagal
 
 async function pollStatus() {
   try {
@@ -1949,6 +1950,8 @@ async function pollStatus() {
       : (low ? `PAPER LOW (${s.paper.left_m} m)` : (s.mode === 'file' ? 'TEST MODE (NO PRINTER)' : 'PRINTER READY'));
     $('#statusText').title = s.message || '';
   } catch (e) {
+    lastServerError = e.message || String(e);
+    lastPrinterStatus = null;
     $('#statusDot').className = 'dot bad';
     // server mati -> status printer tidak bisa dicek; pakai status terakhir yang diketahui
     $('#statusText').textContent = lastPrinterOk ? 'SERVER NOT CONNECTED' : 'SERVER & PRINTER NOT CONNECTED';
@@ -2390,7 +2393,7 @@ async function showPrinterStatusModal() {
   } catch (_) {}
 
   const isAndroid = typeof window.AndroidUsbPrinter !== 'undefined';
-  let rawMsg = (s && s.message) || '';
+  let rawMsg = (s && s.message) || (lastServerError ? 'Koneksi ke backend server gagal: ' + lastServerError : '');
   let devCount = 0;
   if (isAndroid) {
     try {
