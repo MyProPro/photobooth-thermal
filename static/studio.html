@@ -196,7 +196,7 @@ body.ev-photo .thermal-only{display:none!important}
 <header class="top">
   <div class="left">
     <h1 style="font-size:22px">AdsBooth Studio</h1>
-    <span class="badge" id="activeBadge"><span class="dot"></span><span id="activeText">-</span></span>
+    <span class="badge hidden" id="activeBadge"><span class="dot"></span><span id="activeText"></span></span>
     <button type="button" class="lic-pill hidden" id="licPill"></button>
   </div>
   <div class="row">
@@ -233,7 +233,7 @@ body.ev-photo .thermal-only{display:none!important}
 
     <div id="settings" class="hidden">
       <h2 style="font-size:26px">Printer &amp; tablet</h2>
-      <p class="muted" style="margin-top:4px">Pengaturan ini berlaku untuk semua event (disimpan di config.json).</p>
+      <p class="muted" style="margin-top:4px">Pengaturan ini berlaku untuk semua event.</p>
       <div class="split" style="margin-top:16px">
         <div>
           <div class="card">
@@ -674,7 +674,7 @@ body.ev-photo .thermal-only{display:none!important}
           <label class="check" style="font-weight:600;font-size:15px;cursor:pointer">
             <input type="checkbox" id="qrToggle"> Aktifkan Download Softcopy Foto
           </label>
-          <p class="hint" style="margin:4px 0 14px 24px">Tamu dapat mengunduh softcopy foto berwarna resolusi tinggi lewat QR di struk &amp; layar Selesai. Pengaturan link/penyimpanan diatur di <span class="mono">config.json</span> aplikasi.</p>
+          <p class="hint" style="margin:4px 0 14px 24px">Tamu dapat mengunduh softcopy foto berwarna resolusi tinggi lewat QR di struk &amp; layar Selesai.</p>
           <div id="autoDeleteWrap" style="padding-top:14px;border-top:1px solid var(--line);max-width:360px">
             <label class="field"><span>Hapus Otomatis File di Server Setelah</span>
               <select id="downloadAutoDelete">

@@ -42,8 +42,15 @@ async function loadEvents() {
   const j = await api('/api/studio/events');
   EVENTS = j.events; ACTIVE = j.active;
   const act = EVENTS.find((e) => e.id === ACTIVE);
-  $('#activeText').textContent = act ? 'Aktif: ' + act.name : 'Aktif: config.json (tanpa event)';
-  $('#activeBadge').classList.toggle('on', !!act);
+  if (act) {
+    $('#activeBadge').classList.remove('hidden');
+    $('#activeBadge').classList.add('on');
+    $('#activeText').textContent = 'Aktif: ' + act.name;
+  } else {
+    $('#activeBadge').classList.add('hidden');
+    $('#activeBadge').classList.remove('on');
+    $('#activeText').textContent = '';
+  }
   $('#eventList').innerHTML = EVENTS.length ? '' : '<p class="hint">Belum ada event.</p>';
   EVENTS.forEach((e) => {
     const b = document.createElement('button');
