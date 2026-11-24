@@ -95,6 +95,8 @@ class MainActivity : ComponentActivity() {
                         runOnUiThread {
                             status.visibility = View.GONE
                             web.loadUrl(kioskUrl)
+                            // Minta izin USB secara otomatis jika printer terpasang
+                            try { UsbPrinterBridge.requestPermission(null) } catch (_: Exception) {}
                         }
                         return@thread
                     }

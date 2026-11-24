@@ -74,6 +74,22 @@ object UsbPrinterBridge {
     }
 
     /**
+     * Nama perangkat yang aman dari SecurityException (Android 10+ melempar SecurityException jika belum ada izin).
+     */
+    private fun getSafeDeviceName(dev: UsbDevice): String {
+        return try {
+            val manager = usbManager
+            if (manager != null && manager.hasPermission(dev)) {
+                dev.productName ?: dev.deviceName
+            } else {
+                dev.deviceName
+            }
+        } catch (_: Throwable) {
+            dev.deviceName
+        }
+    }
+
+    /**
      * Cari printer USB yang terhubung.
      * Prioritas:
      * 1. Perangkat dengan Interface USB Class 7 (Printer)
@@ -82,50 +98,56 @@ object UsbPrinterBridge {
      */
     @JvmStatic
     fun findPrinterDevice(): UsbDevice? {
-        val manager = usbManager ?: return null
-        val deviceList = manager.deviceList
-        if (deviceList.isEmpty()) {
-            lastStatusMessage = "Tidak ada perangkat USB terdeteksi. Pastikan kabel OTG tercolok dan opsi 'Koneksi OTG' di Pengaturan Android sudah aktif."
-            return null
-        }
-
-        // Cek 1: Interface Class 7 (Printer standard)
-        for (dev in deviceList.values) {
-            for (i in 0 until dev.interfaceCount) {
-                val iface = dev.getInterface(i)
-                if (iface.interfaceClass == UsbConstants.USB_CLASS_PRINTER) {
-                    lastStatusMessage = "Printer terdeteksi: ${dev.productName ?: dev.deviceName} (Class 7)"
-                    return dev
-                }
+        return try {
+            val manager = usbManager ?: return null
+            val deviceList = manager.deviceList
+            if (deviceList.isEmpty()) {
+                lastStatusMessage = "Tidak ada perangkat USB terdeteksi. Pastikan kabel OTG tercolok dan opsi 'Koneksi OTG' di Pengaturan Android sudah aktif."
+                return null
             }
-        }
 
-        // Cek 2: Vendor Epson (0x04b8)
-        for (dev in deviceList.values) {
-            if (dev.vendorId == 0x04b8) {
-                lastStatusMessage = "Printer Epson terdeteksi: ${dev.productName ?: dev.deviceName} (VID 0x04b8)"
-                return dev
-            }
-        }
-
-        // Cek 3: Perangkat dengan BULK OUT endpoint
-        for (dev in deviceList.values) {
-            for (i in 0 until dev.interfaceCount) {
-                val iface = dev.getInterface(i)
-                for (j in 0 until iface.endpointCount) {
-                    val ep = iface.getEndpoint(j)
-                    if (ep.direction == UsbConstants.USB_DIR_OUT &&
-                        ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK) {
-                        lastStatusMessage = "Perangkat USB Bulk OUT terdeteksi: ${dev.productName ?: dev.deviceName}"
+            // Cek 1: Interface Class 7 (Printer standard)
+            for (dev in deviceList.values) {
+                for (i in 0 until dev.interfaceCount) {
+                    val iface = dev.getInterface(i)
+                    if (iface.interfaceClass == UsbConstants.USB_CLASS_PRINTER) {
+                        lastStatusMessage = "Printer terdeteksi: ${getSafeDeviceName(dev)} (Class 7)"
                         return dev
                     }
                 }
             }
-        }
 
-        val names = deviceList.values.joinToString { "${it.productName ?: it.deviceName} (VID:0x${Integer.toHexString(it.vendorId)})" }
-        lastStatusMessage = "Perangkat USB tercolok tapi bukan printer yang dikenali ($names)"
-        return null
+            // Cek 2: Vendor Epson (0x04b8)
+            for (dev in deviceList.values) {
+                if (dev.vendorId == 0x04b8) {
+                    lastStatusMessage = "Printer Epson terdeteksi: ${getSafeDeviceName(dev)} (VID 0x04b8)"
+                    return dev
+                }
+            }
+
+            // Cek 3: Perangkat dengan BULK OUT endpoint
+            for (dev in deviceList.values) {
+                for (i in 0 until dev.interfaceCount) {
+                    val iface = dev.getInterface(i)
+                    for (j in 0 until iface.endpointCount) {
+                        val ep = iface.getEndpoint(j)
+                        if (ep.direction == UsbConstants.USB_DIR_OUT &&
+                            ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK) {
+                            lastStatusMessage = "Perangkat USB Bulk OUT terdeteksi: ${getSafeDeviceName(dev)}"
+                            return dev
+                        }
+                    }
+                }
+            }
+
+            val names = deviceList.values.joinToString { "${getSafeDeviceName(it)} (VID:0x${Integer.toHexString(it.vendorId)})" }
+            lastStatusMessage = "Perangkat USB tercolok tapi bukan printer yang dikenali ($names)"
+            null
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error saat mencari printer: ${e.message}", e)
+            lastStatusMessage = "Error deteksi USB: ${e.message}"
+            null
+        }
     }
 
     @JvmStatic
@@ -175,35 +197,46 @@ object UsbPrinterBridge {
 
     @JvmStatic
     fun getStatusJson(): String {
-        val manager = usbManager
-        val json = JSONObject()
-        if (manager == null) {
-            json.put("ok", false)
-            json.put("available", false)
-            json.put("message", "USB Manager tidak tersedia")
-            return json.toString()
-        }
+        return try {
+            val manager = usbManager
+            val json = JSONObject()
+            if (manager == null) {
+                json.put("ok", false)
+                json.put("available", false)
+                json.put("message", "USB Manager tidak tersedia")
+                return json.toString()
+            }
 
-        val dev = findPrinterDevice()
-        if (dev == null) {
+            val dev = findPrinterDevice()
+            if (dev == null) {
+                json.put("ok", false)
+                json.put("available", true)
+                json.put("connected", false)
+                json.put("message", lastStatusMessage)
+                return json.toString()
+            }
+
+            val permitted = manager.hasPermission(dev)
+            val devName = getSafeDeviceName(dev)
+            json.put("ok", permitted)
+            json.put("available", true)
+            json.put("connected", true)
+            json.put("has_permission", permitted)
+            json.put("device_name", devName)
+            json.put("vendor_id", String.format("0x%04x", dev.vendorId))
+            json.put("product_id", String.format("0x%04x", dev.productId))
+            json.put("message", if (permitted) "Printer USB siap: $devName"
+                               else "Printer USB terdeteksi, butuh izin akses (tekan Sambungkan)")
+            json.toString()
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error di getStatusJson: ${e.message}", e)
+            val json = JSONObject()
             json.put("ok", false)
             json.put("available", true)
             json.put("connected", false)
-            json.put("message", lastStatusMessage)
-            return json.toString()
+            json.put("message", "Error status USB: ${e.message}")
+            json.toString()
         }
-
-        val permitted = manager.hasPermission(dev)
-        json.put("ok", permitted)
-        json.put("available", true)
-        json.put("connected", true)
-        json.put("has_permission", permitted)
-        json.put("device_name", dev.productName ?: dev.deviceName)
-        json.put("vendor_id", String.format("0x%04x", dev.vendorId))
-        json.put("product_id", String.format("0x%04x", dev.productId))
-        json.put("message", if (permitted) "Printer USB siap: ${dev.productName ?: dev.deviceName}"
-                           else "Printer USB terdeteksi, butuh izin akses (tekan Minta Izin)")
-        return json.toString()
     }
 
     /**

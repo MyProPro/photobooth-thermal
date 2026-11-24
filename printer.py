@@ -67,6 +67,8 @@ class ThermalPrinter:
     def configure(self, cfg):
         self.cfg = dict(cfg or {})
         self.mode = self.cfg.get("type", "file")
+        if self.mode == "win32" and get_android_usb_bridge():
+            self.mode = "webusb"
 
     def _make(self):
         c = self.cfg
@@ -301,6 +303,8 @@ class PhotoPrinter:
     def configure(self, cfg):
         self.cfg = dict(cfg or {})
         self.mode = self.cfg.get("type", "file")
+        if self.mode == "win32" and get_android_usb_bridge():
+            self.mode = "webusb"
 
     def status(self):
         if self.mode == "android":
