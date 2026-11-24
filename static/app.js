@@ -194,6 +194,29 @@ function showDummy(i) {
 
 // Viewfinder mengikuti rasio asli kamera (potret / lanskap), jadi tidak gepeng
 // dan yang terlihat = yang difoto. Dihitung ulang saat layar diputar.
+// Rasio foto per template (h/w) — cermin dari templates.py. Panduan viewfinder ikut ini.
+const TPL_RATIO = {
+  musik:{solo:1.15,duo:0.95,strip:1.1,grid:1.0},
+  teater:{solo:1.2,duo:0.9,strip:1.1,grid:1.0},
+  nowplaying:{solo:1.0,duo:0.85,strip:0.9,grid:1.0},
+  konser:{solo:1.15,duo:0.9,strip:1.05,grid:1.0},
+  chat:{solo:1.0,duo:1.0,strip:1.0,grid:1.0},
+  idcard:{solo:1.25,duo:0.8,strip:0.85,grid:1.0},
+  poster:{solo:1.3,duo:1.0,strip:1.05,grid:1.0},
+};
+const DEFAULT_RATIO = { solo:0.75, duo:0.75, strip:2/3, grid:1.0, feed:1.0 };
+function photoRatioHW() {
+  const lay = S.layout || 'strip';
+  const m = TPL_RATIO[S.template];
+  return (m && m[lay]) || DEFAULT_RATIO[lay] || 0.75;   // tinggi / lebar
+}
+function ratioLabel(a) {
+  const opts=[[1,'1:1'],[3/4,'3:4'],[4/5,'4:5'],[9/16,'9:16'],[4/3,'4:3'],[3/2,'3:2'],[16/9,'16:9']];
+  let best=opts[0], bd=1e9;
+  for (const [v,l] of opts){ const dd=Math.abs(v-a); if(dd<bd){bd=dd;best=[v,l];} }
+  return best[1];
+}
+
 function camRatio() {
   const v = $('#video'), d = $('#dummyView');
   if (DUMMY && d.naturalWidth) return d.naturalWidth / d.naturalHeight;
@@ -211,6 +234,16 @@ function sizeViewfinder() {
   vf.style.width = Math.floor(w) + 'px';
   vf.style.height = Math.floor(h) + 'px';
   $('#s-camera').style.setProperty('--ar', ar.toFixed(4));
+  const g = $("#vfGuide");
+  if (g) {
+    const tAR = 1 / photoRatioHW();        // lebar / tinggi area cetak
+    let gw = 100, gh = 100;
+    if (tAR <= ar) { gw = tAR / ar * 100; } else { gh = ar / tAR * 100; }
+    g.style.width = gw.toFixed(2) + "%";
+    g.style.height = gh.toFixed(2) + "%";
+    g.classList.remove("hidden");
+    const tag = $("#vfTag"); if (tag) tag.textContent = ratioLabel(tAR);
+  }
 }
 ['loadedmetadata', 'resize'].forEach((ev) => $('#video').addEventListener(ev, sizeViewfinder));
 $('#dummyView').addEventListener('load', sizeViewfinder);
@@ -646,7 +679,7 @@ function renderOptions() {
 }
 $$('#layoutOptions .opt').forEach((b) => b.addEventListener('click', () => {
   S.layout = b.dataset.layout; renderOptions();
-  setTimeout(() => go('style'), 180);   // tap langsung lanjut
+  setTimeout(() => go('style'), 180);   // pilih gaya cetak dulu (Dither/Halftone/Contrast)
 }));
 $('#copyInc').addEventListener('click', () => {
   if (S.paid) return;
@@ -833,6 +866,7 @@ async function shoot(indices, next = 'template') {
   shooting = true;
   go('camera');
   $('.viewfinder').classList.toggle('mirror', CFG.mirror);
+  sizeViewfinder();
   const n = SHOTS[S.layout];
   try {
     // tombol "Siap foto!" di tengah layar; setelah ditekan semua foto jalan otomatis

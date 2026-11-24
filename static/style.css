@@ -1546,3 +1546,12 @@ body.mode-photo #styleOptions .sthumb img{image-rendering:auto}
 @media (max-width:600px){
   #s-welcome.screen{padding-bottom:40px!important}
 }
+
+
+/* ---- Panduan rasio foto di kamera (viewfinder ikut template) ---- */
+.viewfinder .vf-guide{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  box-shadow:0 0 0 9999px rgba(0,0,0,.42);border:2px dashed rgba(255,255,255,.92);
+  border-radius:10px;pointer-events:none;z-index:2;box-sizing:border-box}
+.viewfinder .vf-guide.hidden{display:none}
+.viewfinder .vf-guide .vf-tag{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.6);
+  color:#fff;font-size:12px;line-height:1;padding:4px 8px;border-radius:6px;letter-spacing:1px}

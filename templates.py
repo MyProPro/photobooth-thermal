@@ -6,6 +6,7 @@ Tambah template baru: buat fungsi t_xxx(c) lalu daftarkan di TEMPLATES.
 """
 import os
 import random
+import math
 from datetime import datetime
 
 from PIL import Image, ImageDraw, ImageFont
@@ -470,13 +471,13 @@ def qr_fit(qr, size):
     return qr.resize((qr.width * k, qr.width * k), Image.NEAREST)
 
 
-def slots(layout, x, y, w, gap=12, solo_r=0.75, strip_r=2 / 3, grid_r=1.0):
+def slots(layout, x, y, w, gap=12, solo_r=0.75, strip_r=2 / 3, grid_r=1.0, duo_r=0.75):
     """Posisi foto (x, y, w, h) untuk layout; return (list, bottom)."""
     if layout == "solo":
         h = int(w * solo_r)
         return [(x, y, w, h)], y + h
     if layout == "duo":
-        h = int(w * 0.75)
+        h = int(w * duo_r)
         return [(x, y, w, h), (x, y + h + gap, w, h)], y + 2 * h + gap
     if layout == "grid":
         s = (w - gap) // 2
@@ -2245,7 +2246,265 @@ def t_komik(c):
     return p.finish()
 
 
+
+# ============================================ TEMPLATE BARU (otentik/unik)
+
+def _star(d,cx,cy,r,fill=0):
+    pts=[]
+    for i in range(10):
+        a=-math.pi/2+i*math.pi/5
+        rr=r if i%2==0 else r*0.42
+        pts.append((cx+rr*math.cos(a),cy+rr*math.sin(a)))
+    d.polygon(pts,fill=fill)
+
+# 1 ---------------- Music / Playlist Receipt ----------------
+def t_musik(c):
+    p=Paper(c.W); W=c.W; m=36
+    p.y=30
+    words=c.event.upper().split()
+    if len(words)>=2:
+        p.y=p.center(words[0], F("black",62))+2
+        p.y=p.center(" ".join(words[1:]).lower(), F("serifk",50))+16
+    else:
+        p.y=p.center(c.event.upper(), F("black",56))+16
+    p.y=p.center("TRACK ORDER", F("monob",20), spacing=6)+8
+    p.y=p.center(c.date_long, F("mono",18))+16
+    p.y=p.rule(2,x0=m,x1=W-m)+16
+    f=F("mono",22)
+    tracks=[("01  GOLDEN HOUR","03:21"),("02  BEST DAY EVER","04:02"),
+            ("03  STAY LIKE THIS","02:48"),("04  ONE MORE POSE","03:33")]
+    for a,b in tracks[:max(2,c.n)+1]:
+        p.text(m,p.y,a,f); p.right(b,f,p.y,x1=W-m); p.y+=34
+    p.y+=4
+    p.y=p.dashed(h=2,x0=m,x1=W-m)+10
+    fb=F("monob",24)
+    p.text(m,p.y,"TOTAL",fb); p.right("FOREVER",fb,p.y,x1=W-m); p.y+=42
+    p.y=p.rule(2,x0=m,x1=W-m)+20
+    rects,p.y=slots(c.layout,m,p.y,W-2*m,gap=12,solo_r=1.15,duo_r=0.95,strip_r=1.1,grid_r=1.0)
+    put_photos(p,c,rects)
+    p.y+=22
+    p.para_center("Printed like a receipt, kept like a memory.", F("serif",24), max_w=W-2*m, line_gap=6)
+    p.y+=16
+    p.qr_row(c, size=150, x=(W-150)//2) if c.qr is not None else None
+    p.y+=6
+    p.y=p.center("THE ART OF THE MOMENT", F("monob",18), spacing=4)+12
+    return p.finish()
+
+# 2 ---------------- Theater Ticket Photostrip ----------------
+def t_teater(c):
+    p=Paper(c.W); W=c.W; m=10; m2=34
+    p.y=16; top=p.y; bandh=64
+    p.d.rectangle((m,p.y,W-m-1,p.y+bandh),fill=0)
+    p.center("THEATER TICKET", F("bebas",52), y=p.y+9, fill=255)
+    p.y+=bandh+18
+    _star(p.d,m2+4,p.y+6,13); _star(p.d,W-m2-4,p.y+6,13)
+    p.y=p.center("ADMIT ONE", F("black",30))+10
+    p.y=p.center(c.event.upper(), F("serifb",36))+6
+    if c.caption: p.y=p.center(c.caption, F("hand",40))+6
+    p.y+=6
+    p.y=p.dots(r=2,step=10,x0=m2,x1=W-m2)+16
+    cols=[("ROW","A"),("SEAT",c.no[-2:]),("DATE",c.now.strftime("%d %b").upper())]
+    bw=(W-2*m2-2*10)/3
+    for i,(lab,val) in enumerate(cols):
+        x=m2+i*(bw+10)
+        p.text(x,p.y,lab,F("mono",15)); p.text(x,p.y+22,val,F("bebas",34))
+    p.y+=66
+    rects,p.y=slots(c.layout,m2,p.y,W-2*m2,gap=12,solo_r=1.2,duo_r=0.9,strip_r=1.1,grid_r=1.0)
+    put_photos(p,c,rects,border=3)
+    p.y+=20
+    p.y=p.center("MEMORIES THEATER", F("monob",18), spacing=3)+16
+    p.d.rectangle((m,top,W-m-1,p.y),outline=0,width=4)
+    p.y+=22; p.dots(r=3,step=13,y=p.y); p.y+=18
+    stub_top=p.y; p.y+=16
+    p.text(m2,p.y,"STUB", F("bebas",40)); p.right(f"NO.{c.no}", F("monob",18), p.y+12, x1=W-m2)
+    p.y+=58
+    p.barcode(m2,p.y,W-2*m2,80,seed=c.no); p.y+=96
+    p.d.rectangle((m,stub_top,W-m-1,p.y),outline=0,width=4)
+    p.y+=10
+    return p.finish()
+
+# 3 ---------------- Now Playing (music player) ----------------
+def t_nowplaying(c):
+    p=Paper(c.W); W=c.W; m=40
+    p.y=30
+    p.y=p.center("NOW PLAYING", F("monob",18), spacing=6)+20
+    rects,p.y=slots(c.layout,m,p.y,W-2*m,gap=12,solo_r=1.0,duo_r=0.85,strip_r=0.9,grid_r=1.0)
+    put_photos(p,c,rects,border=0)
+    p.y+=26
+    p.y=p.center(c.event.upper(), F("black",40))+6
+    p.y=p.center(c.caption or "feat. good vibes", F("serif",24))+22
+    # progress bar
+    bx0,bx1=m,W-m; by=p.y; p.d.rectangle((bx0,by,bx1,by+4),fill=0)
+    knob=bx0+int((bx1-bx0)*0.42); p.d.ellipse((knob-8,by-6,knob+8,by+10),fill=0)
+    p.y+=20
+    f=F("mono",18); p.text(bx0,p.y,"1:27",f); p.right("3:45",f,p.y,x1=bx1); p.y+=40
+    # transport controls
+    cy=p.y+10; cx=W//2
+    d=p.d
+    d.polygon([(cx-90,cy-14),(cx-108,cy),(cx-90,cy+14)],fill=0); d.polygon([(cx-74,cy-14),(cx-92,cy),(cx-74,cy+14)],fill=0)
+    d.ellipse((cx-26,cy-26,cx+26,cy+26),fill=0); d.polygon([(cx-8,cy-13),(cx+15,cy),(cx-8,cy+13)],fill=255)
+    d.polygon([(cx+74,cy-14),(cx+92,cy),(cx+74,cy+14)],fill=0); d.polygon([(cx+90,cy-14),(cx+108,cy),(cx+90,cy+14)],fill=0)
+    p.y+=64
+    p.qr_row(c, size=130, x=(W-130)//2) if c.qr is not None else None
+    p.y+=6
+    p.y=p.center(c.footer, F("monob",18), spacing=3)+12
+    return p.finish()
+
+# 4 ---------------- Concert / Festival Ticket ----------------
+def t_konser(c):
+    p=Paper(c.W); W=c.W; m=10; m2=34
+    p.y=16; top=p.y
+    p.y=p.center("LIVE IN CONCERT", F("monob",18), spacing=4)+12
+    p.para_center(c.event.upper(), F("black",46), max_w=W-2*m2, line_gap=4); p.y+=6
+    p.y=p.center(c.date_long+"  ·  GATE 7PM", F("mono",18))+16
+    p.y=p.dashed(h=2,x0=m2,x1=W-m2)+14
+    p.y=p.center("LINE UP", F("monob",17), spacing=5)+12
+    for name in ["THE MIDNIGHTS","GOLDEN HOUR","PAPER PLANES","and more..."]:
+        p.y=p.center(name, F("serifb",26))+8
+    p.y+=12
+    p.y=p.dashed(h=2,x0=m2,x1=W-m2)+16
+    rects,p.y=slots(c.layout,m2,p.y,W-2*m2,gap=12,solo_r=1.15,duo_r=0.9,strip_r=1.05,grid_r=1.0)
+    put_photos(p,c,rects,border=3)
+    p.y+=20
+    cols=[("SEC","GA"),("ROW","--"),("SEAT",c.no[-2:])]
+    bw=(W-2*m2-2*10)/3
+    for i,(lab,val) in enumerate(cols):
+        x=m2+i*(bw+10); p.d.rectangle((x,p.y,x+bw,p.y+72),outline=0,width=2)
+        p.text(x+10,p.y+10,lab,F("mono",14)); p.text(x+10,p.y+32,val,F("bebas",34))
+    p.y+=72+20
+    p.d.rectangle((m,top,W-m-1,p.y),outline=0,width=4)
+    p.y+=22; p.dots(r=3,step=13,y=p.y); p.y+=18
+    p.barcode(m2,p.y,W-2*m2,80,seed=c.no); p.y+=94
+    p.y=p.center(f"ADMIT ONE · NO.{c.no}", F("mono",16), spacing=2)+12
+    return p.finish()
+
+# 5 ---------------- Chat / iMessage ----------------
+def t_chat(c):
+    p=Paper(c.W); W=c.W; m=28
+    p.y=22
+    # header
+    p.d.ellipse((m,p.y,m+46,p.y+46),outline=0,width=3)
+    p.text(m+60,p.y+2,c.event.title(),F("sansb",26)); p.text(m+60,p.y+30,"online now",F("sans",16))
+    p.y+=64; p.y=p.rule(2,x0=0,x1=W)+22
+    def bubble(text, right=False, f=None):
+        f=f or F("sans",22)
+        lines=p.wrap(text,f,W*0.6)
+        bw=max(p.tw(l,f) for l in lines)+36; bh=len(lines)*32+24
+        if right: x0=W-m-bw
+        else: x0=m
+        p.d.rounded_rectangle((x0,p.y,x0+bw,p.y+bh),radius=22,outline=0,width=3)
+        ty=p.y+12
+        for l in lines: p.text(x0+18,ty,l,f); ty+=32
+        p.y+=bh+16
+    bubble("Say cheese! ready?? 📸")
+    bubble("always ready 😎", right=True)
+    # photo as sent image
+    rects,p.y=slots(c.layout,W-m-300 if c.layout in ("solo",) else m,p.y,300 if c.layout=="solo" else W-2*m,gap=10,solo_r=1.0,duo_r=1.0,strip_r=1.0,grid_r=1.0)
+    put_photos(p,c,rects,border=3)
+    p.y+=16
+    bubble("okay this is THE one 🤍", right=True)
+    bubble("framing it forever")
+    p.y+=6
+    p.y=p.center("Delivered", F("sans",16))+16
+    p.qr_row(c, size=120, x=(W-120)//2) if c.qr is not None else None
+    p.y+=4
+    return p.finish()
+
+# 6 ---------------- Vintage ID / Member Card ----------------
+def t_idcard(c):
+    p=Paper(c.W); W=c.W; m=24
+    p.y=22; top=p.y
+    p.d.rectangle((m,p.y,W-m-1,p.y+58),fill=0)
+    p.center("MEMBER CARD", F("bebas",46), y=p.y+8, fill=255); p.y+=58+8
+    p.center(c.event.upper(), F("monob",18), y=p.y, spacing=3); p.y+=34
+    p.y=p.rule(2,x0=m,x1=W-m)+18
+    # photo left, details right
+    pw=190; ph=int(pw*1.25)
+    p.paste(c.ph(0,pw,ph),m,p.y); p.d.rectangle((m,p.y,m+pw,p.y+ph),outline=0,width=3)
+    dx=m+pw+26; f=F("mono",18); fy=p.y+4
+    for lab,val in [("NAME",(c.caption or "GUEST").upper()),("ID NO",c.no),
+                    ("ISSUED",c.now.strftime("%d %b %Y")),("EXP","NEVER"),("TYPE","VIP")]:
+        p.text(dx,fy,lab,F("mono",14)); p.text(dx,fy+20,val,F("sansb",22)); fy+=58
+    p.y+=ph+20
+    p.y=p.dashed(h=2,x0=m,x1=W-m)+14
+    # extra strip if more photos
+    if c.n>1:
+        rects,p.y=slots("strip" if c.n>=3 else "duo", m, p.y, W-2*m, gap=10,strip_r=0.85,duo_r=0.8)
+        put_photos(p,c,rects,border=2); p.y+=16
+    p.text(m,p.y,"SIGNATURE",F("mono",14)); p.d.line((m+120,p.y+20,W-m,p.y+20),fill=0,width=2); p.y+=40
+    p.barcode(m,p.y,W-2*m,64,seed=c.no); p.y+=78
+    p.d.rectangle((m-4,top-4,W-m+3,p.y+4),outline=0,width=2)
+    p.y+=16
+    return p.finish()
+
+# 7 ---------------- Movie Poster ----------------
+def t_poster(c):
+    p=Paper(c.W); W=c.W; m=30
+    p.y=24
+    p.y=p.center("NOW SHOWING", F("monob",18), spacing=6)+16
+    rects,p.y=slots(c.layout,m,p.y,W-2*m,gap=12,solo_r=1.3,duo_r=1.0,strip_r=1.05,grid_r=1.0)
+    put_photos(p,c,rects,border=0)
+    p.y+=24
+    p.para_center(c.event.upper(), F("serifk",58), max_w=W-2*m, line_gap=2); p.y+=10
+    p.y=p.center("— a film about good friends —", F("serif",22))+16
+    p.y=p.center("STARRING", F("monob",15), spacing=5)+10
+    p.y=p.center((c.caption or "YOU & THE GANG").upper(), F("sansb",24))+18
+    for _ in range(1):
+        cx=W//2
+        for k in range(5): _star(p.d,cx-80+k*40,p.y+8,12)
+    p.y+=30
+    p.y=p.dashed(h=2,x0=m,x1=W-m)+14
+    f=F("mono",18)
+    p.text(m,p.y,"RUNTIME  "+str(90+int(c.no[-2:] or 0))+" MIN",f)
+    p.right("RATED  G", f, p.y, x1=W-m); p.y+=30
+    p.text(m,p.y,"RELEASE  "+c.now.strftime("%d.%m.%Y"),f)
+    p.right("SCREEN 1", f, p.y, x1=W-m); p.y+=36
+    p.qr_row(c, size=130, x=(W-130)//2) if c.qr is not None else None
+    p.y+=4
+    p.y=p.center(c.footer, F("monob",18), spacing=3)+12
+    return p.finish()
+
+# 8 ---------------- Coffee Shop Receipt ----------------
+def t_kopi(c):
+    p=Paper(c.W); W=c.W; m=36
+    p.y=28
+    # cup icon
+    cx=W//2
+    p.d.rectangle((cx-26,p.y,cx+22,p.y+34),outline=0,width=3)
+    p.d.arc((cx+18,p.y+4,cx+40,p.y+26),-90,90,fill=0,width=3)
+    p.d.line((cx-20,p.y-8,cx-16,p.y-16),fill=0,width=2); p.d.line((cx,p.y-8,cx+4,p.y-16),fill=0,width=2)
+    p.y+=48
+    p.y=p.center(c.event.upper(), F("black",42))+4
+    p.y=p.center("COFFEE · ROASTERY", F("monob",16), spacing=3)+6
+    p.y=p.center("Jl. Kenangan No. 1", F("mono",16))+16
+    p.y=p.dashed(h=2,x0=m,x1=W-m)+14
+    f=F("mono",20)
+    p.text(m,p.y,f"ORDER {c.no}",f); p.right(c.now.strftime("%d/%m %H:%M"),f,p.y,x1=W-m); p.y+=34
+    p.y=p.dashed(h=2,x0=m,x1=W-m)+14
+    for a,b in [("1x CAPPUCCINO","happy"),("1x ICED LATTE","smile"),("1x CROISSANT","laugh")][:max(2,c.n)]:
+        p.text(m,p.y,a,f); p.right(b,f,p.y,x1=W-m); p.y+=32
+    p.y+=4; p.y=p.rule(2,x0=m,x1=W-m)+10
+    fb=F("monob",24); p.text(m,p.y,"TOTAL",fb); p.right("PRICELESS",fb,p.y,x1=W-m); p.y+=44
+    p.y=p.dashed(h=2,x0=m,x1=W-m)+16
+    rects,p.y=slots(c.layout,m,p.y,W-2*m,gap=10)
+    put_photos(p,c,rects)
+    p.y+=20
+    p.y=p.center("thank you, see you again", F("hand",38))+14
+    p.qr_row(c, size=130, x=(W-130)//2) if c.qr is not None else None
+    p.y+=4
+    p.y=p.center(c.footer, F("monob",18), spacing=3)+10
+    return p.finish()
+
+
 TEMPLATES = [
+    ("musik", "Music Receipt", t_musik),
+    ("teater", "Theater Ticket", t_teater),
+    ("nowplaying", "Now Playing", t_nowplaying),
+    ("konser", "Concert Ticket", t_konser),
+    ("chat", "Chat", t_chat),
+    ("idcard", "ID Card", t_idcard),
+    ("poster", "Movie Poster", t_poster),
+    ("kopi", "Coffee Receipt", t_kopi),
     ("klasik", "Classic", t_klasik),
     ("sosmed", "Social Profile", t_sosmed),
     ("threads", "Text Feed", t_threads),
