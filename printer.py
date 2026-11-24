@@ -280,7 +280,7 @@ def discover():
 
 
 # ================= printer FOTO (mode cetak 4R berwarna) =================
-PHOTO_TYPES = ["file", "windows", "cups"]
+PHOTO_TYPES = ["file", "windows", "cups", "android"]
 
 
 class PhotoPrinter:
@@ -303,6 +303,8 @@ class PhotoPrinter:
         self.mode = self.cfg.get("type", "file")
 
     def status(self):
+        if self.mode == "android":
+            return {"ok": True, "mode": "android", "message": "Cetak lewat Android (Mopria/AirPrint/Epson/Canon) di tablet"}
         if self.mode == "file":
             return {"ok": True, "mode": "file", "message": "Mode tes foto (simpan file, tanpa printer)"}
         try:
@@ -317,7 +319,7 @@ class PhotoPrinter:
         os.makedirs(os.path.join(self.out_dir, "prints"), exist_ok=True)
         path = os.path.join(self.out_dir, "prints", datetime.now().strftime("%Y%m%d_%H%M%S_%f") + ".jpg")
         img.convert("RGB").save(path, quality=95, dpi=(300, 300))
-        if self.mode == "file":
+        if self.mode in ("file", "android"):
             return path
         with self.lock:
             for _ in range(max(1, copies)):

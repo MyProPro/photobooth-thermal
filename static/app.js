@@ -1779,6 +1779,10 @@ async function doPrint() {
       await PBUSB.printJobs(j.jobs);
       S.pendingJobs = null;
     }
+    if (j.photo_url && PBPHOTO.supported()) {   // mode cetak foto LAN (Android Print Framework)
+      $('#printStatus').textContent = 'Opening printer…';
+      await PBPHOTO.printPhoto(j.photo_url, j.photo_copies, j.photo_media, j.photo_borderless);
+    }
     clearInterval(anim);
     setPct(100);
     S.printed = S.copies;
@@ -1988,12 +1992,14 @@ function revealApp() {
   const sp = document.getElementById('splash');
   if (!sp) return;
   let fired = false;
+  const SPLASH_MIN_MS = 1600;   // minimal tampil biar sempat terlihat (ubah di sini)
+  const hide = () => requestAnimationFrame(() => requestAnimationFrame(() => {
+    sp.classList.add('hide');
+    setTimeout(() => { if (sp.parentNode) sp.remove(); }, 550);
+  }));
   const done = () => {
     if (fired) return; fired = true;
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      sp.classList.add('hide');
-      setTimeout(() => { if (sp.parentNode) sp.remove(); }, 550);
-    }));
+    setTimeout(hide, Math.max(0, SPLASH_MIN_MS - performance.now()));
   };
   const fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
   Promise.race([fonts, new Promise((r) => setTimeout(r, 4000))]).then(done);

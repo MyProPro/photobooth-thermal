@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
         web.settings.mediaPlaybackRequiresUserGesture = false
         web.webViewClient = WebViewClient()
         web.addJavascriptInterface(AndroidPrintInterface(this), "AndroidUsbPrinter")
+        web.addJavascriptInterface(PhotoPrintBridge(this), "AndroidPhotoPrinter") 
         UsbPrinterBridge.init(this)
         web.webChromeClient = object : WebChromeClient() {
             override fun onPermissionRequest(request: PermissionRequest) {

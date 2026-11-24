@@ -928,6 +928,12 @@ def api_print():
 
     resp = {"ok": True, "id": sid, "number": number, "lucky": lucky,
             "jobs": [base64.b64encode(j).decode() for j in jobs]}
+    if is_photo(ev, p) and CFG.get("photo_printer", {}).get("type") == "android":
+        _pp = CFG.get("photo_printer", {})
+        resp["photo_url"] = f"/api/session/{sid}/print.jpg"
+        resp["photo_copies"] = copies + (1 if ft["host_copy"] else 0)
+        resp["photo_media"] = _pp.get("media") or "4x6"
+        resp["photo_borderless"] = bool(_pp.get("borderless", True))
     if qr:
         from imaging import make_qr_with_logo
         logo = ev.get("logo")
@@ -935,6 +941,17 @@ def api_print():
         resp["qr"] = to_data_url(make_qr_with_logo(qr, logo=logo_path, box_size=6, border=2, as_rgb=True))
         resp["url"] = qr
     return jsonify(resp)
+
+
+@app.get("/api/session/<sid>/print.jpg")
+def api_session_print(sid):
+    """Gambar cetak 4R final untuk dikirim ke printer LAN lewat Android Print Framework."""
+    if not re.fullmatch(r"[0-9a-fA-F]{6,16}", sid or ""):
+        abort(404)
+    path = os.path.join(OUT, "sessions", sid, "hasil_cetak.jpg")
+    if not os.path.exists(path):
+        abort(404)
+    return send_file(path, mimetype="image/jpeg")
 
 
 @app.post("/api/reprint/<sid>")
