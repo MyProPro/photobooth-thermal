@@ -48,7 +48,7 @@ class PhotoPrintBridge(private val activity: Activity) {
             "a4" -> PrintAttributes.MediaSize.ISO_A4
             "a5" -> PrintAttributes.MediaSize.ISO_A5
             "a6" -> PrintAttributes.MediaSize.ISO_A6
-            "5x7", "13x18" -> PrintAttributes.MediaSize.NA_5X7
+            "5x7", "13x18" -> PrintAttributes.MediaSize("NA_5X7", "5x7", 5000, 7000)
             "l", "3.5x5", "9x13" -> PrintAttributes.MediaSize.NA_INDEX_4X6
             else -> PrintAttributes.MediaSize.NA_INDEX_4X6   // 4x6 / postcard / 10x15 (default)
         }
