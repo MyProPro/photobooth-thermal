@@ -1884,11 +1884,15 @@ $('#btnReprint').addEventListener('click', async () => {
 
 // ---------- status printer ----------
 let lastPrinterOk = null;   // status printer terakhir yang diketahui (dipakai saat server tidak merespons)
+let lastPrinterStatus = null; // objek status printer terakhir dari /api/status
+
 async function pollStatus() {
   try {
-    const r = await fetch('/api/status');
+    const r = await fetch('/api/status', { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const s = await r.json();
+    lastPrinterStatus = s;
+
     // Event diganti dari Studio -> muat ulang kiosk (langsung kalau sedang di layar awal)
     if (s.eventVersion && CFG.eventVersion && s.eventVersion !== CFG.eventVersion) {
       if (current === 'welcome') { location.reload(); return; }
@@ -1896,31 +1900,59 @@ async function pollStatus() {
     }
     const low = CFG.output !== 'photo' && s.paper && s.paper.low;
     const pill = $('#introStatus');
-    const problem = !s.ok ? 'PRINTER NOT CONNECTED' : (low ? 'PAPER LOW' : '');
-    pill.textContent = problem; pill.classList.toggle('hidden', !problem);
-    if (s.mode === 'webusb') {
+
+    if (s.mode === 'webusb' || s.mode === 'android_usb') {
       const d = await PBUSB.paired().catch(() => null);
-      $('#btnUsb').classList.toggle('hidden', !!d);
-      lastPrinterOk = !!d;
       if (!d) {
-        $('#introStatus').textContent = 'USB PRINTER NOT CONNECTED'; $('#introStatus').classList.remove('hidden');
-        $('#statusDot').className = 'dot warn';
-        $('#statusText').textContent = PBUSB.supported() ? 'USB PRINTER NOT CONNECTED' : 'BROWSER DOES NOT SUPPORT USB';
+        lastPrinterOk = false;
+        pill.textContent = 'USB PRINTER BELUM TERHUBUNG';
+        pill.classList.remove('hidden');
+        $('#btnUsb').textContent = 'Sambungkan Printer USB';
+        $('#btnUsb').classList.remove('hidden');
+        $('#statusDot').className = 'dot bad';
+        $('#statusText').textContent = 'PRINTER TIDAK TERDETEKSI (KETUK)';
+        $('#statusText').title = s.message || 'Periksa kabel OTG atau aktifkan Koneksi OTG di pengaturan tablet';
         return;
       }
-    } else {
+      if (!d.hasPermission) {
+        lastPrinterOk = false;
+        pill.textContent = 'IZIN AKSES USB DIPERLUKAN';
+        pill.classList.remove('hidden');
+        $('#btnUsb').textContent = 'Izinkan Akses Printer USB';
+        $('#btnUsb').classList.remove('hidden');
+        $('#statusDot').className = 'dot warn';
+        $('#statusText').textContent = 'IZIN USB DIPERLUKAN (KETUK)';
+        $('#statusText').title = s.message || 'Ketuk untuk mengizinkan akses printer USB';
+        return;
+      }
+      // d.hasPermission === true dan printer terhubung
       $('#btnUsb').classList.add('hidden');
+      lastPrinterOk = !!s.ok;
+      const problem = !s.ok ? 'PRINTER TIDAK SIAP' : (low ? 'PAPER LOW' : '');
+      pill.textContent = problem;
+      pill.classList.toggle('hidden', !problem);
+      $('#statusDot').className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
+      $('#statusText').textContent = !s.ok ? 'PRINTER TIDAK SIAP (KETUK)'
+        : (low ? `PAPER LOW (${s.paper.left_m} m)` : 'PRINTER READY');
+      $('#statusText').title = s.message || '';
+      return;
     }
-    if (s.mode !== 'webusb') lastPrinterOk = !!s.ok;
+
+    // Mode printer lainnya (network, win32, file, photo)
+    $('#btnUsb').classList.add('hidden');
+    lastPrinterOk = !!s.ok;
+    const problem = !s.ok ? 'PRINTER NOT CONNECTED' : (low ? 'PAPER LOW' : '');
+    pill.textContent = problem;
+    pill.classList.toggle('hidden', !problem);
     $('#statusDot').className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
-    $('#statusText').textContent = !s.ok ? 'PRINTER NOT CONNECTED'
+    $('#statusText').textContent = !s.ok ? 'PRINTER NOT CONNECTED (KETUK)'
       : (low ? `PAPER LOW (${s.paper.left_m} m)` : (s.mode === 'file' ? 'TEST MODE (NO PRINTER)' : 'PRINTER READY'));
     $('#statusText').title = s.message || '';
   } catch (e) {
     $('#statusDot').className = 'dot bad';
     // server mati -> status printer tidak bisa dicek; pakai status terakhir yang diketahui
     $('#statusText').textContent = lastPrinterOk ? 'SERVER NOT CONNECTED' : 'SERVER & PRINTER NOT CONNECTED';
-    $('#statusText').title = 'Server tidak merespons (/api/status gagal) - cek app.py / koneksi ke PC server';
+    $('#statusText').title = 'Server tidak merespons (/api/status gagal) - cek app.py / koneksi ke PC server: ' + e.message;
   }
 }
 
@@ -2248,7 +2280,7 @@ async function submitAdminPin() {
 }
 
 // ---------- Modal Notifikasi Sistem In-App Kiosk ----------
-function showKioskAlert(title, message, icon = 'ℹ️', btnText = 'OK') {
+function showKioskAlert(title, message, icon = 'ℹ️', btnText = 'OK', isHtml = false) {
   return new Promise((resolve) => {
     const modal = $('#kioskAppModal');
     const t = $('#kioskModalTitle');
@@ -2261,7 +2293,10 @@ function showKioskAlert(title, message, icon = 'ℹ️', btnText = 'OK') {
       return;
     }
     if (t) t.textContent = title;
-    if (msg) msg.textContent = message;
+    if (msg) {
+      if (isHtml) msg.innerHTML = message;
+      else msg.textContent = message;
+    }
     if (ico) {
       ico.textContent = icon;
       if (icon === '⏱️' || icon === '❌' || icon === '🛑') {
@@ -2291,7 +2326,7 @@ function showKioskAlert(title, message, icon = 'ℹ️', btnText = 'OK') {
   });
 }
 
-function showKioskConfirm(title, message, okText = 'Ya', cancelText = 'Batal', icon = '❓') {
+function showKioskConfirm(title, message, okText = 'Ya', cancelText = 'Batal', icon = '❓', isHtml = false) {
   return new Promise((resolve) => {
     const modal = $('#kioskAppModal');
     const t = $('#kioskModalTitle');
@@ -2304,7 +2339,10 @@ function showKioskConfirm(title, message, okText = 'Ya', cancelText = 'Batal', i
       return;
     }
     if (t) t.textContent = title;
-    if (msg) msg.textContent = message;
+    if (msg) {
+      if (isHtml) msg.innerHTML = message;
+      else msg.textContent = message;
+    }
     if (ico) {
       ico.textContent = icon;
       if (icon === '❌' || icon === '🛑') {
@@ -2341,6 +2379,83 @@ function showKioskConfirm(title, message, okText = 'Ya', cancelText = 'Batal', i
     btnOk?.addEventListener('click', onOk);
     btnCancel?.addEventListener('click', onCancel);
   });
+}
+
+// Modal info status printer ketika indikator pojok kanan bawah diketuk
+async function showPrinterStatusModal() {
+  const s = lastPrinterStatus || {};
+  let d = null;
+  try {
+    if (typeof PBUSB !== 'undefined') d = await PBUSB.paired();
+  } catch (_) {}
+
+  const isAndroid = typeof window.AndroidUsbPrinter !== 'undefined';
+  let rawMsg = (s && s.message) || '';
+  let devCount = 0;
+  if (isAndroid) {
+    try {
+      const raw = window.AndroidUsbPrinter.getStatus();
+      const st = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      if (st) {
+        if (st.message) rawMsg = st.message;
+        if (st.device_count !== undefined) devCount = st.device_count;
+      }
+    } catch (_) {}
+  }
+
+  const isOk = !!(s && s.ok && (!d || d.hasPermission !== false));
+  const hasPerm = d ? d.hasPermission : (s && s.has_permission);
+  const devName = (d && d.name) || (s && s.device_name) || (isAndroid ? (devCount > 0 ? 'Perangkat USB lain' : 'Tidak ada perangkat USB terdeteksi') : (s.name || 'Printer'));
+  const statusColor = isOk ? '#16a34a' : (hasPerm === false ? '#d97706' : '#dc2626');
+  const statusLabel = isOk ? 'SIAP DIGUNAKAN' : (hasPerm === false ? 'BUTUH IZIN AKSES USB' : 'BELUM TERHUBUNG');
+  const statusIcon = isOk ? '🖨️' : (hasPerm === false ? '🔑' : '⚠️');
+
+  const html = `
+    <div style="text-align:left;font-size:14px;line-height:1.55;color:#1f2937">
+      <div style="display:flex;align-items:center;justify-content:space-between;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:10px 14px;margin-bottom:12px">
+        <div>
+          <div style="font-size:11px;color:#6b7280;text-transform:uppercase;font-weight:700">Status Printer</div>
+          <div style="font-weight:800;font-size:15px;color:${statusColor}">${statusLabel}</div>
+        </div>
+        <div style="font-size:24px">${statusIcon}</div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:#6b7280;font-weight:700;text-transform:uppercase;margin-bottom:2px">Perangkat:</div>
+        <div style="font-weight:600;font-size:14px;color:#111">${devName}</div>
+      </div>
+      <div style="background:#f3f4f6;border-radius:12px;padding:10px 14px;font-size:12.5px;color:#374151;margin-bottom:14px;border:1px solid #e5e7eb;word-break:break-word">
+        <b style="color:#111">Diagnosa Sistem:</b><br>${rawMsg || 'Belum ada info status printer.'}
+      </div>
+      <div style="font-size:12px;color:#4b5563;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:10px 14px;line-height:1.5">
+        <b style="color:#92400e">Petunjuk jika printer belum tersambung:</b>
+        <ol style="margin:4px 0 0;padding-left:18px">
+          <li>Pastikan kabel OTG tercolok kuat ke tablet dan printer ON.</li>
+          <li>Di HP/Tablet Android: Buka <b>Pengaturan &rarr; Pengaturan Tambahan / Sistem &rarr; aktifkan 'Koneksi OTG'</b>.</li>
+          <li>Ketuk tombol di bawah untuk meminta dialog izin USB.</li>
+        </ol>
+      </div>
+    </div>
+  `;
+
+  const ok = await showKioskConfirm(
+    'Status Printer USB',
+    html,
+    'Sambungkan / Minta Izin',
+    'Tutup',
+    statusIcon,
+    true
+  );
+
+  if (ok) {
+    await usbConnect();
+    pollStatus();
+  }
+}
+
+// Pasang klik pada indikator printer pojok kanan bawah
+const printerIndicator = $('#stepLabel');
+if (printerIndicator) {
+  printerIndicator.addEventListener('click', showPrinterStatusModal);
 }
 
 // Override dialog native browser di Kiosk agar 100% menggunakan modal sistem

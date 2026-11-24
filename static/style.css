@@ -32,9 +32,10 @@ body{display:flex;justify-content:center;width:100%}
 body.dark{background:var(--ink)}body.dark .topbar{color:var(--paper);border-color:#3A3733}
 body.dark .topbar-clock{color:var(--paper)}
 
-/* Status Printer Kecil di Bawah Kanan */
-.bottom-printer-indicator{position:fixed;bottom:12px;right:16px;z-index:90;font-size:11px;letter-spacing:.04em;background:rgba(255,255,255,.88);border:1px solid var(--line);border-radius:99px;padding:4px 10px;box-shadow:0 2px 8px rgba(0,0,0,.08);backdrop-filter:blur(4px);color:var(--ink);pointer-events:none;opacity:.85;transition:opacity .2s}
-body.dark .bottom-printer-indicator{background:rgba(28,28,28,.88);border-color:#444;color:var(--paper)}
+/* Status Printer Kecil di Bawah Kanan (Dapat diketuk untuk melihat info & sambungkan) */
+.bottom-printer-indicator{position:fixed;bottom:12px;right:16px;z-index:90;font-size:11px;letter-spacing:.04em;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:99px;padding:5px 12px;box-shadow:0 3px 12px rgba(0,0,0,.1);backdrop-filter:blur(6px);color:var(--ink);pointer-events:auto;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;opacity:.9;transition:transform .15s ease,opacity .2s ease}
+.bottom-printer-indicator:active{transform:scale(.95);opacity:1}
+body.dark .bottom-printer-indicator{background:rgba(28,28,28,.92);border-color:#444;color:var(--paper)}
 
 .screen{display:none;flex:1;flex-direction:column;gap:24px;padding:40px 48px 36px;min-height:0;overflow-y:auto}
 .screen.active{display:flex}

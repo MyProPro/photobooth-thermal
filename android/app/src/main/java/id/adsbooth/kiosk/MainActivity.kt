@@ -68,6 +68,16 @@ class MainActivity : ComponentActivity() {
         waitThenLoad()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Cek dan minta izin USB otomatis setiap kali kembali ke aplikasi (mis. setelah aktifkan OTG di Pengaturan)
+        try {
+            if (!UsbPrinterBridge.hasPermission()) {
+                UsbPrinterBridge.requestPermission(null)
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun startPythonServer() {
         if (!Python.isStarted()) Python.start(AndroidPlatform(this))
         val py = Python.getInstance()

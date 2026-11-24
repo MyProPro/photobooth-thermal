@@ -89,12 +89,21 @@ object UsbPrinterBridge {
         }
     }
 
+    private fun isNonPrinterClass(cls: Int): Boolean {
+        return cls == UsbConstants.USB_CLASS_VIDEO ||
+               cls == UsbConstants.USB_CLASS_AUDIO ||
+               cls == UsbConstants.USB_CLASS_HUB ||
+               cls == UsbConstants.USB_CLASS_HID ||
+               cls == UsbConstants.USB_CLASS_MASS_STORAGE
+    }
+
     /**
      * Cari printer USB yang terhubung.
      * Prioritas:
-     * 1. Perangkat dengan Interface USB Class 7 (Printer)
+     * 1. Perangkat dengan Interface USB Class 7 (Printer standard)
      * 2. Vendor ID Epson (0x04b8)
-     * 3. Perangkat USB apapun yang punya Endpoint BULK OUT (jika hanya ada 1 perangkat USB OTG)
+     * 3. Vendor ID thermal printer umum lainnya (Xprinter, Panda, POS-58, dll.)
+     * 4. Perangkat USB dengan Endpoint BULK OUT (bukan video/webcam, audio, hub, hid)
      */
     @JvmStatic
     fun findPrinterDevice(): UsbDevice? {
@@ -108,6 +117,7 @@ object UsbPrinterBridge {
 
             // Cek 1: Interface Class 7 (Printer standard)
             for (dev in deviceList.values) {
+                if (isNonPrinterClass(dev.deviceClass)) continue
                 for (i in 0 until dev.interfaceCount) {
                     val iface = dev.getInterface(i)
                     if (iface.interfaceClass == UsbConstants.USB_CLASS_PRINTER) {
@@ -125,10 +135,21 @@ object UsbPrinterBridge {
                 }
             }
 
-            // Cek 3: Perangkat dengan BULK OUT endpoint
+            // Cek 3: Vendor printer thermal populer (Winbond/Xprinter 0x0416, 0x0471, 0x1fc9, Star 0x0519, Rongta 0x0fe6, CH340 0x1a86, CP210x 0x10c4, FTDI 0x0403)
+            val knownThermalVids = setOf(0x0416, 0x0471, 0x1fc9, 0x0519, 0x0fe6, 0x1a86, 0x10c4, 0x0403)
             for (dev in deviceList.values) {
+                if (knownThermalVids.contains(dev.vendorId)) {
+                    lastStatusMessage = "Printer thermal terdeteksi: ${getSafeDeviceName(dev)} (VID 0x${Integer.toHexString(dev.vendorId)})"
+                    return dev
+                }
+            }
+
+            // Cek 4: Perangkat dengan BULK OUT endpoint (abaikan webcam / audio / hub)
+            for (dev in deviceList.values) {
+                if (isNonPrinterClass(dev.deviceClass)) continue
                 for (i in 0 until dev.interfaceCount) {
                     val iface = dev.getInterface(i)
+                    if (isNonPrinterClass(iface.interfaceClass)) continue
                     for (j in 0 until iface.endpointCount) {
                         val ep = iface.getEndpoint(j)
                         if (ep.direction == UsbConstants.USB_DIR_OUT &&
@@ -141,7 +162,7 @@ object UsbPrinterBridge {
             }
 
             val names = deviceList.values.joinToString { "${getSafeDeviceName(it)} (VID:0x${Integer.toHexString(it.vendorId)})" }
-            lastStatusMessage = "Perangkat USB tercolok tapi bukan printer yang dikenali ($names)"
+            lastStatusMessage = "Perangkat USB tercolok tapi bukan printer ($names)"
             null
         } catch (e: Throwable) {
             Log.e(TAG, "Error saat mencari printer: ${e.message}", e)
@@ -161,37 +182,40 @@ object UsbPrinterBridge {
     fun requestPermission(onResult: ((Boolean) -> Unit)? = null) {
         val act = activityRef ?: return
         val manager = usbManager ?: return
-        val dev = findPrinterDevice()
-        if (dev == null) {
-            onResult?.invoke(false)
-            return
-        }
-
-        if (manager.hasPermission(dev)) {
-            lastStatusMessage = "Izin USB sudah ada"
-            onResult?.invoke(true)
-            return
-        }
-
-        this.permissionCallback = onResult
-        try {
-            val flag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_MUTABLE
-            } else {
-                0
+        act.runOnUiThread {
+            val dev = findPrinterDevice()
+            if (dev == null) {
+                onResult?.invoke(false)
+                return@runOnUiThread
             }
-            // Di Android 12+ (SDK 31+), PendingIntent MUTABLE wajib memiliki intent eksplisit (setPackage)
-            val intent = Intent(ACTION_USB_PERMISSION).apply {
-                setPackage(act.packageName)
+
+            if (manager.hasPermission(dev)) {
+                lastStatusMessage = "Printer USB siap: ${getSafeDeviceName(dev)}"
+                onResult?.invoke(true)
+                return@runOnUiThread
             }
-            val permissionIntent = PendingIntent.getBroadcast(
-                act, 0, intent, flag
-            )
-            manager.requestPermission(dev, permissionIntent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Gagal meminta izin USB: ${e.message}", e)
-            lastStatusMessage = "Gagal meminta izin USB: ${e.message}"
-            onResult?.invoke(false)
+
+            this.permissionCallback = onResult
+            try {
+                val flag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_MUTABLE
+                } else {
+                    0
+                }
+                // Di Android 12+ (SDK 31+), PendingIntent MUTABLE wajib memiliki intent eksplisit (setPackage)
+                val intent = Intent(ACTION_USB_PERMISSION).apply {
+                    setPackage(act.packageName)
+                }
+                val permissionIntent = PendingIntent.getBroadcast(
+                    act, 0, intent, flag
+                )
+                manager.requestPermission(dev, permissionIntent)
+                lastStatusMessage = "Meminta izin akses USB untuk ${getSafeDeviceName(dev)}..."
+            } catch (e: Exception) {
+                Log.e(TAG, "Gagal meminta izin USB: ${e.message}", e)
+                lastStatusMessage = "Gagal meminta izin USB: ${e.message}"
+                onResult?.invoke(false)
+            }
         }
     }
 
@@ -203,15 +227,21 @@ object UsbPrinterBridge {
             if (manager == null) {
                 json.put("ok", false)
                 json.put("available", false)
+                json.put("connected", false)
+                json.put("device_count", 0)
                 json.put("message", "USB Manager tidak tersedia")
                 return json.toString()
             }
+
+            val deviceCount = manager.deviceList.size
+            json.put("device_count", deviceCount)
 
             val dev = findPrinterDevice()
             if (dev == null) {
                 json.put("ok", false)
                 json.put("available", true)
                 json.put("connected", false)
+                json.put("has_permission", false)
                 json.put("message", lastStatusMessage)
                 return json.toString()
             }
@@ -226,7 +256,7 @@ object UsbPrinterBridge {
             json.put("vendor_id", String.format("0x%04x", dev.vendorId))
             json.put("product_id", String.format("0x%04x", dev.productId))
             json.put("message", if (permitted) "Printer USB siap: $devName"
-                               else "Printer USB terdeteksi, butuh izin akses (tekan Sambungkan)")
+                               else "Printer $devName terdeteksi, butuh izin akses (ketuk untuk izinkan)")
             json.toString()
         } catch (e: Throwable) {
             Log.e(TAG, "Error di getStatusJson: ${e.message}", e)
@@ -234,6 +264,8 @@ object UsbPrinterBridge {
             json.put("ok", false)
             json.put("available", true)
             json.put("connected", false)
+            json.put("has_permission", false)
+            json.put("device_count", 0)
             json.put("message", "Error status USB: ${e.message}")
             json.toString()
         }

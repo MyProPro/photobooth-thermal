@@ -80,7 +80,10 @@
             name: st.device_name || 'Printer USB (OTG)',
             vendorId: st.vendor_id || '',
             productId: st.product_id || '',
-            hasPermission: !!st.has_permission
+            connected: true,
+            hasPermission: !!st.has_permission,
+            message: st.message || '',
+            deviceCount: Number(st.device_count || 0)
           };
         }
       } catch (e) {
@@ -94,7 +97,7 @@
     if (!list.length) return null;
     const d = list[0];
     return { name: [d.manufacturerName, d.productName].filter(Boolean).join(' ') || 'Printer USB',
-             vendorId: d.vendorId, productId: d.productId };
+             vendorId: d.vendorId, productId: d.productId, connected: true, hasPermission: true };
   }
 
   function b64ToBytes(b64) {

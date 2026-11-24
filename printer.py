@@ -19,6 +19,19 @@ from datetime import datetime
 TYPES = ["file", "win32", "usb", "network", "serial", "device", "webusb", "android_usb"]
 
 
+def is_android():
+    """Deteksi apakah berjalan di lingkungan Android (APK Chaquopy)."""
+    import sys
+    return bool(
+        os.environ.get("ADSBOOTH_DATA") or
+        os.environ.get("PHOTOBOOTH_DATA") or
+        "ANDROID_ROOT" in os.environ or
+        "ANDROID_DATA" in os.environ or
+        hasattr(sys, "getandroidapilevel") or
+        get_android_usb_bridge() is not None
+    )
+
+
 def get_android_usb_bridge():
     """Ambil jembatan Kotlin UsbPrinterBridge saat dijalankan di dalam APK Android."""
     try:
@@ -67,7 +80,7 @@ class ThermalPrinter:
     def configure(self, cfg):
         self.cfg = dict(cfg or {})
         self.mode = self.cfg.get("type", "file")
-        if self.mode == "win32" and get_android_usb_bridge():
+        if self.mode == "win32" and is_android():
             self.mode = "webusb"
 
     def _make(self):
@@ -93,6 +106,8 @@ class ThermalPrinter:
         return None
 
     def status(self):
+        if self.mode == "win32" and is_android():
+            self.mode = "webusb"
         if self.mode == "file":
             return {"ok": True, "mode": "file", "message": "Mode tes (tanpa printer)"}
         if self.mode in ("webusb", "android_usb"):
@@ -100,7 +115,15 @@ class ThermalPrinter:
             if bridge:
                 try:
                     st = json.loads(str(bridge.getStatusJson()))
-                    return {"ok": bool(st.get("ok")), "mode": self.mode, "message": st.get("message", "Status USB Android")}
+                    return {
+                        "ok": bool(st.get("ok")),
+                        "mode": self.mode,
+                        "connected": bool(st.get("connected")),
+                        "has_permission": bool(st.get("has_permission")),
+                        "device_name": st.get("device_name", ""),
+                        "device_count": st.get("device_count", 0),
+                        "message": st.get("message", "Status USB Android")
+                    }
                 except Exception as e:  # noqa: BLE001
                     return {"ok": False, "mode": self.mode, "message": f"Error status USB Android: {e}"}
             return {"ok": True, "mode": "webusb", "message": "Dicetak lewat Chrome di tablet (USB OTG)"}
@@ -303,7 +326,7 @@ class PhotoPrinter:
     def configure(self, cfg):
         self.cfg = dict(cfg or {})
         self.mode = self.cfg.get("type", "file")
-        if self.mode == "win32" and get_android_usb_bridge():
+        if self.mode == "win32" and is_android():
             self.mode = "webusb"
 
     def status(self):
