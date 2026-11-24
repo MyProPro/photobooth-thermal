@@ -1001,6 +1001,15 @@ async function renderTemplates() {
   if (seq !== tplSeq) return;
   // kartu kosong dulu, gambar diisi begitu siap
   list.innerHTML = '';
+  // pastikan ada template terpilih, lalu urutkan: terpilih dulu, sisanya dari bentuk/rasio paling mirip
+  if (!prep.templates.some((t) => t.id === S.template) && prep.templates.length) S.template = prep.templates[0].id;
+  (function sortByShape() {
+    const lay = S.layout || 'strip';
+    const rof = (id) => { const m = TPL_RATIO[id]; return (m && m[lay]) || DEFAULT_RATIO[lay] || 0.75; };
+    const selR = rof(S.template);
+    prep.templates.sort((a, b) =>
+      a.id === S.template ? -1 : b.id === S.template ? 1 : Math.abs(rof(a.id) - selR) - Math.abs(rof(b.id) - selR));
+  })();
   prep.templates.forEach((t) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -1975,6 +1984,21 @@ function applyLicense(L) {
 }
 
 // ---------- init ----------
+function revealApp() {
+  const sp = document.getElementById('splash');
+  if (!sp) return;
+  let fired = false;
+  const done = () => {
+    if (fired) return; fired = true;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      sp.classList.add('hide');
+      setTimeout(() => { if (sp.parentNode) sp.remove(); }, 550);
+    }));
+  };
+  const fonts = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+  Promise.race([fonts, new Promise((r) => setTimeout(r, 4000))]).then(done);
+  setTimeout(done, 6000);   // batas aman: jangan sampai splash nyangkut
+}
 (async function init() {
   try {
     const c = await api('/api/config');
@@ -2005,6 +2029,7 @@ function applyLicense(L) {
     document.body.classList.add('kiosk');
     document.addEventListener('contextmenu', (e) => e.preventDefault());
   }
+  revealApp();
 })();
 
 // ---------- Akses Rahasia Studio (Hidden Gesture: Tap 4x pojok kanan atas) ----------
