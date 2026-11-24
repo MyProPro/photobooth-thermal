@@ -539,6 +539,16 @@ body.ev-photo .thermal-only{display:none!important}
           <label class="field"><span>Nama yang dicetak di struk</span><input type="text" data-k="event_name"><span class="hint">Dipakai di semua template sebagai {event}.</span></label>
           <label class="field"><span>Teks penutup (footer)</span><input type="text" data-k="footer"></label>
           <label class="field"><span>Bahasa teks cetak</span><select data-k="print_lang"><option value="id">Bahasa Indonesia</option><option value="en">English</option></select><span class="hint">Teks bawaan di struk/foto (judul template, tanggal, undian, buku tamu). Nama event, footer &amp; caption tetap seperti yang diketik.</span></label>
+          <label class="field"><span>Hitung mundur layar QR selesai</span>
+            <select data-k="reset_seconds">
+              <option value="30">30 detik</option>
+              <option value="45">45 detik</option>
+              <option value="60">1 menit (60 detik - Bawaan)</option>
+              <option value="90">1,5 menit (90 detik)</option>
+              <option value="120">2 menit (120 detik)</option>
+            </select>
+            <span class="hint">Waktu tampil QR download softfile sebelum kiosk otomatis kembali ke awal.</span>
+          </label>
           <div class="field"><span>Logo</span>
             <div class="row"><img class="logo-prev hidden" id="logoPrev" alt="Logo event"><label class="btn">Upload logo<input type="file" id="logoFile" class="hidden" accept="image/png,image/jpeg"></label><button class="ghost hidden" id="btnLogoDel">Hapus logo</button></div>
             <span class="hint">PNG transparan paling bagus. Logo gelap di atas transparan/putih.</span>

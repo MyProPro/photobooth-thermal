@@ -11,7 +11,7 @@
   "brightness": 1.0,
   "max_copies": 2,
   "countdown_seconds": 5,
-  "reset_seconds": 15,
+  "reset_seconds": 60,
   "idle_seconds": 90,
   "mirror": true,
   "dummy_camera": false,

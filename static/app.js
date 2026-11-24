@@ -4,7 +4,7 @@ const $$ = (s) => document.querySelectorAll(s);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const SHOTS = { solo: 1, duo: 2, strip: 3, grid: 4 };
 
-let CFG = { certTitles: [], features: {}, poses: [], cameraFacing: 'user', layouts: ['solo', 'duo', 'strip', 'grid'], defaultLayout: 'strip', eventVersion: '', templates: [], defaultTemplate: 'klasik', maxCopies: 2, countdown: 3, resetSeconds: 15, idleSeconds: 90, mirror: true, qr: true };
+let CFG = { certTitles: [], features: {}, poses: [], cameraFacing: 'user', layouts: ['solo', 'duo', 'strip', 'grid'], defaultLayout: 'strip', eventVersion: '', templates: [], defaultTemplate: 'klasik', maxCopies: 2, countdown: 3, resetSeconds: 60, idleSeconds: 90, mirror: true, qr: true };
 let S = {};
 let stream = null;
 let DUMMY = false, dummyIdx = 0;

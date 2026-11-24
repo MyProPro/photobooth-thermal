@@ -140,7 +140,10 @@ $$('.tabs button').forEach((b) => b.addEventListener('click', () => {
 function renderInfo() {
   $('#evTitle').textContent = ev.name;
   $('#evId').textContent = 'events/' + ev.id;
-  $$('#tab-info [data-k]').forEach((el) => { el.value = ev[el.dataset.k] ?? ''; });
+  $$('#tab-info [data-k]').forEach((el) => {
+    if (el.dataset.k === 'reset_seconds') el.value = String(ev.reset_seconds || 60);
+    else el.value = ev[el.dataset.k] ?? '';
+  });
   ev.social = Object.assign({ username: '', display: '{event}', website: '', bio: '{date_long}' }, ev.social || {});
   $$('#tab-info [data-s]').forEach((el) => { el.value = ev.social[el.dataset.s] ?? ''; });
   $('#qrToggle').checked = ev.qr_download !== false;
@@ -226,12 +229,12 @@ function renderDefaultLayout() {
   if (!ev.layouts.includes(ev.default_layout)) ev.default_layout = ev.layouts[0];
   s.value = ev.default_layout;
 }
-$$('#tab-info [data-k]').forEach((el) => el.addEventListener('input', () => {
-  ev[el.dataset.k] = el.value;
+$$('#tab-info [data-k]').forEach((el) => ['input', 'change'].forEach((evt) => el.addEventListener(evt, () => {
+  ev[el.dataset.k] = el.dataset.k === 'reset_seconds' ? parseInt(el.value, 10) : el.value;
   if (el.dataset.k === 'name') $('#evTitle').textContent = el.value;
   if (el.dataset.k === 'event_name') paintThemePrev();
   setDirty(); schedulePreview();
-}));
+})));
 $$('#tab-info [data-s]').forEach((el) => el.addEventListener('input', () => {
   ev.social[el.dataset.s] = el.value;
   setDirty(); schedulePreview();

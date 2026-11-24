@@ -564,7 +564,7 @@ def api_config():
         "defaultLayout": ev.get("default_layout") if ev.get("default_layout") in layouts else layouts[0],
         "maxCopies": int(CFG.get("max_copies", 2)),
         "countdown": int(CFG.get("countdown_seconds", 3)),
-        "resetSeconds": int(CFG.get("reset_seconds", 15)),
+        "resetSeconds": int(ev.get("reset_seconds") or (60 if CFG.get("reset_seconds") in (15, None) else CFG.get("reset_seconds", 60))),
         "idleSeconds": int(CFG.get("idle_seconds", 90)),
         "mirror": bool(CFG.get("mirror", True)),
         "qr": qr_on(ev),
