@@ -358,15 +358,16 @@ body.intro-on .topbar{display:none}
 .intro-stage.p-out .ip-photo{opacity:0;transition:none}
 @keyframes ipScan{from{top:10px}to{top:236px}}
 @keyframes ipBlink{50%{background:#7CFF8A}}
-/* tombol mulai minimalis */
-.intro-cta{position:relative;width:146px;height:146px;border-radius:50%;border:0;background:var(--ink,#121212);color:var(--paper,#fff);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;
-  box-shadow:0 10px 28px rgba(0,0,0,.25);transition:transform .15s ease,box-shadow .15s ease}
-.intro-cta:hover{transform:scale(1.05);box-shadow:0 14px 34px rgba(0,0,0,.32)}
+/* tombol mulai bernyawa & beranimasi */
+.intro-cta{position:relative;width:146px;height:146px;border-radius:50%;border:0;background:var(--btn,var(--ink,#121212));color:var(--btn-text,var(--paper,#fff));display:flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;
+  box-shadow:0 10px 28px rgba(0,0,0,.25);animation:ctaBreathe 2.4s ease-in-out infinite;transition:transform .15s ease,box-shadow .15s ease}
+.intro-cta:hover{transform:scale(1.06);box-shadow:0 16px 36px rgba(0,0,0,.35)}
 .intro-cta:active{transform:scale(.94)}
-.intro-cta .ring{position:absolute;inset:-12px;border-radius:50%;border:3px solid var(--btn,var(--ink,#121212));animation:ipPulse 2s ease-out infinite;pointer-events:none}
-.intro-cta-text{position:relative;z-index:2;font-family:'Space Grotesk',Inter,system-ui,sans-serif;font-size:24px;font-weight:800;line-height:1.15;letter-spacing:.05em;text-transform:uppercase;text-align:center;color:#fff;user-select:none}
-@keyframes ipPulse{0%{transform:scale(.85);opacity:.9}100%{transform:scale(1.25);opacity:0}}
-@media (prefers-reduced-motion:reduce){.intro-cta .ring{animation:none}}
+.intro-cta::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid var(--btn,var(--ink,#121212));animation:ipPulse 2.4s cubic-bezier(.2,.8,.2,1) infinite;animation-delay:1.2s;pointer-events:none}
+.intro-cta .ring{position:absolute;inset:-8px;border-radius:50%;border:3px solid var(--btn,var(--ink,#121212));animation:ipPulse 2.4s cubic-bezier(.2,.8,.2,1) infinite;pointer-events:none}
+.intro-cta-text{position:relative;z-index:2;font-family:'Space Grotesk',Inter,system-ui,sans-serif;font-size:24px;font-weight:800;line-height:1.15;letter-spacing:.05em;text-transform:uppercase;text-align:center;color:var(--btn-text,#fff);user-select:none}
+@keyframes ipPulse{0%{transform:scale(.96);opacity:.85}50%{opacity:.5}100%{transform:scale(1.36);opacity:0}}
+@keyframes ctaBreathe{0%,100%{transform:scale(1);box-shadow:0 8px 24px rgba(0,0,0,.22)}50%{transform:scale(1.045);box-shadow:0 14px 34px rgba(0,0,0,.32)}}
 
 .intro-fit{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;position:relative}
 .intro-fit .intro-stage{transform-origin:center center}
