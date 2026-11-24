@@ -1901,61 +1901,82 @@ async function pollStatus() {
     }
     const low = CFG.output !== 'photo' && s.paper && s.paper.low;
     const pill = $('#introStatus');
+    const updatePill = (msg, show = true) => {
+      if (pill) {
+        pill.textContent = msg || '';
+        pill.classList.toggle('hidden', !show || !msg);
+      }
+    };
+    const btnUsb = $('#btnUsb');
+    const statusDot = $('#statusDot');
+    const statusText = $('#statusText');
 
     if (s.mode === 'webusb' || s.mode === 'android_usb') {
       const d = await PBUSB.paired().catch(() => null);
       if (!d) {
         lastPrinterOk = false;
-        pill.textContent = 'USB PRINTER BELUM TERHUBUNG';
-        pill.classList.remove('hidden');
-        $('#btnUsb').textContent = 'Sambungkan Printer USB';
-        $('#btnUsb').classList.remove('hidden');
-        $('#statusDot').className = 'dot bad';
-        $('#statusText').textContent = 'PRINTER TIDAK TERDETEKSI (KETUK)';
-        $('#statusText').title = s.message || 'Periksa kabel OTG atau aktifkan Koneksi OTG di pengaturan tablet';
+        updatePill('USB PRINTER BELUM TERHUBUNG', true);
+        if (btnUsb) {
+          btnUsb.textContent = 'Sambungkan Printer USB';
+          btnUsb.classList.remove('hidden');
+        }
+        if (statusDot) statusDot.className = 'dot bad';
+        if (statusText) {
+          statusText.textContent = 'PRINTER TIDAK TERDETEKSI (KETUK)';
+          statusText.title = s.message || 'Periksa kabel OTG atau aktifkan Koneksi OTG di pengaturan tablet';
+        }
         return;
       }
       if (!d.hasPermission) {
         lastPrinterOk = false;
-        pill.textContent = 'IZIN AKSES USB DIPERLUKAN';
-        pill.classList.remove('hidden');
-        $('#btnUsb').textContent = 'Izinkan Akses Printer USB';
-        $('#btnUsb').classList.remove('hidden');
-        $('#statusDot').className = 'dot warn';
-        $('#statusText').textContent = 'IZIN USB DIPERLUKAN (KETUK)';
-        $('#statusText').title = s.message || 'Ketuk untuk mengizinkan akses printer USB';
+        updatePill('IZIN AKSES USB DIPERLUKAN', true);
+        if (btnUsb) {
+          btnUsb.textContent = 'Izinkan Akses Printer USB';
+          btnUsb.classList.remove('hidden');
+        }
+        if (statusDot) statusDot.className = 'dot warn';
+        if (statusText) {
+          statusText.textContent = 'IZIN USB DIPERLUKAN (KETUK)';
+          statusText.title = s.message || 'Ketuk untuk mengizinkan akses printer USB';
+        }
         return;
       }
       // d.hasPermission === true dan printer terhubung
-      $('#btnUsb').classList.add('hidden');
+      if (btnUsb) btnUsb.classList.add('hidden');
       lastPrinterOk = !!s.ok;
       const problem = !s.ok ? 'PRINTER TIDAK SIAP' : (low ? 'PAPER LOW' : '');
-      pill.textContent = problem;
-      pill.classList.toggle('hidden', !problem);
-      $('#statusDot').className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
-      $('#statusText').textContent = !s.ok ? 'PRINTER TIDAK SIAP (KETUK)'
-        : (low ? `PAPER LOW (${s.paper.left_m} m)` : 'PRINTER READY');
-      $('#statusText').title = s.message || '';
+      updatePill(problem, !!problem);
+      if (statusDot) statusDot.className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
+      if (statusText) {
+        statusText.textContent = !s.ok ? 'PRINTER TIDAK SIAP (KETUK)'
+          : (low ? `PAPER LOW (${s.paper.left_m} m)` : 'PRINTER READY');
+        statusText.title = s.message || '';
+      }
       return;
     }
 
     // Mode printer lainnya (network, win32, file, photo)
-    $('#btnUsb').classList.add('hidden');
+    if (btnUsb) btnUsb.classList.add('hidden');
     lastPrinterOk = !!s.ok;
     const problem = !s.ok ? 'PRINTER NOT CONNECTED' : (low ? 'PAPER LOW' : '');
-    pill.textContent = problem;
-    pill.classList.toggle('hidden', !problem);
-    $('#statusDot').className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
-    $('#statusText').textContent = !s.ok ? 'PRINTER NOT CONNECTED (KETUK)'
-      : (low ? `PAPER LOW (${s.paper.left_m} m)` : (s.mode === 'file' ? 'TEST MODE (NO PRINTER)' : 'PRINTER READY'));
-    $('#statusText').title = s.message || '';
+    updatePill(problem, !!problem);
+    if (statusDot) statusDot.className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
+    if (statusText) {
+      statusText.textContent = !s.ok ? 'PRINTER NOT CONNECTED (KETUK)'
+        : (low ? `PAPER LOW (${s.paper.left_m} m)` : (s.mode === 'file' ? 'TEST MODE (NO PRINTER)' : 'PRINTER READY'));
+      statusText.title = s.message || '';
+    }
   } catch (e) {
+    console.error('pollStatus error:', e);
     lastServerError = e.message || String(e);
     lastPrinterStatus = null;
-    $('#statusDot').className = 'dot bad';
-    // server mati -> status printer tidak bisa dicek; pakai status terakhir yang diketahui
-    $('#statusText').textContent = lastPrinterOk ? 'SERVER NOT CONNECTED' : 'SERVER & PRINTER NOT CONNECTED';
-    $('#statusText').title = 'Server tidak merespons (/api/status gagal) - cek app.py / koneksi ke PC server: ' + e.message;
+    const statusDot = $('#statusDot');
+    const statusText = $('#statusText');
+    if (statusDot) statusDot.className = 'dot bad';
+    if (statusText) {
+      statusText.textContent = lastPrinterOk ? 'SERVER NOT CONNECTED' : 'SERVER & PRINTER NOT CONNECTED';
+      statusText.title = 'Server tidak merespons (/api/status gagal): ' + e.message;
+    }
   }
 }
 
