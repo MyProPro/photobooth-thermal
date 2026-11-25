@@ -122,10 +122,16 @@ def fit_font(d, s, name, size, max_w, min_size=18):
 
 
 class Ctx:
-    def __init__(self, photos, layout, W, H, event, footer, caption, date, logo, qr, theme, lucky, number):
+    def __init__(self, photos, layout, W, H, event, footer, caption, date, logo, qr, theme, lucky, number,
+                 social=None, opts=None, logo_src=None, asset_dir=None, now_dt=None):
         self.photos, self.layout, self.W, self.H = photos, layout, W, H
         self.event, self.footer, self.caption, self.date = event, footer, caption, date
         self.logo, self.qr, self.theme, self.lucky, self.number = logo, qr, theme, lucky, number
+        self.social = social or {}
+        self.opts = opts or {}
+        self.logo_src = logo_src
+        self.asset_dir = asset_dir
+        self.now_dt = now_dt
         self.strip = layout == "strip"
         self.s = W / 1200 if not self.strip else 0.62   # skala teks
 
@@ -376,6 +382,71 @@ def t_bingkai(c, frame_path=None):
     return cv
 
 
+def render_receipt_as_photo(c, receipt_fn):
+    """Render template struk thermal ke kanvas Foto 4R berwarna penuh (RGB).
+    Untuk layout strip: render pada 600 px (akan dijadikan twin strip di compose_photo).
+    Untuk layout solo/duo/grid: render pada 1200 px mengikuti ukuran penuh 4R.
+    """
+    T.set_color_mode(True, theme=c.theme)
+    try:
+        target_w = STRIP_W if c.strip else W4R
+        now_dt = getattr(c, "now_dt", None) or datetime.now()
+
+        def stylize_fn(im, sz):
+            return fit(im, sz[0], sz[1])
+
+        rc = T.Ctx(
+            photos=c.photos,
+            layout=c.layout,
+            stylize_fn=stylize_fn,
+            event=c.event,
+            caption=c.caption,
+            number=c.number,
+            qr=c.qr,
+            logo=c.logo,
+            width=target_w,
+            now=now_dt,
+            logo_src=c.logo_src or c.logo,
+            asset_dir=c.asset_dir,
+            social=c.social,
+            opts=c.opts,
+            footer=c.footer,
+        )
+
+        raw = receipt_fn(rc)
+        if raw.mode != "RGB":
+            raw = raw.convert("RGB")
+
+        unit_w = STRIP_W if c.strip else W4R
+        unit_h = H4R
+        rw, rh = raw.size
+
+        # Latar belakang kanvas mengikuti tema / deteksi warna pojok template
+        paper_bg = hexrgb((c.theme or {}).get("paper", "#FFFFFF"), default=(255, 255, 255))
+        corner = raw.getpixel((min(4, rw - 1), min(4, rh - 1)))
+        if isinstance(corner, tuple) and sum(corner[:3]) < 90:
+            bg_col = (16, 16, 16)
+        else:
+            bg_col = paper_bg
+
+        cv = Image.new("RGB", (unit_w, unit_h), bg_col)
+
+        if rh <= unit_h:
+            yo = (unit_h - rh) // 2
+            xo = (unit_w - rw) // 2
+            cv.paste(raw, (max(0, xo), max(0, yo)))
+        else:
+            sc = unit_h / rh
+            new_w = max(1, int(rw * sc))
+            scaled = raw.resize((new_w, unit_h), Image.LANCZOS)
+            xo = (unit_w - new_w) // 2
+            cv.paste(scaled, (max(0, xo), 0))
+
+        return cv
+    finally:
+        T.set_color_mode(False)
+
+
 TEMPLATES = [
     ("klasik", "Classic white", t_klasik),
     ("gelap", "Elegant black", t_gelap),
@@ -386,6 +457,15 @@ TEMPLATES = [
     ("wedding", "Wedding", t_wedding),
     ("bingkai", "Custom frame (PNG)", t_bingkai),
 ]
+
+def _make_receipt_photo_fn(fn):
+    return lambda c: render_receipt_as_photo(c, fn)
+
+# Daftarkan semua template struk agar bisa dipakai di Foto 4R berwarna
+for _tid, _tname, _tfn in T.TEMPLATES:
+    if _tid not in [t[0] for t in TEMPLATES]:
+        TEMPLATES.append((_tid, _tname, _make_receipt_photo_fn(_tfn)))
+
 BY_ID = {t[0]: t for t in TEMPLATES}
 
 
@@ -396,7 +476,7 @@ def date_str(now=None):
 
 def compose_photo(photos, layout="strip", style="warna", caption="", show_logo=True, event_name="",
                   logo_path=None, qr_url=None, template="klasik", theme=None, lucky=None, number=None,
-                  frames=None, asset_dir=None, footer="", now=None, brightness=1.0):
+                  frames=None, asset_dir=None, footer="", now=None, brightness=1.0, social=None, opts=None):
     """Hasil: RGB 1200x1800 (4R potret, 300 dpi). Strip = 2 strip kembar berdampingan."""
     styled = []
     for p in photos:
@@ -415,8 +495,10 @@ def compose_photo(photos, layout="strip", style="warna", caption="", show_logo=T
         from imaging import make_qr_with_logo
         qr = make_qr_with_logo(qr_url, logo=logo, as_rgb=True)
     W = STRIP_W if layout == "strip" else W4R
-    c = Ctx(styled, layout, W, H4R, event_name or T.tr("NAMA EVENT"), T.tr(footer), caption or "", date_str(now), logo, qr,
-            theme or {}, lucky, number)
+    now_dt = now or datetime.now()
+    c = Ctx(styled, layout, W, H4R, event_name or T.tr("NAMA EVENT"), T.tr(footer), caption or "",
+            date_str(now_dt), logo, qr, theme or {}, lucky, number,
+            social=social, opts=opts, logo_src=logo, asset_dir=asset_dir, now_dt=now_dt)
     tid = template if template in BY_ID else "klasik"
     if tid == "bingkai":
         fname = (frames or {}).get(layout)

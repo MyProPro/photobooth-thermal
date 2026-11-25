@@ -43,6 +43,45 @@ def set_lang(lang):
 def get_lang():
     return getattr(_TL, "lang", "id")
 
+def hexrgb(h, default=(18, 18, 18)):
+    try:
+        h = str(h).lstrip("#")
+        if len(h) == 3:
+            h = "".join(c * 2 for c in h)
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except Exception:
+        return default
+
+
+def set_color_mode(enabled, theme=None):
+    _TL.is_color = bool(enabled)
+    _TL.color_theme = theme or {}
+
+
+def is_color_mode():
+    return getattr(_TL, "is_color", False)
+
+
+# Warna autentik untuk mode berwarna (Foto 4R)
+C_IG_BLUE = (0, 149, 246)       # #0095F6 Instagram Follow / link
+C_IG_GRAY = (239, 239, 239)     # #EFEFEF Instagram Message button
+C_IG_BORDER = (219, 219, 219)   # #DBDBDB
+C_IG_RED = (237, 73, 86)        # #ED4956 Heart / Love
+C_IG_GRAD1 = (225, 48, 108)     # Instagram gradient magenta
+C_THREADS_FOLLOW = (16, 16, 16)
+C_THREADS_MENTION = (242, 242, 242)
+C_X_FOLLOW = (15, 20, 25)
+C_X_BLUE = (29, 155, 240)       # #1D9BF0 Verified
+C_X_PINK = (249, 24, 128)       # #F91880
+C_FB_BLUE = (24, 119, 242)      # #1877F2 Facebook Blue
+C_FB_GRAY = (228, 230, 235)     # #E4E6EB
+C_YT_RED = (204, 0, 0)          # #CC0000 YouTube Red
+C_SPOTIFY_GREEN = (30, 215, 96) # #1ED760
+C_WA_GREEN = (220, 248, 198)    # #DCF8C6
+C_WA_BLUE = (52, 183, 241)      # #34B7F1
+C_COFFEE = (111, 78, 55)        # Cafe brown
+C_GOLD = (201, 168, 106)
+
 
 def month_name(m):
     """m: 1..12"""
@@ -329,11 +368,78 @@ class Ctx:
 
 
 # ---------------------------------------------------------------- kanvas
+class ProxyDraw:
+    def __init__(self, draw, ink=(24, 24, 24), paper=(255, 255, 255)):
+        self._d = draw
+        self.ink = ink
+        self.paper = paper
+
+    def _c(self, v):
+        if v == 0:
+            return self.ink
+        if v == 255:
+            return self.paper
+        return v
+
+    def __getattr__(self, name):
+        attr = getattr(self._d, name)
+        if callable(attr):
+            def wrapper(*args, **kwargs):
+                new_kwargs = {}
+                for k, v in kwargs.items():
+                    if k in ("fill", "outline", "stroke_fill"):
+                        new_kwargs[k] = self._c(v)
+                    else:
+                        new_kwargs[k] = v
+                return attr(*args, **new_kwargs)
+            return wrapper
+        return attr
+
+
+class ProxyImage:
+    def __init__(self, img, ink=(24, 24, 24), paper=(255, 255, 255)):
+        self._img = img
+        self.ink = ink
+        self.paper = paper
+
+    def _c(self, v):
+        if v == 0:
+            return self.ink
+        if v == 255:
+            return self.paper
+        return v
+
+    def paste(self, im, box=None, mask=None):
+        im = self._c(im)
+        if mask is not None:
+            return self._img.paste(im, box, mask)
+        if box is not None:
+            return self._img.paste(im, box)
+        return self._img.paste(im)
+
+    def crop(self, box):
+        return self._img.crop(box)
+
+    def __getattr__(self, name):
+        return getattr(self._img, name)
+
+
 class Paper:
     def __init__(self, W, h=6000):
         self.W = W
-        self.img = Image.new("L", (W, h), P)
-        self.d = ImageDraw.Draw(self.img)
+        self.is_color = is_color_mode()
+        if self.is_color:
+            theme = getattr(_TL, "color_theme", {}) or {}
+            self.paper = hexrgb(theme.get("paper", "#FFFFFF"), default=(255, 255, 255))
+            self.ink = hexrgb(theme.get("text", "#181818"), default=(24, 24, 24))
+            raw = Image.new("RGB", (W, h), self.paper)
+            self.img = ProxyImage(raw, ink=self.ink, paper=self.paper)
+            self.d = ProxyDraw(ImageDraw.Draw(raw), ink=self.ink, paper=self.paper)
+        else:
+            self.paper = P
+            self.ink = K
+            self.img = Image.new("L", (W, h), P)
+            self.d = ImageDraw.Draw(self.img)
         self.y = 0
 
     def tw(self, text, f, spacing=0):
@@ -411,7 +517,10 @@ class Paper:
         return y + r
 
     def paste(self, im, x, y):
-        self.img.paste(im, (int(x), int(y)))
+        if getattr(im, "mode", "") == "RGBA":
+            self.img.paste(im, (int(x), int(y)), im.split()[-1])
+        else:
+            self.img.paste(im, (int(x), int(y)))
 
     def barcode(self, x, y, w, h, seed="0"):
         rnd = random.Random(str(seed))
@@ -462,7 +571,10 @@ class Paper:
 
     def finish(self, bottom_pad=40):
         h = int(self.y + bottom_pad)
-        return self.img.crop((0, 0, self.W, h)).point(lambda v: P if v > 127 else K)
+        cropped = self.img.crop((0, 0, self.W, h))
+        if self.is_color:
+            return cropped
+        return cropped.point(lambda v: P if v > 127 else K)
 
 
 def qr_fit(qr, size):
@@ -1209,7 +1321,7 @@ def t_sosmed(c):
     # avatar + statistik
     av = 132
     ring_x, ring_y = L, y
-    d.ellipse((ring_x, ring_y, ring_x + av, ring_y + av), outline=K, width=3)
+    d.ellipse((ring_x, ring_y, ring_x + av, ring_y + av), outline=C_IG_GRAD1 if is_color_mode() else K, width=3)
     inner = av - 16
     if c.logo_src is not None:
         lg = Image.new("L", (inner, inner), P)
@@ -1242,12 +1354,20 @@ def t_sosmed(c):
     y += 40
     # tombol
     bw = (R - L - 12 - 56) // 2
-    d.rounded_rectangle((L, y, L + bw, y + 48), radius=10, fill=K)
-    p.center("Follow", F("sansb", 20), y=y + 14, x0=L, x1=L + bw, fill=P)
-    d.rounded_rectangle((L + bw + 6, y, L + 2 * bw + 6, y + 48), radius=10, outline=K, width=3)
-    p.center("Message", F("sansb", 20), y=y + 14, x0=L + bw + 6, x1=L + 2 * bw + 6)
-    d.rounded_rectangle((R - 50, y, R, y + 48), radius=10, outline=K, width=3)
-    _icon(d, "person_add", R - 27, y + 24)
+    if is_color_mode():
+        d.rounded_rectangle((L, y, L + bw, y + 48), radius=10, fill=C_IG_BLUE)
+        p.center("Follow", F("sansb", 20), y=y + 14, x0=L, x1=L + bw, fill=(255, 255, 255))
+        d.rounded_rectangle((L + bw + 6, y, L + 2 * bw + 6, y + 48), radius=10, fill=C_IG_GRAY, outline=C_IG_BORDER, width=1)
+        p.center("Message", F("sansb", 20), y=y + 14, x0=L + bw + 6, x1=L + 2 * bw + 6, fill=(0, 0, 0))
+        d.rounded_rectangle((R - 50, y, R, y + 48), radius=10, fill=C_IG_GRAY, outline=C_IG_BORDER, width=1)
+        _icon(d, "person_add", R - 27, y + 24, fill=(0, 0, 0))
+    else:
+        d.rounded_rectangle((L, y, L + bw, y + 48), radius=10, fill=K)
+        p.center("Follow", F("sansb", 20), y=y + 14, x0=L, x1=L + bw, fill=P)
+        d.rounded_rectangle((L + bw + 6, y, L + 2 * bw + 6, y + 48), radius=10, outline=K, width=3)
+        p.center("Message", F("sansb", 20), y=y + 14, x0=L + bw + 6, x1=L + 2 * bw + 6)
+        d.rounded_rectangle((R - 50, y, R, y + 48), radius=10, outline=K, width=3)
+        _icon(d, "person_add", R - 27, y + 24)
     y += 72
     # tab
     third = W / 3
@@ -1441,9 +1561,10 @@ def _actions(p, items, y, x0, x1):
     f = F("sans", 17)
     for i, (kind, label) in enumerate(items):
         cx = x0 + i * cw + 14
-        (_icon2 if kind not in ("heart",) else _icon)(p.d, kind, cx, y + 12, s=22)
+        col = C_IG_RED if (is_color_mode() and kind == "heart") else (K if not is_color_mode() else (80, 80, 80))
+        (_icon2 if kind not in ("heart",) else _icon)(p.d, kind, cx, y + 12, s=22, fill=col)
         if label:
-            p.text(cx + 20, y + 3, label, f)
+            p.text(cx + 20, y + 3, label, f, fill=col if (kind == "heart" and is_color_mode()) else (K if not is_color_mode() else (60, 60, 60)))
     return y + 30
 
 
@@ -1491,10 +1612,16 @@ def t_threads(c):
     p.text(L + 3 * 18 + 22, y + 6, f"{_fmt_num(fol)} followers · {s['web']}", F("sans", 18))
     y += 50
     bw = (R - L - 12) // 2
-    p.d.rounded_rectangle((L, y, L + bw, y + 46), radius=12, fill=K)
-    p.center("Follow", F("sansb", 19), y=y + 13, x0=L, x1=L + bw, fill=P)
-    p.d.rounded_rectangle((L + bw + 12, y, R, y + 46), radius=12, outline=K, width=2)
-    p.center("Mention", F("sansb", 19), y=y + 13, x0=L + bw + 12, x1=R)
+    if is_color_mode():
+        p.d.rounded_rectangle((L, y, L + bw, y + 46), radius=12, fill=C_THREADS_FOLLOW)
+        p.center("Follow", F("sansb", 19), y=y + 13, x0=L, x1=L + bw, fill=(255, 255, 255))
+        p.d.rounded_rectangle((L + bw + 12, y, R, y + 46), radius=12, fill=C_THREADS_MENTION, outline=(220, 220, 220), width=1)
+        p.center("Mention", F("sansb", 19), y=y + 13, x0=L + bw + 12, x1=R, fill=(0, 0, 0))
+    else:
+        p.d.rounded_rectangle((L, y, L + bw, y + 46), radius=12, fill=K)
+        p.center("Follow", F("sansb", 19), y=y + 13, x0=L, x1=L + bw, fill=P)
+        p.d.rounded_rectangle((L + bw + 12, y, R, y + 46), radius=12, outline=K, width=2)
+        p.center("Mention", F("sansb", 19), y=y + 13, x0=L + bw + 12, x1=R)
     y += 72
     y = _tabs(p, y, ["Posts", "Replies", "Media", "Reposts"], 0)
     # postingan
@@ -1531,8 +1658,12 @@ def t_xprofil(c):
     av = 118
     ay = bh - av // 2
     _put_avatar(p, c, L, ay, av, ring=6)
-    p.d.rounded_rectangle((R - 130, bh + 16, R, bh + 60), radius=22, fill=K)
-    p.center("Follow", F("sansb", 20), y=bh + 28, x0=R - 130, x1=R, fill=P)
+    if is_color_mode():
+        p.d.rounded_rectangle((R - 130, bh + 16, R, bh + 60), radius=22, fill=C_X_FOLLOW)
+        p.center("Follow", F("sansb", 20), y=bh + 28, x0=R - 130, x1=R, fill=(255, 255, 255))
+    else:
+        p.d.rounded_rectangle((R - 130, bh + 16, R, bh + 60), radius=22, fill=K)
+        p.center("Follow", F("sansb", 20), y=bh + 28, x0=R - 130, x1=R, fill=P)
     y = ay + av + 18
     p.text(L, y, s["name"], F("sansb", 28))
     nw = p.tw(s["name"], F("sansb", 28))
@@ -1600,10 +1731,16 @@ def t_facebook(c):
     p.text(L + 30, y, s["web"], F("sansb", 18))
     y += 40
     bw = (R - L - 12 - 60) // 2
-    p.d.rounded_rectangle((L, y, L + bw, y + 46), radius=8, fill=K)
-    p.center("+ Add friend", F("sansb", 19), y=y + 13, x0=L, x1=L + bw, fill=P)
-    p.d.rounded_rectangle((L + bw + 6, y, L + 2 * bw + 6, y + 46), radius=8, outline=K, width=3)
-    p.center("Message", F("sansb", 19), y=y + 13, x0=L + bw + 6, x1=L + 2 * bw + 6)
+    if is_color_mode():
+        p.d.rounded_rectangle((L, y, L + bw, y + 46), radius=8, fill=C_FB_BLUE)
+        p.center("+ Add friend", F("sansb", 19), y=y + 13, x0=L, x1=L + bw, fill=(255, 255, 255))
+        p.d.rounded_rectangle((L + bw + 6, y, L + 2 * bw + 6, y + 46), radius=8, fill=C_FB_GRAY, outline=(200, 200, 200), width=1)
+        p.center("Message", F("sansb", 19), y=y + 13, x0=L + bw + 6, x1=L + 2 * bw + 6, fill=(5, 5, 5))
+    else:
+        p.d.rounded_rectangle((L, y, L + bw, y + 46), radius=8, fill=K)
+        p.center("+ Add friend", F("sansb", 19), y=y + 13, x0=L, x1=L + bw, fill=P)
+        p.d.rounded_rectangle((L + bw + 6, y, L + 2 * bw + 6, y + 46), radius=8, outline=K, width=3)
+        p.center("Message", F("sansb", 19), y=y + 13, x0=L + bw + 6, x1=L + 2 * bw + 6)
     p.d.rounded_rectangle((R - 54, y, R, y + 46), radius=8, outline=K, width=3)
     _icon(p.d, "dots", R - 27, y + 23)
     y += 66
@@ -1677,8 +1814,12 @@ def t_youtube(c):
     y = _wrap_text(p, L, y, s["bio"] + "  >", F("sans", 19), R - L, 27)
     p.text(L, y, s["web"], F("sansb", 18))
     y += 38
-    p.d.rounded_rectangle((L, y, R, y + 50), radius=25, fill=K)
-    p.center("Subscribe", F("sansb", 21), y=y + 14, x0=L, x1=R, fill=P)
+    if is_color_mode():
+        p.d.rounded_rectangle((L, y, R, y + 50), radius=25, fill=C_YT_RED)
+        p.center("Subscribe", F("sansb", 21), y=y + 14, x0=L, x1=R, fill=(255, 255, 255))
+    else:
+        p.d.rounded_rectangle((L, y, R, y + 50), radius=25, fill=K)
+        p.center("Subscribe", F("sansb", 21), y=y + 14, x0=L, x1=R, fill=P)
     y += 72
     y = _tabs(p, y, ["Home", "Videos", "Shorts", "Playlists"], 1, size=18)
     y += 20
@@ -2455,7 +2596,7 @@ def t_poster(c):
     p.y+=30
     p.y=p.dashed(h=2,x0=m,x1=W-m)+14
     f=F("mono",18)
-    p.text(m,p.y,"RUNTIME  "+str(90+int(c.no[-2:] or 0))+" MIN",f)
+    p.text(m,p.y,"RUNTIME  "+str(90+(int(c.no[-2:]) if c.no[-2:].isdigit() else 0))+" MIN",f)
     p.right("RATED  G", f, p.y, x1=W-m); p.y+=30
     p.text(m,p.y,"RELEASE  "+c.now.strftime("%d.%m.%Y"),f)
     p.right("SCREEN 1", f, p.y, x1=W-m); p.y+=36

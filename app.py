@@ -371,7 +371,7 @@ def _render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_ove
             logo_path=os.path.join(asset_dir, logo) if logo else None, qr_url=qr_url,
             template=p.get("template") or ev.get("photo_default_template", "klasik"), theme=ev.get("theme"),
             lucky=lucky, number=number, frames=ev.get("photo_frames"), asset_dir=asset_dir,
-            footer=footer, brightness=brightness)
+            footer=footer, brightness=brightness, social=social, opts=p.get("opts") or ev.get("opts"))
     layout = p.get("layout") if p.get("layout") in LAYOUTS else "strip"
     custom = {t["id"]: t for t in ev.get("custom_templates", [])}
     if spec_override:
@@ -909,7 +909,8 @@ def api_print():
                                       event_name=p.get("event_name") or ev.get("event_name", ""),
                                       logo_path=os.path.join(asset_dir, ev.get("logo")) if ev.get("logo") else None,
                                       template=p.get("template", "klasik"), theme=ev.get("theme"),
-                                      footer=p.get("footer", ""))
+                                      footer=p.get("footer", ""), social=social, opts=p.get("opts") or ev.get("opts"),
+                                      number=number, lucky=lucky)
                 sc.save(os.path.join(folder, "softcopy_color.jpg"), quality=93)
             except Exception:
                 img.convert("RGB").save(os.path.join(folder, "softcopy_color.jpg"), quality=93)
