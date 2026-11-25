@@ -286,36 +286,65 @@ def public_summary():
 
 # ---------------------------------------------------------------- tanda DEMO di hasil cetak
 def watermark(img):
-    """Tanda pita DEMO di bagian bawah template (isi template tetap bersih & terlihat jelas)."""
+    """Tanda demo: watermark semi-transparan 'ADSBOOTH' di tengah cetakan + pita hitam 'ADSBOOTH DEMO' di bawah."""
     from PIL import Image, ImageDraw
     import templates as T
     mode = img.mode
     W, H = img.size
+
+    # 1. Watermark semi-transparan di tengah cetakan (foto tetap terlihat jelas)
+    size = max(50, int(W * 0.16))
+    f = T.F("black", size)
+    stroke = max(2, size // 15)
+    msg = "ADSBOOTH"
+
+    tile = Image.new("RGBA", (int(W * 1.5), int(size * 2.2)), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tile)
+    bb = f.getbbox(msg)
+    tw = d.textlength(msg, font=f)
+    th = bb[3] - bb[1]
+    tx = (tile.width - tw) / 2
+    ty = (tile.height - th) / 2 - bb[1]
+    d.text((tx, ty), msg, font=f, fill=(255, 255, 255, 85), stroke_width=stroke, stroke_fill=(0, 0, 0, 65))
+    tile_rot = tile.rotate(25, expand=True, resample=Image.BICUBIC)
+
+    cx = (W - tile_rot.width) // 2
+    cy = (H - tile_rot.height) // 2
+
+    base = img.convert("RGBA")
+    base.alpha_composite(tile_rot, (cx, cy))
+
+    if mode in ("1", "L"):
+        out_main = base.convert("L").convert(mode)
+    else:
+        out_main = base.convert(mode) if mode != "RGB" else base.convert("RGB")
+
+    # 2. Pita hitam 'ADSBOOTH DEMO' di paling bawah template
     band = max(44, int(W * 0.08))
 
     if mode in ("1", "L"):
         ext = Image.new("L", (W, H + band), 255)
-        ext.paste(img.convert("L"), (0, 0))
-        d = ImageDraw.Draw(ext)
-        d.rectangle((0, H, W, H + band), fill=0)
+        ext.paste(out_main.convert("L"), (0, 0))
+        d2 = ImageDraw.Draw(ext)
+        d2.rectangle((0, H, W, H + band), fill=0)
         fb = T.F("monob", max(16, int(band * 0.42)))
-        msg = "ADSBOOTH DEMO"
-        tw = d.textlength(msg, font=fb)
-        bb = fb.getbbox(msg)
-        th = bb[3] - bb[1]
-        d.text(((W - tw) / 2, H + (band - th) / 2 - bb[1]), msg, font=fb, fill=255)
+        msg_band = "ADSBOOTH DEMO"
+        btw = d2.textlength(msg_band, font=fb)
+        bbb = fb.getbbox(msg_band)
+        bth = bbb[3] - bbb[1]
+        d2.text(((W - btw) / 2, H + (band - bth) / 2 - bbb[1]), msg_band, font=fb, fill=255)
         return ext.convert(mode)
     else:
         ext = Image.new("RGB", (W, H + band), (255, 255, 255))
-        ext.paste(img.convert("RGB"), (0, 0))
-        d = ImageDraw.Draw(ext)
-        d.rectangle((0, H, W, H + band), fill=(0, 0, 0))
+        ext.paste(out_main.convert("RGB"), (0, 0))
+        d2 = ImageDraw.Draw(ext)
+        d2.rectangle((0, H, W, H + band), fill=(0, 0, 0))
         fb = T.F("monob", max(16, int(band * 0.42)))
-        msg = "ADSBOOTH DEMO"
-        tw = d.textlength(msg, font=fb)
-        bb = fb.getbbox(msg)
-        th = bb[3] - bb[1]
-        d.text(((W - tw) / 2, H + (band - th) / 2 - bb[1]), msg, font=fb, fill=(255, 255, 255))
+        msg_band = "ADSBOOTH DEMO"
+        btw = d2.textlength(msg_band, font=fb)
+        bbb = fb.getbbox(msg_band)
+        bth = bbb[3] - bbb[1]
+        d2.text(((W - btw) / 2, H + (band - bth) / 2 - bbb[1]), msg_band, font=fb, fill=(255, 255, 255))
         return ext.convert(mode) if mode != "RGB" else ext
 
 
