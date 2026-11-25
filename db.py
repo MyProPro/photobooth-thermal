@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     guest_message  TEXT,
     has_signature  INTEGER DEFAULT 0,
     poses          TEXT,
+    is_demo        INTEGER DEFAULT 0,
     payment_amount INTEGER DEFAULT 0,
     payment_method TEXT DEFAULT '',
     payment_status TEXT DEFAULT ''
@@ -61,6 +62,8 @@ def init():
         c.executescript(SCHEMA)
         # Migrasi kolom tambahan jika tabel sessions sudah ada sebelumnya
         cols = {r[1] for r in c.execute("PRAGMA table_info(sessions)").fetchall()}
+        if "is_demo" not in cols:
+            c.execute("ALTER TABLE sessions ADD COLUMN is_demo INTEGER DEFAULT 0")
         if "payment_amount" not in cols:
             c.execute("ALTER TABLE sessions ADD COLUMN payment_amount INTEGER DEFAULT 0")
         if "payment_method" not in cols:
@@ -70,22 +73,23 @@ def init():
 
 
 def add_session(m):
-    """m: isi meta.json (+ style, copies, host_copy, payment)."""
+    """m: isi meta.json (+ style, copies, host_copy, payment, is_demo)."""
     gb = m.get("guestbook") or {}
     pay = m.get("payment") or {}
-    pay_amount = int(m.get("payment_amount") or pay.get("amount") or 0)
-    pay_method = str(m.get("payment_method") or pay.get("method") or "")
-    pay_status = str(m.get("payment_status") or pay.get("status") or "")
+    is_demo = 1 if (m.get("is_demo") or m.get("payment_status") == "DEMO" or pay.get("status") == "DEMO") else 0
+    pay_amount = 0 if is_demo else int(m.get("payment_amount") or pay.get("amount") or 0)
+    pay_method = "DEMO" if is_demo else str(m.get("payment_method") or pay.get("method") or "")
+    pay_status = "DEMO" if is_demo else str(m.get("payment_status") or pay.get("status") or "")
     row = (m["id"], m.get("event", ""), m.get("number"), m.get("time"), m.get("template"), m.get("layout"),
            m.get("style"), m.get("caption"), m.get("lucky"), int(m.get("copies") or 1), int(bool(m.get("host_copy"))),
            gb.get("name"), gb.get("message"), int(bool(gb.get("signature"))),
            json.dumps(m.get("poses") or [], ensure_ascii=False),
-           pay_amount, pay_method, pay_status)
+           is_demo, pay_amount, pay_method, pay_status)
     with _lock, _conn() as c:
         c.execute("""INSERT OR REPLACE INTO sessions
                      (id, event, number, time, template, layout, style, caption, lucky, copies, host_copy,
-                      guest_name, guest_message, has_signature, poses, payment_amount, payment_method, payment_status)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", row)
+                      guest_name, guest_message, has_signature, poses, is_demo, payment_amount, payment_method, payment_status)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", row)
 
 
 def add_draw(event, lucky, session, t):
@@ -119,6 +123,9 @@ def backfill(sessions_root):
 
 
 def stats(event, start_time=None, end_time=None, ev_config=None):
+    import licensing as LIC
+    is_lic_demo = bool(LIC.status().get("demo", True))
+
     where = "WHERE event=?"
     params = [event]
     if start_time is not None:
@@ -131,12 +138,17 @@ def stats(event, start_time=None, end_time=None, ev_config=None):
     with _conn() as c:
         q = lambda sql: c.execute(sql, params)
 
-        tot = q(f"""SELECT COUNT(*) n, COALESCE(SUM(copies),0) + COALESCE(SUM(host_copy),0) prints,
-                    COALESCE(SUM(payment_amount),0) revenue,
+        tot = q(f"""SELECT COUNT(*) n,
+                    COALESCE(SUM(copies),0) + COALESCE(SUM(host_copy),0) prints,
+                    COALESCE(SUM(CASE WHEN is_demo = 1 THEN 0 ELSE payment_amount END),0) revenue,
+                    COALESCE(SUM(CASE WHEN is_demo = 1 THEN 1 ELSE 0 END),0) demo_sessions,
+                    COALESCE(SUM(CASE WHEN is_demo = 1 THEN copies + host_copy ELSE 0 END),0) demo_prints,
                     SUM(guest_message IS NOT NULL AND guest_message != '') gb, SUM(lucky IS NOT NULL) lucky,
                     MIN(time) first, MAX(time) last FROM sessions {where}""").fetchone()
 
-        tpl = q(f"""SELECT template, COUNT(*) n, COALESCE(SUM(payment_amount),0) rev
+        tpl = q(f"""SELECT template, COUNT(*) n,
+                           COALESCE(SUM(CASE WHEN is_demo = 1 THEN 0 ELSE payment_amount END),0) rev,
+                           COALESCE(SUM(CASE WHEN is_demo = 1 THEN 1 ELSE 0 END),0) demo_n
                     FROM sessions {where} GROUP BY template ORDER BY n DESC""").fetchall()
         lay = q(f"""SELECT layout, COUNT(*) n, COALESCE(SUM(copies),0) + COALESCE(SUM(host_copy),0) prints
                     FROM sessions {where} GROUP BY layout ORDER BY n DESC""").fetchall()
@@ -144,13 +156,18 @@ def stats(event, start_time=None, end_time=None, ev_config=None):
                     FROM sessions {where} GROUP BY style ORDER BY n DESC""").fetchall()
         hrs = q(f"""SELECT strftime('%H', time, 'unixepoch', 'localtime') h, COUNT(*) n,
                            COALESCE(SUM(copies),0) + COALESCE(SUM(host_copy),0) prints,
-                           COALESCE(SUM(payment_amount),0) rev
+                           COALESCE(SUM(CASE WHEN is_demo = 1 THEN 0 ELSE payment_amount END),0) rev,
+                           COALESCE(SUM(CASE WHEN is_demo = 1 THEN 1 ELSE 0 END),0) demo_n
                     FROM sessions {where} GROUP BY h ORDER BY h""").fetchall()
-        pay_methods = q(f"""SELECT payment_method m, COUNT(*) n, COALESCE(SUM(payment_amount),0) rev
-                            FROM sessions {where} AND payment_method != '' GROUP BY m ORDER BY rev DESC""").fetchall()
+        pay_methods = q(f"""SELECT payment_method m, COUNT(*) n,
+                                   COALESCE(SUM(CASE WHEN is_demo = 1 THEN 0 ELSE payment_amount END),0) rev
+                            FROM sessions
+                            {where} AND payment_method != '' AND payment_method != 'DEMO'
+                            GROUP BY m ORDER BY rev DESC""").fetchall()
         daily = q(f"""SELECT date(time, 'unixepoch', 'localtime') dt, COUNT(*) n,
                              COALESCE(SUM(copies),0) + COALESCE(SUM(host_copy),0) prints,
-                             COALESCE(SUM(payment_amount),0) rev
+                             COALESCE(SUM(CASE WHEN is_demo = 1 THEN 0 ELSE payment_amount END),0) rev,
+                             COALESCE(SUM(CASE WHEN is_demo = 1 THEN 1 ELSE 0 END),0) demo_n
                       FROM sessions {where} GROUP BY dt ORDER BY dt""").fetchall()
         drw = c.execute("SELECT COUNT(*) FROM draws WHERE event=?", (event,)).fetchone()[0]
 
@@ -160,11 +177,11 @@ def stats(event, start_time=None, end_time=None, ev_config=None):
     n = tot["n"] or 0
     prints = tot["prints"] or 0
     rev = tot["revenue"] or 0
+    demo_sessions = tot["demo_sessions"] or 0
+    demo_prints = tot["demo_prints"] or 0
+    real_sessions = n - demo_sessions
 
     cfg_pay = (ev_config or {}).get("payment") or {}
-    if cfg_pay.get("enabled") and rev == 0 and prints > 0:
-        price_item = int(cfg_pay.get("price_receipt") or 15000)
-        rev = prints * price_item
 
     peak_h = max(hrs, key=lambda x: x["n"])["h"] if hrs else None
     peak_count = max(hrs, key=lambda x: x["n"])["n"] if hrs else 0
@@ -174,8 +191,12 @@ def stats(event, start_time=None, end_time=None, ev_config=None):
         "prints": prints,
         "revenue": rev,
         "revenue_formatted": f"Rp {rev:,}".replace(",", "."),
+        "demo_sessions": demo_sessions,
+        "demo_prints": demo_prints,
+        "real_sessions": real_sessions,
+        "is_demo_license": is_lic_demo,
         "avg_prints_per_session": round(prints / n, 1) if n > 0 else 0,
-        "avg_revenue_per_session": round(rev / n) if n > 0 else 0,
+        "avg_revenue_per_session": round(rev / real_sessions) if real_sessions > 0 else 0,
         "paper_meters_estimated": round(prints * 0.22, 1),
         "peak_hour": f"{peak_h}:00" if peak_h is not None else None,
         "peak_hour_count": peak_count,
@@ -210,8 +231,10 @@ def export_rows(event, start_time=None, end_time=None):
 
     with _conn() as c:
         cur = c.execute(f"""SELECT number, datetime(time, 'unixepoch', 'localtime') waktu,
+                            (CASE WHEN is_demo = 1 THEN 'DEMO' ELSE 'RESMI' END) status_lisensi,
                             template, layout, style, caption, copies, host_copy,
-                            payment_amount pendapatan, payment_method metode_bayar, payment_status status_bayar,
+                            (CASE WHEN is_demo = 1 THEN 0 ELSE payment_amount END) pendapatan,
+                            payment_method metode_bayar,
                             guest_name, guest_message, id
                             FROM sessions {where} ORDER BY time""", params)
         cols = [d[0] for d in cur.description]

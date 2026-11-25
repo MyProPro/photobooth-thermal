@@ -926,29 +926,39 @@ def api_print():
         copies = max(1, min(int(p.get("copies", 1)), int(CFG.get("max_copies", 2))))
         meta.update({"style": p.get("style", "dither"), "copies": copies, "host_copy": ft["host_copy"]})
 
-        # Simpan info pembayaran jika mode bayar kiosk aktif
+        # Simpan info pembayaran & status demo
+        is_demo = bool(LIC.status().get("demo", True))
+        meta["is_demo"] = is_demo
+
         pay_info = {}
-        tx_id = p.get("payment_tx")
-        if tx_id:
-            with _PAY_LOCK:
-                item = _PAYMENTS.get(tx_id)
-                if item and item.get("status") == "paid":
-                    pay_info = {
-                        "amount": int(item.get("amount", 0)),
-                        "method": item.get("paid_method") or item.get("method") or "qris",
-                        "status": "paid",
-                        "tx_id": tx_id
-                    }
-        if not pay_info and (ev.get("payment") or {}).get("enabled"):
-            cfg_pay = ev.get("payment", {})
-            price_key = "price_photo" if is_photo(ev, p) else "price_receipt"
-            price = int(cfg_pay.get(price_key) or (30000 if is_photo(ev, p) else 15000))
-            pay_info = {"amount": price * copies, "method": cfg_pay.get("method", "qris"), "status": "paid"}
-        if pay_info:
-            meta["payment"] = pay_info
-            meta["payment_amount"] = pay_info.get("amount", 0)
-            meta["payment_method"] = pay_info.get("method", "")
-            meta["payment_status"] = pay_info.get("status", "")
+        if not is_demo:
+            tx_id = p.get("payment_tx")
+            if tx_id:
+                with _PAY_LOCK:
+                    item = _PAYMENTS.get(tx_id)
+                    if item and item.get("status") == "paid":
+                        pay_info = {
+                            "amount": int(item.get("amount", 0)),
+                            "method": item.get("paid_method") or item.get("method") or "qris",
+                            "status": "paid",
+                            "tx_id": tx_id
+                        }
+            if not pay_info and (ev.get("payment") or {}).get("enabled"):
+                cfg_pay = ev.get("payment", {})
+                price_key = "price_photo" if is_photo(ev, p) else "price_receipt"
+                price = int(cfg_pay.get(price_key) or (30000 if is_photo(ev, p) else 15000))
+                pay_info = {"amount": price * copies, "method": cfg_pay.get("method", "qris"), "status": "paid"}
+            if pay_info:
+                meta["payment"] = pay_info
+                meta["payment_amount"] = pay_info.get("amount", 0)
+                meta["payment_method"] = pay_info.get("method", "")
+                meta["payment_status"] = pay_info.get("status", "")
+        else:
+            # Mode Demo: pendapatan bersih 0, diberi label status DEMO
+            meta["payment_amount"] = 0
+            meta["payment_method"] = "DEMO"
+            meta["payment_status"] = "DEMO"
+            meta["payment"] = {"amount": 0, "method": "DEMO", "status": "DEMO"}
 
         if p.get("event_name"):
             meta["event_name"] = p["event_name"]

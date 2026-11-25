@@ -1007,11 +1007,24 @@ function renderStats(s) {
   const statCards = $('#statCards');
   if (statCards) {
     const revFormatted = s.revenue_formatted || `Rp ${Number(s.revenue || 0).toLocaleString('id-ID')}`;
+    let revSub = 'Mode event gratis';
+    if (s.revenue > 0) {
+      revSub = `~Rp ${Number(s.avg_revenue_per_session || 0).toLocaleString('id-ID')}/sesi bersih`;
+    } else if (s.demo_sessions > 0 || s.is_demo_license) {
+      revSub = 'Mode Demo (Pendapatan tidak dihitung)';
+    } else if (s.payment_enabled) {
+      revSub = 'Kiosk berbayar aktif';
+    }
+
+    const sessionSub = s.demo_sessions > 0
+      ? `${s.sessions} sesi total (${s.demo_sessions} sesi demo)`
+      : 'Sesi pemotretan tamu';
+
     statCards.innerHTML =
-      cardBox('Total Sesi Foto', s.sessions ?? 0, 'Sesi pemotretan tamu', '📸') +
+      cardBox('Total Sesi Foto', s.sessions ?? 0, sessionSub, '📸') +
       cardBox('Total Lembar Dicetak', s.prints ?? 0, `Rata-rata ${s.avg_prints_per_session || 0} lembar/sesi`, '📄') +
       cardBox('Estimasi Kertas', `${s.paper_meters_estimated || 0} m`, 'Pemakaian roll thermal 80mm', '🧻') +
-      cardBox('Total Revenue', revFormatted, s.revenue > 0 ? `~Rp ${Number(s.avg_revenue_per_session || 0).toLocaleString('id-ID')}/sesi` : (s.payment_enabled ? 'Harga aktif' : 'Mode event gratis'), '💰');
+      cardBox('Total Revenue', revFormatted, revSub, '💰');
   }
 
   // Revenue Card
@@ -1020,8 +1033,11 @@ function renderStats(s) {
     const revBadge = $('#statRevenueBadge');
     if (revBadge) {
       if (s.revenue > 0) {
-        revBadge.textContent = 'Penjualan Tercatat';
+        revBadge.textContent = 'Penjualan Tercatat (Bersih)';
         revBadge.className = 'badge on';
+      } else if (s.demo_sessions > 0 || s.is_demo_license) {
+        revBadge.textContent = 'Versi Demo (Revenue: Rp 0)';
+        revBadge.className = 'badge';
       } else if (s.payment_enabled) {
         revBadge.textContent = 'Kiosk Berbayar (Belum Ada Transaksi)';
         revBadge.className = 'badge';
@@ -1035,15 +1051,16 @@ function renderStats(s) {
     if (revSum) {
       revSum.innerHTML = `
         <div class="row" style="justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)">
-          <span class="small">Total Omzet</span><b class="mono" style="font-size:16px">${s.revenue_formatted || 'Rp 0'}</b>
+          <span class="small">Total Omzet Bersih</span><b class="mono" style="font-size:16px">${s.revenue_formatted || 'Rp 0'}</b>
         </div>
         <div class="row" style="justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)">
-          <span class="small">Rata-rata per Sesi</span><span class="mono">Rp ${Number(s.avg_revenue_per_session || 0).toLocaleString('id-ID')}</span>
+          <span class="small">Rata-rata per Sesi Resmi</span><span class="mono">Rp ${Number(s.avg_revenue_per_session || 0).toLocaleString('id-ID')}</span>
         </div>
         <div class="row" style="justify-content:space-between;padding:4px 0">
           <span class="small">Tarif Kiosk Saat Ini</span>
           <span class="small muted">Receipt: Rp ${Number(s.price_receipt || 15000).toLocaleString('id-ID')} · Foto: Rp ${Number(s.price_photo || 30000).toLocaleString('id-ID')}</span>
-        </div>`;
+        </div>
+        ${s.demo_sessions > 0 ? `<div class="small hint" style="margin-top:8px;color:#d97706;padding:6px 10px;background:#fffbeb;border-radius:6px;border:1px solid #fef3c7">ℹ️ Terdapat <b>${s.demo_sessions} sesi cetak demo</b> pada periode ini. Sesi demo tidak menghasilkan revenue sehingga omzet tetap bersih Rp 0.</div>` : ''}`;
     }
 
     const revMethods = $('#statRevMethods');
@@ -1055,7 +1072,7 @@ function renderStats(s) {
             <b class="mono">Rp ${Number(m.rev || 0).toLocaleString('id-ID')}</b>
           </div>`).join('');
       } else {
-        revMethods.innerHTML = `<span class="hint">${s.payment_enabled ? 'Belum ada transaksi pada periode ini.' : 'Semua sesi tercatat sebagai mode gratis.'}</span>`;
+        revMethods.innerHTML = `<span class="hint">${(s.demo_sessions > 0 || s.is_demo_license) ? 'Tidak ada transaksi berbayar (seluruh sesi dibuat dalam mode Demo).' : (s.payment_enabled ? 'Belum ada transaksi pada periode ini.' : 'Semua sesi tercatat sebagai mode gratis.')}</span>`;
       }
     }
   }
@@ -1134,9 +1151,10 @@ function renderStats(s) {
           <thead>
             <tr style="border-bottom:2px solid var(--line);text-align:left">
               <th style="padding:6px 8px">Tanggal</th>
-              <th style="padding:6px 8px;text-align:center">Sesi</th>
+              <th style="padding:6px 8px;text-align:center">Total Sesi</th>
               <th style="padding:6px 8px;text-align:center">Lembar Cetak</th>
-              <th style="padding:6px 8px;text-align:right">Revenue</th>
+              <th style="padding:6px 8px;text-align:right">Revenue Bersih</th>
+              <th style="padding:6px 8px;text-align:center">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -1146,6 +1164,11 @@ function renderStats(s) {
                 <td style="padding:6px 8px;text-align:center">${d.n}</td>
                 <td style="padding:6px 8px;text-align:center">${d.prints}</td>
                 <td style="padding:6px 8px;text-align:right" class="mono">Rp ${Number(d.rev || 0).toLocaleString('id-ID')}</td>
+                <td style="padding:6px 8px;text-align:center">
+                  ${d.demo_n > 0
+                    ? `<span class="badge" style="font-size:11px;background:#fef3c7;color:#92400e;border:1px solid #fde68a">${d.demo_n === d.n ? 'DEMO' : `${d.demo_n} Demo`}</span>`
+                    : '<span class="badge on" style="font-size:11px">RESMI</span>'}
+                </td>
               </tr>`).join('')}
           </tbody>
         </table>`;
@@ -1188,14 +1211,14 @@ $('#btnCopySummary')?.addEventListener('click', async () => {
 Event: ${ev.name || ev.event_name || 'Photobooth'}
 ${filterText}
 ----------------------------------------
-📸 Total Sesi Foto: ${s.sessions} sesi
+📸 Total Sesi Foto: ${s.sessions} sesi ${s.demo_sessions > 0 ? `(${s.demo_sessions} sesi demo)` : ''}
 📄 Total Lembar Dicetak: ${s.prints} lembar
 🧻 Estimasi Kertas: ${s.paper_meters_estimated} meter
-💰 Total Revenue: ${s.revenue_formatted || 'Rp 0'}
+💰 Total Revenue: ${s.revenue_formatted || 'Rp 0'} (Bersih)
 ⭐ Template Terpopuler: ${topTpl}
 ⏰ Jam Teramai: ${s.peak_hour ? `${s.peak_hour} (${s.peak_hour_count} sesi)` : '-'}
 ----------------------------------------
-Dihasilkan oleh AdsBooth`;
+${s.demo_sessions > 0 ? `⚠️ Catatan: ${s.demo_sessions} sesi foto dibuat dalam mode Demo (tidak menghasilkan revenue).\n----------------------------------------\n` : ''}Dihasilkan oleh AdsBooth`;
 
   try {
     await navigator.clipboard.writeText(text);
