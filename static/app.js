@@ -1908,6 +1908,7 @@ async function pollStatus() {
       }
     };
     const btnUsb = $('#btnUsb');
+    const indicator = $('#stepLabel');
     const statusDot = $('#statusDot');
     const statusText = $('#statusText');
 
@@ -1920,6 +1921,7 @@ async function pollStatus() {
           btnUsb.textContent = 'Sambungkan Printer USB';
           btnUsb.classList.remove('hidden');
         }
+        if (indicator) indicator.classList.remove('hidden');
         if (statusDot) statusDot.className = 'dot bad';
         if (statusText) {
           statusText.textContent = 'PRINTER TIDAK TERDETEKSI (KETUK)';
@@ -1934,6 +1936,7 @@ async function pollStatus() {
           btnUsb.textContent = 'Izinkan Akses Printer USB';
           btnUsb.classList.remove('hidden');
         }
+        if (indicator) indicator.classList.remove('hidden');
         if (statusDot) statusDot.className = 'dot warn';
         if (statusText) {
           statusText.textContent = 'IZIN USB DIPERLUKAN (KETUK)';
@@ -1944,8 +1947,11 @@ async function pollStatus() {
       // d.hasPermission === true dan printer terhubung
       if (btnUsb) btnUsb.classList.add('hidden');
       lastPrinterOk = !!s.ok;
+      const isReady = s.ok && !low;
       const problem = !s.ok ? 'PRINTER TIDAK SIAP' : (low ? 'PAPER LOW' : '');
       updatePill(problem, !!problem);
+      // Sembunyikan indikator pojok kanan bawah saat ready, tampilkan hanya saat offline/bermasalah
+      if (indicator) indicator.classList.toggle('hidden', isReady);
       if (statusDot) statusDot.className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
       if (statusText) {
         statusText.textContent = !s.ok ? 'PRINTER TIDAK SIAP (KETUK)'
@@ -1958,8 +1964,11 @@ async function pollStatus() {
     // Mode printer lainnya (network, win32, file, photo)
     if (btnUsb) btnUsb.classList.add('hidden');
     lastPrinterOk = !!s.ok;
+    const isReady = s.ok && !low;
     const problem = !s.ok ? (s.message || 'PRINTER NOT CONNECTED') : (low ? 'PAPER LOW' : '');
     updatePill(problem, !!problem);
+    // Sembunyikan indikator pojok kanan bawah saat ready, tampilkan hanya saat offline/bermasalah
+    if (indicator) indicator.classList.toggle('hidden', isReady);
     if (statusDot) statusDot.className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
     if (statusText) {
       statusText.textContent = !s.ok ? 'PRINTER MATI / OFFLINE (KETUK)'
@@ -1970,6 +1979,8 @@ async function pollStatus() {
     console.error('pollStatus error:', e);
     lastServerError = e.message || String(e);
     lastPrinterStatus = null;
+    const indicator = $('#stepLabel');
+    if (indicator) indicator.classList.remove('hidden');
     const statusDot = $('#statusDot');
     const statusText = $('#statusText');
     if (statusDot) statusDot.className = 'dot bad';
