@@ -724,15 +724,84 @@ body.ev-photo .thermal-only{display:none!important}
 
       <!-- STATISTIK -->
       <section id="tab-guest" class="hidden">
+        <!-- Filter & Toolbar -->
         <div class="card" style="margin-bottom:16px">
-          <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Statistik event</b>
-            <a class="btn" id="csvOpen" target="_blank" rel="noopener">Unduh CSV ↓</a></div>
-          <div class="grid2" id="statNums" style="margin-top:12px"></div>
-          <div class="grid2" style="margin-top:14px">
-            <div><b class="small">Template terpopuler</b><div id="statTpl" class="small" style="margin-top:6px"></div></div>
-            <div><b class="small">Sesi per jam</b><div id="statHours" class="small" style="margin-top:6px"></div></div>
+          <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+            <div>
+              <b style="font-family:'Space Grotesk',sans-serif;font-size:20px">Statistik & Analisis Event</b>
+              <div class="small muted" id="statFilterLabel" style="margin-top:2px">Menampilkan data: Semua waktu</div>
+            </div>
+            <div class="row" style="gap:8px">
+              <button type="button" class="btn ghost" id="btnCopySummary" title="Salin ringkasan singkat untuk dikirim ke WhatsApp / Klien">📋 Salin Ringkasan</button>
+              <a class="btn" id="csvOpen" target="_blank" rel="noopener">Unduh CSV ↓</a>
+            </div>
           </div>
-          <p class="hint" style="margin-top:10px">Dari database <span class="mono">output/photobooth.db</span> (SQLite). CSV bisa dibuka di Excel.</p>
+
+          <!-- Filter Tanggal Bar -->
+          <div class="row" style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);align-items:center;flex-wrap:wrap;gap:8px">
+            <span class="small muted" style="font-weight:600">Filter Tanggal:</span>
+            <div class="row" id="statPresetButtons" style="gap:6px;flex-wrap:wrap">
+              <button type="button" class="ghost on btn-preset" data-filter="all">Semua</button>
+              <button type="button" class="ghost btn-preset" data-filter="today">Hari Ini</button>
+              <button type="button" class="ghost btn-preset" data-filter="yesterday">Kemarin</button>
+              <button type="button" class="ghost btn-preset" data-filter="7d">7 Hari</button>
+              <button type="button" class="ghost btn-preset" data-filter="30d">30 Hari</button>
+            </div>
+            <div class="row" style="gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap">
+              <input type="date" id="statDateFrom" style="padding:5px 8px;font-size:13px;border:1px solid var(--line);border-radius:6px">
+              <span class="small muted">s/d</span>
+              <input type="date" id="statDateTo" style="padding:5px 8px;font-size:13px;border:1px solid var(--line);border-radius:6px">
+              <button type="button" class="primary" id="btnStatApply" style="padding:5px 12px;font-size:13px">Terapkan</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4 Kartu Metrik Utama -->
+        <div class="grid4" id="statCards" style="margin-bottom:16px"></div>
+
+        <!-- Bagian Revenue & Keuangan -->
+        <div class="card" id="statRevenueCard" style="margin-bottom:16px">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <b style="font-family:'Space Grotesk',sans-serif;font-size:17px">💰 Analisis Revenue & Penjualan</b>
+            <span class="badge on" id="statRevenueBadge">Mode Berbayar</span>
+          </div>
+          <div class="grid2" style="margin-top:12px;gap:14px">
+            <div>
+              <div class="small muted">Rincian Keuangan</div>
+              <div id="statRevSummary" style="margin-top:6px"></div>
+            </div>
+            <div>
+              <div class="small muted">Metode Pembayaran</div>
+              <div id="statRevMethods" class="small" style="margin-top:6px"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preferensi Tamu (Template & Layout) -->
+        <div class="grid2" style="margin-bottom:16px;gap:16px">
+          <div class="card">
+            <b style="font-family:'Space Grotesk',sans-serif;font-size:17px">Template Terpopuler</b>
+            <div id="statTpl" class="small" style="margin-top:10px"></div>
+          </div>
+          <div class="card">
+            <b style="font-family:'Space Grotesk',sans-serif;font-size:17px">Layout Terfavorit</b>
+            <div id="statLayout" class="small" style="margin-top:10px"></div>
+          </div>
+        </div>
+
+        <!-- Waktu & Pola Antrean -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="row" style="justify-content:space-between;align-items:center">
+            <b style="font-family:'Space Grotesk',sans-serif;font-size:17px">⏰ Distribusi Sesi per Jam (Jam Sibuk)</b>
+            <span class="small muted" id="statPeakBadge"></span>
+          </div>
+          <div id="statHours" class="small" style="margin-top:12px"></div>
+        </div>
+
+        <!-- Riwayat Harian (Jika > 1 hari) -->
+        <div class="card hidden" id="statDailyCard" style="margin-bottom:16px">
+          <b style="font-family:'Space Grotesk',sans-serif;font-size:17px">📅 Riwayat Harian</b>
+          <div id="statDailyTable" style="margin-top:10px;overflow-x:auto"></div>
         </div>
       </section>
 

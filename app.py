@@ -925,6 +925,31 @@ def api_print():
                               "signature": gb.get("signature") is not None} if gb else None}
         copies = max(1, min(int(p.get("copies", 1)), int(CFG.get("max_copies", 2))))
         meta.update({"style": p.get("style", "dither"), "copies": copies, "host_copy": ft["host_copy"]})
+
+        # Simpan info pembayaran jika mode bayar kiosk aktif
+        pay_info = {}
+        tx_id = p.get("payment_tx")
+        if tx_id:
+            with _PAY_LOCK:
+                item = _PAYMENTS.get(tx_id)
+                if item and item.get("status") == "paid":
+                    pay_info = {
+                        "amount": int(item.get("amount", 0)),
+                        "method": item.get("paid_method") or item.get("method") or "qris",
+                        "status": "paid",
+                        "tx_id": tx_id
+                    }
+        if not pay_info and (ev.get("payment") or {}).get("enabled"):
+            cfg_pay = ev.get("payment", {})
+            price_key = "price_photo" if is_photo(ev, p) else "price_receipt"
+            price = int(cfg_pay.get(price_key) or (30000 if is_photo(ev, p) else 15000))
+            pay_info = {"amount": price * copies, "method": cfg_pay.get("method", "qris"), "status": "paid"}
+        if pay_info:
+            meta["payment"] = pay_info
+            meta["payment_amount"] = pay_info.get("amount", 0)
+            meta["payment_method"] = pay_info.get("method", "")
+            meta["payment_status"] = pay_info.get("status", "")
+
         if p.get("event_name"):
             meta["event_name"] = p["event_name"]
         if p.get("footer"):
@@ -1966,15 +1991,56 @@ def studio_draw_reset(eid):
     return jsonify({"ok": True})
 
 
+def _parse_date_filter(args):
+    """Parse start & end timestamps dari filter query (preset atau tanggal kustom)."""
+    from datetime import datetime, time as dtime, timedelta
+    now = datetime.now()
+    flt = args.get("filter", "all")
+    start_ts, end_ts = None, None
+
+    if flt == "today":
+        start_ts = int(datetime.combine(now.date(), dtime.min).timestamp())
+        end_ts = int(datetime.combine(now.date(), dtime.max).timestamp())
+    elif flt == "yesterday":
+        y = now.date() - timedelta(days=1)
+        start_ts = int(datetime.combine(y, dtime.min).timestamp())
+        end_ts = int(datetime.combine(y, dtime.max).timestamp())
+    elif flt == "7d":
+        start_ts = int(datetime.combine(now.date() - timedelta(days=7), dtime.min).timestamp())
+        end_ts = int(datetime.combine(now.date(), dtime.max).timestamp())
+    elif flt == "30d":
+        start_ts = int(datetime.combine(now.date() - timedelta(days=30), dtime.min).timestamp())
+        end_ts = int(datetime.combine(now.date(), dtime.max).timestamp())
+    elif args.get("start") or args.get("end"):
+        if args.get("start"):
+            try:
+                start_ts = int(datetime.strptime(args["start"].strip(), "%Y-%m-%d").timestamp())
+            except Exception:
+                pass
+        if args.get("end"):
+            try:
+                end_d = datetime.strptime(args["end"].strip(), "%Y-%m-%d").date()
+                end_ts = int(datetime.combine(end_d, dtime.max).timestamp())
+            except Exception:
+                pass
+    return start_ts, end_ts
+
+
 @app.get("/api/studio/events/<eid>/stats")
 @studio_auth
 def studio_stats(eid):
     need_event(eid)
+    ev_cfg = EV.load(eid)
     names = {t[0]: t[1] for t in TPL.TEMPLATES}
-    names.update({"c:" + t["id"]: t.get("name", "Custom") for t in EV.load(eid).get("custom_templates", [])})
-    s = DB.stats(eid)
+    names.update({"c:" + t["id"]: t.get("name", "Custom") for t in ev_cfg.get("custom_templates", [])})
+    start_ts, end_ts = _parse_date_filter(request.args)
+    s = DB.stats(eid, start_time=start_ts, end_time=end_ts, ev_config=ev_cfg)
+    total_sessions = max(1, s["sessions"])
     for r in s["templates"]:
         r["name"] = names.get(r["template"], r["template"] or "-")
+        r["pct"] = round(100 * r["n"] / total_sessions, 1) if s["sessions"] > 0 else 0
+    for r in s["layouts"]:
+        r["pct"] = round(100 * r["n"] / total_sessions, 1) if s["sessions"] > 0 else 0
     return jsonify(s)
 
 
@@ -1983,15 +2049,17 @@ def studio_stats(eid):
 def studio_export(eid):
     import csv
     need_event(eid)
-    cols, rows = DB.export_rows(eid)
+    start_ts, end_ts = _parse_date_filter(request.args)
+    cols, rows = DB.export_rows(eid, start_time=start_ts, end_time=end_ts)
     buf = io.StringIO()
     buf.write("\ufeff")  # supaya Excel membaca UTF-8
     w = csv.writer(buf)
     w.writerow(cols)
     w.writerows([tuple(r) for r in rows])
     from flask import Response
+    flt_tag = request.args.get("filter") or "all"
     return Response(buf.getvalue(), mimetype="text/csv",
-                    headers={"Content-Disposition": f"attachment; filename=adsbooth-{eid}.csv"})
+                    headers={"Content-Disposition": f"attachment; filename=adsbooth-{eid}-{flt_tag}.csv"})
 
 
 @app.get("/api/theme-bg/<fname>")

@@ -954,28 +954,256 @@ function setLayout(l) {
 $('#pvCaption')?.addEventListener('input', schedulePreview);
 
 // ---------------------------------------------------------------- statistik event
-const pinQ = () => (sessionStorage.getItem('studioPin') ? '?pin=' + encodeURIComponent(sessionStorage.getItem('studioPin')) : '');
+const pinQ = (hasOtherParam = false) => {
+  const pin = sessionStorage.getItem('studioPin');
+  if (!pin) return '';
+  return (hasOtherParam ? '&' : '?') + 'pin=' + encodeURIComponent(pin);
+};
+
+let currentStatFilter = { type: 'all', start: '', end: '' };
+let currentStatData = null;
+
 async function loadGuest() {
   if (!ev) return;
   const id = encodeURIComponent(ev.id);
-  const st = await api(`/api/studio/events/${id}/stats`).catch(() => null);
-  if (st) renderStats(st);
+
+  let query = 'filter=' + encodeURIComponent(currentStatFilter.type);
+  if (currentStatFilter.type === 'custom') {
+    query = `start=${encodeURIComponent(currentStatFilter.start)}&end=${encodeURIComponent(currentStatFilter.end)}`;
+  }
+
   const csv = $('#csvOpen');
-  if (csv) csv.href = `/studio/export/${id}.csv${pinQ()}`;
+  if (csv) csv.href = `/studio/export/${id}.csv?${query}${pinQ(true)}`;
+
+  const st = await api(`/api/studio/events/${id}/stats?${query}`).catch(() => null);
+  if (st) renderStats(st);
 }
+
 function renderStats(s) {
-  const box = (label, val) => `<div class="card" style="padding:14px;text-align:center"><div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:32px">${val}</div><div class="small muted" style="margin-top:4px">${label}</div></div>`;
-  const statNums = $('#statNums');
-  if (statNums) statNums.innerHTML = box('Total Sesi Foto', s.sessions ?? 0) + box('Total Lembar Dicetak', s.prints ?? 0);
-  const max = Math.max(1, ...(s.templates || []).map((t) => t.n));
+  currentStatData = s;
+
+  // Filter label
+  const lbl = $('#statFilterLabel');
+  if (lbl) {
+    if (currentStatFilter.type === 'today') lbl.textContent = 'Menampilkan data: Hari Ini';
+    else if (currentStatFilter.type === 'yesterday') lbl.textContent = 'Menampilkan data: Kemarin';
+    else if (currentStatFilter.type === '7d') lbl.textContent = 'Menampilkan data: 7 Hari Terakhir';
+    else if (currentStatFilter.type === '30d') lbl.textContent = 'Menampilkan data: 30 Hari Terakhir';
+    else if (currentStatFilter.type === 'custom') lbl.textContent = `Menampilkan data: ${currentStatFilter.start || '...'} s/d ${currentStatFilter.end || '...'}`;
+    else lbl.textContent = 'Menampilkan data: Semua waktu';
+  }
+
+  // 4 Kartu Utama
+  const cardBox = (title, val, subtitle, icon) => `
+    <div class="card" style="padding:16px;position:relative;overflow:hidden">
+      <div class="row" style="justify-content:space-between;align-items:flex-start">
+        <div class="small muted" style="font-weight:600">${title}</div>
+        <span style="font-size:20px">${icon}</span>
+      </div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:30px;margin:8px 0 2px;line-height:1.1">${val}</div>
+      <div class="small muted" style="font-size:12px">${subtitle}</div>
+    </div>`;
+
+  const statCards = $('#statCards');
+  if (statCards) {
+    const revFormatted = s.revenue_formatted || `Rp ${Number(s.revenue || 0).toLocaleString('id-ID')}`;
+    statCards.innerHTML =
+      cardBox('Total Sesi Foto', s.sessions ?? 0, 'Sesi pemotretan tamu', '📸') +
+      cardBox('Total Lembar Dicetak', s.prints ?? 0, `Rata-rata ${s.avg_prints_per_session || 0} lembar/sesi`, '📄') +
+      cardBox('Estimasi Kertas', `${s.paper_meters_estimated || 0} m`, 'Pemakaian roll thermal 80mm', '🧻') +
+      cardBox('Total Revenue', revFormatted, s.revenue > 0 ? `~Rp ${Number(s.avg_revenue_per_session || 0).toLocaleString('id-ID')}/sesi` : (s.payment_enabled ? 'Harga aktif' : 'Mode event gratis'), '💰');
+  }
+
+  // Revenue Card
+  const revCard = $('#statRevenueCard');
+  if (revCard) {
+    const revBadge = $('#statRevenueBadge');
+    if (revBadge) {
+      if (s.revenue > 0) {
+        revBadge.textContent = 'Penjualan Tercatat';
+        revBadge.className = 'badge on';
+      } else if (s.payment_enabled) {
+        revBadge.textContent = 'Kiosk Berbayar (Belum Ada Transaksi)';
+        revBadge.className = 'badge';
+      } else {
+        revBadge.textContent = 'Event Gratis (Non-Komersial)';
+        revBadge.className = 'badge';
+      }
+    }
+
+    const revSum = $('#statRevSummary');
+    if (revSum) {
+      revSum.innerHTML = `
+        <div class="row" style="justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)">
+          <span class="small">Total Omzet</span><b class="mono" style="font-size:16px">${s.revenue_formatted || 'Rp 0'}</b>
+        </div>
+        <div class="row" style="justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)">
+          <span class="small">Rata-rata per Sesi</span><span class="mono">Rp ${Number(s.avg_revenue_per_session || 0).toLocaleString('id-ID')}</span>
+        </div>
+        <div class="row" style="justify-content:space-between;padding:4px 0">
+          <span class="small">Tarif Kiosk Saat Ini</span>
+          <span class="small muted">Receipt: Rp ${Number(s.price_receipt || 15000).toLocaleString('id-ID')} · Foto: Rp ${Number(s.price_photo || 30000).toLocaleString('id-ID')}</span>
+        </div>`;
+    }
+
+    const revMethods = $('#statRevMethods');
+    if (revMethods) {
+      if (s.payment_methods && s.payment_methods.length > 0) {
+        revMethods.innerHTML = s.payment_methods.map((m) => `
+          <div class="row" style="justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line)">
+            <span>${esc(m.m.toUpperCase() || 'LAINNYA')} (${m.n}x)</span>
+            <b class="mono">Rp ${Number(m.rev || 0).toLocaleString('id-ID')}</b>
+          </div>`).join('');
+      } else {
+        revMethods.innerHTML = `<span class="hint">${s.payment_enabled ? 'Belum ada transaksi pada periode ini.' : 'Semua sesi tercatat sebagai mode gratis.'}</span>`;
+      }
+    }
+  }
+
+  // Template Terpopuler
+  const maxTpl = Math.max(1, ...(s.templates || []).map((t) => t.n));
   const statTpl = $('#statTpl');
-  if (statTpl) statTpl.innerHTML = (s.templates || []).slice(0, 6).map((t) => `<div class="row" style="flex-wrap:nowrap;gap:8px;margin:3px 0"><span style="width:130px">${esc(t.name)}</span>
-      <span style="flex:1;height:10px;background:var(--ink);border-radius:4px;max-width:${Math.round(100 * t.n / max)}%"></span><b>${t.n}</b></div>`).join('') || '<span class="hint">Belum ada data.</span>';
+  if (statTpl) {
+    if (s.templates && s.templates.length > 0) {
+      statTpl.innerHTML = s.templates.slice(0, 8).map((t, idx) => `
+        <div style="margin:8px 0">
+          <div class="row" style="justify-content:space-between;margin-bottom:3px">
+            <span><b style="color:var(--accent)">#${idx + 1}</b> ${esc(t.name)}</span>
+            <b>${t.n} sesi <span class="muted" style="font-weight:normal">(${t.pct}%)</span></b>
+          </div>
+          <div style="height:8px;background:var(--line);border-radius:4px;overflow:hidden">
+            <div style="height:100%;background:var(--ink);width:${Math.round(100 * t.n / maxTpl)}%"></div>
+          </div>
+        </div>`).join('');
+    } else {
+      statTpl.innerHTML = '<span class="hint">Belum ada data sesi foto pada periode ini.</span>';
+    }
+  }
+
+  // Layout Terfavorit
+  const maxLay = Math.max(1, ...(s.layouts || []).map((l) => l.n));
+  const statLayout = $('#statLayout');
+  if (statLayout) {
+    const layoutNames = { solo: 'Solo (1 Foto)', duo: 'Duo (2 Foto)', strip: 'Photostrip (3 Foto)', grid: 'Grid (4 Foto)' };
+    if (s.layouts && s.layouts.length > 0) {
+      statLayout.innerHTML = s.layouts.map((l) => `
+        <div style="margin:8px 0">
+          <div class="row" style="justify-content:space-between;margin-bottom:3px">
+            <span>${layoutNames[l.layout] || esc(l.layout)}</span>
+            <b>${l.n} sesi <span class="muted" style="font-weight:normal">(${l.pct}%)</span></b>
+          </div>
+          <div style="height:8px;background:var(--line);border-radius:4px;overflow:hidden">
+            <div style="height:100%;background:var(--accent);width:${Math.round(100 * l.n / maxLay)}%"></div>
+          </div>
+        </div>`).join('');
+    } else {
+      statLayout.innerHTML = '<span class="hint">Belum ada data layout pada periode ini.</span>';
+    }
+  }
+
+  // Jam Sibuk
+  const statPeak = $('#statPeakBadge');
+  if (statPeak) {
+    statPeak.innerHTML = s.peak_hour ? `🔥 <b>Jam Teramai: ${s.peak_hour}</b> (${s.peak_hour_count} sesi)` : '';
+  }
   const hmax = Math.max(1, ...(s.hours || []).map((h) => h.n));
   const statHours = $('#statHours');
-  if (statHours) statHours.innerHTML = (s.hours || []).map((h) => `<div class="row" style="flex-wrap:nowrap;gap:8px;margin:3px 0"><span class="mono" style="width:44px">${h.h}:00</span>
-      <span style="flex:1;height:10px;background:var(--accent);border-radius:4px;max-width:${Math.round(100 * h.n / hmax)}%"></span><b>${h.n}</b></div>`).join('') || '<span class="hint">Belum ada data.</span>';
+  if (statHours) {
+    if (s.hours && s.hours.length > 0) {
+      statHours.innerHTML = s.hours.map((h) => `
+        <div class="row" style="flex-wrap:nowrap;gap:8px;margin:4px 0;align-items:center">
+          <span class="mono" style="width:48px">${h.h}:00</span>
+          <div style="flex:1;height:12px;background:var(--line);border-radius:6px;overflow:hidden">
+            <div style="height:100%;background:var(--accent);width:${Math.round(100 * h.n / hmax)}%"></div>
+          </div>
+          <b style="width:50px;text-align:right">${h.n} sesi</b>
+        </div>`).join('');
+    } else {
+      statHours.innerHTML = '<span class="hint">Belum ada data sesi foto pada periode ini.</span>';
+    }
+  }
+
+  // Riwayat Harian
+  const dailyCard = $('#statDailyCard');
+  const dailyTable = $('#statDailyTable');
+  if (dailyCard && dailyTable) {
+    if (s.daily && s.daily.length > 1) {
+      dailyCard.classList.remove('hidden');
+      dailyTable.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+          <thead>
+            <tr style="border-bottom:2px solid var(--line);text-align:left">
+              <th style="padding:6px 8px">Tanggal</th>
+              <th style="padding:6px 8px;text-align:center">Sesi</th>
+              <th style="padding:6px 8px;text-align:center">Lembar Cetak</th>
+              <th style="padding:6px 8px;text-align:right">Revenue</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${s.daily.map((d) => `
+              <tr style="border-bottom:1px solid var(--line)">
+                <td style="padding:6px 8px"><b>${esc(d.dt)}</b></td>
+                <td style="padding:6px 8px;text-align:center">${d.n}</td>
+                <td style="padding:6px 8px;text-align:center">${d.prints}</td>
+                <td style="padding:6px 8px;text-align:right" class="mono">Rp ${Number(d.rev || 0).toLocaleString('id-ID')}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>`;
+    } else {
+      dailyCard.classList.add('hidden');
+    }
+  }
 }
+
+// Preset filter buttons click
+$$('#statPresetButtons button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('#statPresetButtons button').forEach((b) => b.classList.remove('on'));
+    btn.classList.add('on');
+    const f = btn.dataset.filter || 'all';
+    currentStatFilter = { type: f, start: '', end: '' };
+    $('#statDateFrom').value = '';
+    $('#statDateTo').value = '';
+    loadGuest();
+  });
+});
+
+// Custom date apply click
+$('#btnStatApply')?.addEventListener('click', () => {
+  const from = $('#statDateFrom')?.value;
+  const to = $('#statDateTo')?.value;
+  if (!from && !to) return;
+  $$('#statPresetButtons button').forEach((b) => b.classList.remove('on'));
+  currentStatFilter = { type: 'custom', start: from, end: to };
+  loadGuest();
+});
+
+// Copy Executive Summary for WhatsApp / Client
+$('#btnCopySummary')?.addEventListener('click', async () => {
+  if (!currentStatData || !ev) return;
+  const s = currentStatData;
+  const filterText = $('#statFilterLabel')?.textContent || 'Semua waktu';
+  const topTpl = s.templates && s.templates[0] ? `${s.templates[0].name} (${s.templates[0].pct}%)` : '-';
+  const text = `📊 *RINGKASAN PHOTOBOOTH*
+Event: ${ev.name || ev.event_name || 'Photobooth'}
+${filterText}
+----------------------------------------
+📸 Total Sesi Foto: ${s.sessions} sesi
+📄 Total Lembar Dicetak: ${s.prints} lembar
+🧻 Estimasi Kertas: ${s.paper_meters_estimated} meter
+💰 Total Revenue: ${s.revenue_formatted || 'Rp 0'}
+⭐ Template Terpopuler: ${topTpl}
+⏰ Jam Teramai: ${s.peak_hour ? `${s.peak_hour} (${s.peak_hour_count} sesi)` : '-'}
+----------------------------------------
+Dihasilkan oleh AdsBooth`;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    await showStudioAlert('Berhasil Disalin!', 'Ringkasan laporan berhasil disalin ke clipboard. Anda bisa langsung menempelkannya (paste) ke WhatsApp klien atau catatan.', '📋');
+  } catch (err) {
+    showStudioPrompt('Salin Ringkasan', 'Salin teks ringkasan di bawah ini:', text, '', '📋');
+  }
+});
 const btnDraw = $('#btnDraw');
 if (btnDraw) {
   btnDraw.addEventListener('click', async () => {});

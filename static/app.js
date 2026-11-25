@@ -1253,6 +1253,7 @@ function payload() {
            event_name: S.eventName, footer: S.footer, username: S.username, website: S.website,
            newspaper_name: S.koranTitle, koran_title: S.koranTitle,
            brightness: S.brightness, lucky: S.lucky,
+           payment_tx: S.paymentTx || null,
            output: S.outputMode || (CFG.output === 'both' ? 'thermal' : CFG.output) };
 }
 function renderCertPick() {
