@@ -130,9 +130,8 @@ class ThermalPrinter:
         try:
             if self.mode == "win32":
                 import win32print
-                ok = self.cfg.get("name") in list_windows_printers_raw(win32print)
-                return {"ok": ok, "mode": "win32",
-                        "message": "Printer siap" if ok else f"Printer '{self.cfg.get('name')}' tidak ditemukan"}
+                ok, msg = check_windows_printer_status(win32print, self.cfg.get("name"))
+                return {"ok": ok, "mode": "win32", "message": msg}
             if self.mode == "device":
                 path = self.cfg.get("device_path") or "/dev/usb/lp0"
                 if not os.path.exists(path):
@@ -272,6 +271,44 @@ def list_windows_printers_raw(win32print):
     return [p[2] for p in win32print.EnumPrinters(flags)]
 
 
+def check_windows_printer_status(win32print, name):
+    """Cek status riil printer Windows (apakah hidup/mati, offline, error, atau habis kertas)."""
+    if not name or name not in list_windows_printers_raw(win32print):
+        return False, f"Printer '{name}' tidak ditemukan di Windows"
+    try:
+        h = win32print.OpenPrinter(name)
+        try:
+            info = win32print.GetPrinter(h, 2)
+            st = info.get("Status", 0)
+            attr = info.get("Attributes", 0)
+
+            # Mask konstanta status printer Windows
+            PRINTER_STATUS_ERROR = 0x00000002
+            PRINTER_STATUS_PAPER_JAM = 0x00000008
+            PRINTER_STATUS_PAPER_OUT = 0x00000010
+            PRINTER_STATUS_PAPER_PROBLEM = 0x00000040
+            PRINTER_STATUS_OFFLINE = 0x00000080
+            PRINTER_STATUS_DOOR_OPEN = 0x00000400
+            PRINTER_STATUS_NOT_AVAILABLE = 0x00001000
+            PRINTER_ATTRIBUTE_WORK_OFFLINE = 0x00000400
+
+            if (attr & PRINTER_ATTRIBUTE_WORK_OFFLINE) or (st & PRINTER_STATUS_NOT_AVAILABLE) or (st & PRINTER_STATUS_OFFLINE):
+                return False, f"Printer '{name}' mati atau kabel terlepas (Offline)"
+            if st & PRINTER_STATUS_PAPER_OUT:
+                return False, f"Kertas printer '{name}' habis (Paper Out)"
+            if st & PRINTER_STATUS_DOOR_OPEN:
+                return False, f"Penutup printer '{name}' terbuka (Door Open)"
+            if st & PRINTER_STATUS_PAPER_JAM:
+                return False, f"Kertas printer '{name}' macet (Paper Jam)"
+            if st & (PRINTER_STATUS_ERROR | PRINTER_STATUS_PAPER_PROBLEM):
+                return False, f"Printer '{name}' dalam kondisi error"
+            return True, "Printer siap"
+        finally:
+            win32print.ClosePrinter(h)
+    except Exception as e:
+        return False, f"Gagal membaca status printer Windows: {e}"
+
+
 def discover():
     out = {"windows": [], "serial": [], "usb": [], "devices": [], "notes": [], "android_usb": None}
     bridge = get_android_usb_bridge()
@@ -335,6 +372,10 @@ class PhotoPrinter:
         if self.mode == "file":
             return {"ok": True, "mode": "file", "message": "Mode tes foto (simpan file, tanpa printer)"}
         try:
+            if self.mode == "windows":
+                import win32print
+                ok, msg = check_windows_printer_status(win32print, self.cfg.get("name"))
+                return {"ok": ok, "mode": "windows", "message": msg}
             names = list_photo_printers().get(self.mode, [])
             ok = self.cfg.get("name") in names
             return {"ok": ok, "mode": self.mode,

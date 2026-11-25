@@ -1958,11 +1958,11 @@ async function pollStatus() {
     // Mode printer lainnya (network, win32, file, photo)
     if (btnUsb) btnUsb.classList.add('hidden');
     lastPrinterOk = !!s.ok;
-    const problem = !s.ok ? 'PRINTER NOT CONNECTED' : (low ? 'PAPER LOW' : '');
+    const problem = !s.ok ? (s.message || 'PRINTER NOT CONNECTED') : (low ? 'PAPER LOW' : '');
     updatePill(problem, !!problem);
     if (statusDot) statusDot.className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
     if (statusText) {
-      statusText.textContent = !s.ok ? 'PRINTER NOT CONNECTED (KETUK)'
+      statusText.textContent = !s.ok ? 'PRINTER MATI / OFFLINE (KETUK)'
         : (low ? `PAPER LOW (${s.paper.left_m} m)` : (s.mode === 'file' ? 'TEST MODE (NO PRINTER)' : 'PRINTER READY'));
       statusText.title = s.message || '';
     }
