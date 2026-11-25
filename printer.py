@@ -272,9 +272,9 @@ def list_windows_printers_raw(win32print):
 
 
 def check_windows_printer_status(win32print, name):
-    """Cek status riil printer Windows (apakah hidup/mati, offline, error, atau habis kertas)."""
+    """Check actual status of Windows printer (online, offline, error, out of paper)."""
     if not name or name not in list_windows_printers_raw(win32print):
-        return False, f"Printer '{name}' tidak ditemukan di Windows"
+        return False, f"Printer '{name}' not found in Windows"
     try:
         h = win32print.OpenPrinter(name)
         try:
@@ -282,7 +282,7 @@ def check_windows_printer_status(win32print, name):
             st = info.get("Status", 0)
             attr = info.get("Attributes", 0)
 
-            # Mask konstanta status printer Windows
+            # Windows printer status constant masks
             PRINTER_STATUS_ERROR = 0x00000002
             PRINTER_STATUS_PAPER_JAM = 0x00000008
             PRINTER_STATUS_PAPER_OUT = 0x00000010
@@ -293,20 +293,20 @@ def check_windows_printer_status(win32print, name):
             PRINTER_ATTRIBUTE_WORK_OFFLINE = 0x00000400
 
             if (attr & PRINTER_ATTRIBUTE_WORK_OFFLINE) or (st & PRINTER_STATUS_NOT_AVAILABLE) or (st & PRINTER_STATUS_OFFLINE):
-                return False, f"Printer '{name}' mati atau kabel terlepas (Offline)"
+                return False, f"Printer '{name}' is offline or disconnected"
             if st & PRINTER_STATUS_PAPER_OUT:
-                return False, f"Kertas printer '{name}' habis (Paper Out)"
+                return False, f"Printer '{name}' out of paper"
             if st & PRINTER_STATUS_DOOR_OPEN:
-                return False, f"Penutup printer '{name}' terbuka (Door Open)"
+                return False, f"Printer '{name}' cover open"
             if st & PRINTER_STATUS_PAPER_JAM:
-                return False, f"Kertas printer '{name}' macet (Paper Jam)"
+                return False, f"Printer '{name}' paper jam"
             if st & (PRINTER_STATUS_ERROR | PRINTER_STATUS_PAPER_PROBLEM):
-                return False, f"Printer '{name}' dalam kondisi error"
-            return True, "Printer siap"
+                return False, f"Printer '{name}' error"
+            return True, "Printer ready"
         finally:
             win32print.ClosePrinter(h)
     except Exception as e:
-        return False, f"Gagal membaca status printer Windows: {e}"
+        return False, f"Failed to read printer status: {e}"
 
 
 def discover():

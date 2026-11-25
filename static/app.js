@@ -1886,6 +1886,27 @@ $('#btnReprint').addEventListener('click', async () => {
 let lastPrinterOk = null;   // status printer terakhir yang diketahui (dipakai saat server tidak merespons)
 let lastPrinterStatus = null; // objek status printer terakhir dari /api/status
 let lastServerError = null; // pesan error saat fetch /api/status gagal
+let printerReadyTimer = null; // timer untuk menyembunyikan status setelah PRINTER READY
+let lastKnownReady = null;  // status apakah sebelumnya printer dalam kondisi ready
+
+function hidePrinterIndicator() {
+  const indicator = $('#stepLabel');
+  if (!indicator) return;
+  indicator.classList.add('fade-out');
+  setTimeout(() => {
+    if (indicator.classList.contains('fade-out')) {
+      indicator.classList.add('hidden');
+      indicator.classList.remove('fade-out');
+    }
+  }, 300);
+}
+
+function showPrinterIndicator() {
+  const indicator = $('#stepLabel');
+  if (!indicator) return;
+  indicator.classList.remove('fade-out');
+  indicator.classList.remove('hidden');
+}
 
 async function pollStatus() {
   try {
@@ -1908,7 +1929,6 @@ async function pollStatus() {
       }
     };
     const btnUsb = $('#btnUsb');
-    const indicator = $('#stepLabel');
     const statusDot = $('#statusDot');
     const statusText = $('#statusText');
 
@@ -1916,31 +1936,35 @@ async function pollStatus() {
       const d = await PBUSB.paired().catch(() => null);
       if (!d) {
         lastPrinterOk = false;
-        updatePill('USB PRINTER BELUM TERHUBUNG', true);
+        lastKnownReady = false;
+        if (printerReadyTimer) { clearTimeout(printerReadyTimer); printerReadyTimer = null; }
+        showPrinterIndicator();
+        updatePill('USB PRINTER DISCONNECTED', true);
         if (btnUsb) {
-          btnUsb.textContent = 'Sambungkan Printer USB';
+          btnUsb.textContent = 'Connect USB Printer';
           btnUsb.classList.remove('hidden');
         }
-        if (indicator) indicator.classList.remove('hidden');
         if (statusDot) statusDot.className = 'dot bad';
         if (statusText) {
-          statusText.textContent = 'PRINTER TIDAK TERDETEKSI (KETUK)';
-          statusText.title = s.message || 'Periksa kabel OTG atau aktifkan Koneksi OTG di pengaturan tablet';
+          statusText.textContent = 'PRINTER DISCONNECTED';
+          statusText.title = s.message || 'Check OTG cable or enable OTG in tablet settings';
         }
         return;
       }
       if (!d.hasPermission) {
         lastPrinterOk = false;
-        updatePill('IZIN AKSES USB DIPERLUKAN', true);
+        lastKnownReady = false;
+        if (printerReadyTimer) { clearTimeout(printerReadyTimer); printerReadyTimer = null; }
+        showPrinterIndicator();
+        updatePill('USB PERMISSION REQUIRED', true);
         if (btnUsb) {
-          btnUsb.textContent = 'Izinkan Akses Printer USB';
+          btnUsb.textContent = 'Grant USB Permission';
           btnUsb.classList.remove('hidden');
         }
-        if (indicator) indicator.classList.remove('hidden');
         if (statusDot) statusDot.className = 'dot warn';
         if (statusText) {
-          statusText.textContent = 'IZIN USB DIPERLUKAN (KETUK)';
-          statusText.title = s.message || 'Ketuk untuk mengizinkan akses printer USB';
+          statusText.textContent = 'USB PERMISSION REQUIRED';
+          statusText.title = s.message || 'Tap to grant USB printer permission';
         }
         return;
       }
@@ -1948,15 +1972,36 @@ async function pollStatus() {
       if (btnUsb) btnUsb.classList.add('hidden');
       lastPrinterOk = !!s.ok;
       const isReady = s.ok && !low;
-      const problem = !s.ok ? 'PRINTER TIDAK SIAP' : (low ? 'PAPER LOW' : '');
-      updatePill(problem, !!problem);
-      // Sembunyikan indikator pojok kanan bawah saat ready, tampilkan hanya saat offline/bermasalah
-      if (indicator) indicator.classList.toggle('hidden', isReady);
-      if (statusDot) statusDot.className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
-      if (statusText) {
-        statusText.textContent = !s.ok ? 'PRINTER TIDAK SIAP (KETUK)'
-          : (low ? `PAPER LOW (${s.paper.left_m} m)` : 'PRINTER READY');
-        statusText.title = s.message || '';
+      if (!isReady) {
+        lastKnownReady = false;
+        if (printerReadyTimer) { clearTimeout(printerReadyTimer); printerReadyTimer = null; }
+        showPrinterIndicator();
+        const problem = !s.ok ? 'PRINTER OFFLINE' : 'PAPER LOW';
+        updatePill(problem, true);
+        if (statusDot) statusDot.className = 'dot ' + (!s.ok ? 'bad' : 'warn');
+        if (statusText) {
+          statusText.textContent = !s.ok ? 'PRINTER OFFLINE' : `PAPER LOW (${s.paper.left_m} m)`;
+          statusText.title = s.message || '';
+        }
+        return;
+      }
+      // Ready!
+      updatePill('', false);
+      if (lastKnownReady !== true) {
+        lastKnownReady = true;
+        showPrinterIndicator();
+        if (statusDot) statusDot.className = 'dot ok';
+        if (statusText) {
+          statusText.textContent = 'PRINTER READY';
+          statusText.title = s.message || '';
+        }
+        if (printerReadyTimer) clearTimeout(printerReadyTimer);
+        printerReadyTimer = setTimeout(() => {
+          hidePrinterIndicator();
+          printerReadyTimer = null;
+        }, 3500);
+      } else if (!printerReadyTimer) {
+        hidePrinterIndicator();
       }
       return;
     }
@@ -1965,28 +2010,50 @@ async function pollStatus() {
     if (btnUsb) btnUsb.classList.add('hidden');
     lastPrinterOk = !!s.ok;
     const isReady = s.ok && !low;
-    const problem = !s.ok ? (s.message || 'PRINTER NOT CONNECTED') : (low ? 'PAPER LOW' : '');
-    updatePill(problem, !!problem);
-    // Sembunyikan indikator pojok kanan bawah saat ready, tampilkan hanya saat offline/bermasalah
-    if (indicator) indicator.classList.toggle('hidden', isReady);
-    if (statusDot) statusDot.className = 'dot ' + (!s.ok ? 'bad' : (low ? 'warn' : 'ok'));
-    if (statusText) {
-      statusText.textContent = !s.ok ? 'PRINTER MATI / OFFLINE (KETUK)'
-        : (low ? `PAPER LOW (${s.paper.left_m} m)` : (s.mode === 'file' ? 'TEST MODE (NO PRINTER)' : 'PRINTER READY'));
-      statusText.title = s.message || '';
+    if (!isReady) {
+      lastKnownReady = false;
+      if (printerReadyTimer) { clearTimeout(printerReadyTimer); printerReadyTimer = null; }
+      showPrinterIndicator();
+      const problem = !s.ok ? (s.message || 'PRINTER OFFLINE') : 'PAPER LOW';
+      updatePill(problem, true);
+      if (statusDot) statusDot.className = 'dot ' + (!s.ok ? 'bad' : 'warn');
+      if (statusText) {
+        statusText.textContent = !s.ok ? 'PRINTER OFFLINE' : `PAPER LOW (${s.paper.left_m} m)`;
+        statusText.title = s.message || '';
+      }
+      return;
+    }
+    // Ready!
+    updatePill('', false);
+    if (lastKnownReady !== true) {
+      lastKnownReady = true;
+      showPrinterIndicator();
+      if (statusDot) statusDot.className = 'dot ok';
+      if (statusText) {
+        statusText.textContent = s.mode === 'file' ? 'TEST MODE (NO PRINTER)' : 'PRINTER READY';
+        statusText.title = s.message || '';
+      }
+      if (printerReadyTimer) clearTimeout(printerReadyTimer);
+      printerReadyTimer = setTimeout(() => {
+        hidePrinterIndicator();
+        printerReadyTimer = null;
+      }, 3500);
+    } else if (!printerReadyTimer) {
+      hidePrinterIndicator();
     }
   } catch (e) {
     console.error('pollStatus error:', e);
     lastServerError = e.message || String(e);
     lastPrinterStatus = null;
-    const indicator = $('#stepLabel');
-    if (indicator) indicator.classList.remove('hidden');
+    lastKnownReady = false;
+    if (printerReadyTimer) { clearTimeout(printerReadyTimer); printerReadyTimer = null; }
+    showPrinterIndicator();
     const statusDot = $('#statusDot');
     const statusText = $('#statusText');
     if (statusDot) statusDot.className = 'dot bad';
     if (statusText) {
       statusText.textContent = lastPrinterOk ? 'SERVER NOT CONNECTED' : 'SERVER & PRINTER NOT CONNECTED';
-      statusText.title = 'Server tidak merespons (/api/status gagal): ' + e.message;
+      statusText.title = 'Server error (/api/status failed): ' + e.message;
     }
   }
 }
