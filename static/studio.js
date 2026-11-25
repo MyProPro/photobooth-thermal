@@ -912,14 +912,18 @@ async function runPreview() {
   try {
     const j = await api('/api/studio/preview', { json: {
       eventId: ev.id, event: ev, template: t.id, spec: t.spec || null,
-      layout: pvLayout, caption: $('#pvCaption').value } });
+      layout: pvLayout, caption: $('#pvCaption') ? $('#pvCaption').value : '' } });
     if (seq !== pvSeq) return;
     $('#pvImg').src = j.image;
-    $('#pvInfo').textContent = isPhoto()
-      ? 'Kertas foto 4R (10×15 cm, 300 dpi). Layout Strip = 2 strip 5×15 cm kembar, tinggal dipotong.'
-      : `Tinggi struk ± ${(j.height / 8 / 10).toFixed(1)} cm (203 dpi). Foto contoh: sesi terakhir atau ilustrasi.`;
+    const pvInfo = $('#pvInfo');
+    if (pvInfo) {
+      pvInfo.textContent = isPhoto()
+        ? 'Kertas foto 4R (10×15 cm, 300 dpi). Layout Strip = 2 strip 5×15 cm kembar, tinggal dipotong.'
+        : `Tinggi struk ± ${(j.height / 8 / 10).toFixed(1)} cm (203 dpi). Foto contoh: sesi terakhir atau ilustrasi.`;
+    }
   } catch (e) {
-    $('#pvInfo').textContent = 'Preview gagal: ' + e.message;
+    const pvInfo = $('#pvInfo');
+    if (pvInfo) pvInfo.textContent = 'Preview gagal: ' + e.message;
   }
   $('#pvImg').style.opacity = 1;
 }
@@ -928,7 +932,7 @@ function setLayout(l) {
   $$('#pvLayouts button').forEach((b) => b.classList.toggle('on', b.dataset.l === l));
   schedulePreview();
 }
-$('#pvCaption').addEventListener('input', schedulePreview);
+$('#pvCaption')?.addEventListener('input', schedulePreview);
 
 // ---------------------------------------------------------------- statistik event
 const pinQ = () => (sessionStorage.getItem('studioPin') ? '?pin=' + encodeURIComponent(sessionStorage.getItem('studioPin')) : '');
