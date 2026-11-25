@@ -139,9 +139,8 @@
 
   <!-- 4. Kamera -->
   <section class="screen" id="s-camera">
-    <div class="row-between">
-      <span class="mono">↑ LOOK AT THE CAMERA ABOVE THE SCREEN</span>
-      <span class="chip mono" id="shotLabel">PHOTO 1 OF 3</span>
+    <div class="camera-top-bar" style="display:flex;justify-content:center;align-items:center;width:100%">
+      <span class="chip mono" id="shotLabel">PHOTO 1 OF 1</span>
     </div>
     <div class="vf-wrap" id="vfWrap">
     <div class="viewfinder">
@@ -151,12 +150,11 @@
       <div class="count" id="count"></div>
       <img id="shotReview" class="shot-review hidden" alt="">
       <div class="flash" id="flash"></div>
-      <div class="vf-guide hidden" id="vfGuide"><span class="vf-tag mono" id="vfTag"></span></div>
       <button class="ready-btn hidden" id="btnReady" type="button" aria-label="Ready">
         <span class="rb-circle"><span class="rb-ring"></span>
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"></path><circle cx="12" cy="13" r="3.6"></circle></svg></span>
         <b>Ready?</b>
-        <span class="rb-sub" id="readySub">Tap, then look at the camera</span>
+        <span class="rb-sub" id="readySub">Tap to start</span>
         <span class="rb-dots" id="readyDots"></span>
       </button>
       <div class="pose-box hidden" id="poseBox"><span class="mono">POSE CHALLENGE</span><b id="poseText"></b></div>

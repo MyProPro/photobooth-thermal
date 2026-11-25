@@ -235,15 +235,7 @@ function sizeViewfinder() {
   vf.style.height = Math.floor(h) + 'px';
   $('#s-camera').style.setProperty('--ar', ar.toFixed(4));
   const g = $("#vfGuide");
-  if (g) {
-    const tAR = 1 / photoRatioHW();        // lebar / tinggi area cetak
-    let gw = 100, gh = 100;
-    if (tAR <= ar) { gw = tAR / ar * 100; } else { gh = ar / tAR * 100; }
-    g.style.width = gw.toFixed(2) + "%";
-    g.style.height = gh.toFixed(2) + "%";
-    g.classList.remove("hidden");
-    const tag = $("#vfTag"); if (tag) tag.textContent = ratioLabel(tAR);
-  }
+  if (g) g.classList.add("hidden");
 }
 ['loadedmetadata', 'resize'].forEach((ev) => $('#video').addEventListener(ev, sizeViewfinder));
 $('#dummyView').addEventListener('load', sizeViewfinder);
