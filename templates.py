@@ -2698,33 +2698,93 @@ def _div_color(p, fg, fn):
 # ---- overlay: frame PNG dengan lubang transparan
 
 def detect_slots(alpha, min_size=40):
-    """Cari area transparan (alpha < 128). Return list bbox (x0,y0,x1,y1) urut atas->bawah, kiri->kanan."""
+    """Cari area transparan (alpha < 128) untuk slot foto.
+    Mengabaikan margin transparan di luar bingkai (flood fill dari tepi luar canvas).
+    Return list bbox (x0,y0,x1,y1) urut atas->bawah, kiri->kanan."""
     sc = 4
     small = alpha.resize((max(1, alpha.width // sc), max(1, alpha.height // sc)), Image.NEAREST)
     w, h = small.size
     px = small.load()
+
+    # 1. Tandai background transparan di luar bingkai (flood fill dari tepi gambar)
+    border_bg = bytearray(w * h)
+    stack = []
+    for x in range(w):
+        if px[x, 0] < 128 and not border_bg[x]:
+            border_bg[x] = 1
+            stack.append((x, 0))
+        if px[x, h - 1] < 128 and not border_bg[(h - 1) * w + x]:
+            border_bg[(h - 1) * w + x] = 1
+            stack.append((x, h - 1))
+    for y in range(h):
+        if px[0, y] < 128 and not border_bg[y * w]:
+            border_bg[y * w] = 1
+            stack.append((0, y))
+        if px[w - 1, y] < 128 and not border_bg[y * w + w - 1]:
+            border_bg[y * w + w - 1] = 1
+            stack.append((w - 1, y))
+
+    while stack:
+        cx, cy = stack.pop()
+        for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+            if 0 <= nx < w and 0 <= ny < h and px[nx, ny] < 128 and not border_bg[ny * w + nx]:
+                border_bg[ny * w + nx] = 1
+                stack.append((nx, ny))
+
+    # 2. Cari lubang foto yang berada di dalam bingkai (tidak menyatu dengan tepi luar)
     seen = bytearray(w * h)
-    boxes = []
+    inner_boxes = []
+    for y0 in range(h):
+        for x0 in range(w):
+            if seen[y0 * w + x0] or px[x0, y0] >= 128 or border_bg[y0 * w + x0]:
+                continue
+            st = [(x0, y0)]
+            seen[y0 * w + x0] = 1
+            minx = maxx = x0
+            miny = maxy = y0
+            while st:
+                x, y = st.pop()
+                minx, maxx, miny, maxy = min(minx, x), max(maxx, x), min(miny, y), max(maxy, y)
+                for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx] and px[nx, ny] < 128 and not border_bg[ny * w + nx]:
+                        seen[ny * w + nx] = 1
+                        st.append((nx, ny))
+            bx = (minx * sc, miny * sc, min(alpha.width, (maxx + 1) * sc), min(alpha.height, (maxy + 1) * sc))
+            if bx[2] - bx[0] >= min_size and bx[3] - bx[1] >= min_size:
+                inner_boxes.append(bx)
+
+    if inner_boxes:
+        inner_boxes.sort(key=lambda b: (b[1] // 20, b[0]))
+        return inner_boxes
+
+    # 3. Fallback jika bingkai full-bleed (area foto menyentuh tepi kanvas)
+    seen = bytearray(w * h)
+    fallback_boxes = []
     for y0 in range(h):
         for x0 in range(w):
             if seen[y0 * w + x0] or px[x0, y0] >= 128:
                 continue
-            stack = [(x0, y0)]
+            st = [(x0, y0)]
             seen[y0 * w + x0] = 1
             minx = maxx = x0
             miny = maxy = y0
-            while stack:
-                x, y = stack.pop()
+            px_count = 0
+            while st:
+                x, y = st.pop()
+                px_count += 1
                 minx, maxx, miny, maxy = min(minx, x), max(maxx, x), min(miny, y), max(maxy, y)
                 for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
                     if 0 <= nx < w and 0 <= ny < h and not seen[ny * w + nx] and px[nx, ny] < 128:
                         seen[ny * w + nx] = 1
-                        stack.append((nx, ny))
+                        st.append((nx, ny))
+            bw = (maxx - minx + 1)
+            bh = (maxy - miny + 1)
+            fill_ratio = px_count / float(bw * bh) if bw * bh > 0 else 0
             bx = (minx * sc, miny * sc, min(alpha.width, (maxx + 1) * sc), min(alpha.height, (maxy + 1) * sc))
-            if bx[2] - bx[0] >= min_size and bx[3] - bx[1] >= min_size:
-                boxes.append(bx)
-    boxes.sort(key=lambda b: (b[1] // 20, b[0]))
-    return boxes
+            if bx[2] - bx[0] >= min_size and bx[3] - bx[1] >= min_size and fill_ratio > 0.4:
+                fallback_boxes.append(bx)
+    fallback_boxes.sort(key=lambda b: (b[1] // 20, b[0]))
+    return fallback_boxes
 
 
 def load_frame(path, width):
