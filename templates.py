@@ -2742,10 +2742,22 @@ def t_overlay(c, s):
     fname = frames.get(c.layout)
     if not fname or not c.asset_dir or not os.path.exists(os.path.join(c.asset_dir, os.path.basename(fname))):
         p = Paper(c.W)
-        p.y = 40
-        p.para_center(f"Frame untuk layout '{c.layout}' belum diupload", F("sansb", 26))
-        p.y += 20
-        return p.finish()
+        p.y = 24
+        p.center("BINGKAI BELUM DIUPLOAD", F("sansb", 22))
+        p.y += 8
+        p.para_center(f"Layout '{c.layout}' belum memiliki file bingkai PNG.", F("sans", 16))
+        p.y += 16
+        sl, bottom_y = slots(c.layout, M, p.y, c.W - 2 * M, gap=14)
+        for i, (x, y, w, h) in enumerate(sl):
+            p.img.paste(c.ph(i, int(w), int(h)), (int(x), int(y)))
+            d = ImageDraw.Draw(p.img)
+            d.rectangle((int(x), int(y), int(x + w - 1), int(y + h - 1)), outline=K, width=2)
+        p.y = bottom_y + 16
+        p.dashed()
+        p.y += 12
+        p.center("Klik 'Edit' pada template ini untuk upload bingkai PNG", F("sans", 15))
+        p.y += 14
+        return p.finish(bottom_pad=10)
     fr = load_frame(os.path.join(c.asset_dir, os.path.basename(fname)), c.W)
     alpha = fr.split()[3]
     holes = alpha.point(lambda a: 255 if a < 128 else 0)

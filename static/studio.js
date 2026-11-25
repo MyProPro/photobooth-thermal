@@ -568,7 +568,7 @@ function renderTemplateList() {
       <div class="name"><b>${esc(t.name)}</b><span class="tag">${t.kind.toUpperCase()}</span></div>
       <div class="row">
         <button class="ghost" data-act="default" title="Jadikan terpilih otomatis">${ev[DK()] === t.id ? '★' : '☆'}</button>
-        ${t.spec ? '<button class="ghost" data-act="edit">Edit</button>' : ''}
+        ${t.spec ? `<button class="ghost" data-act="edit">Edit</button><button class="ghost" data-act="del" style="color:var(--accent,#e11d48)" title="Hapus template custom ini">Hapus</button>` : ''}
       </div>
       <div class="arrows row">${on ? '<button data-act="up" aria-label="Naik">↑</button><button data-act="down" aria-label="Turun">↓</button>' : ''}</div>`;
     row.querySelector('input').addEventListener('change', (e) => {
@@ -580,10 +580,12 @@ function renderTemplateList() {
       setDirty(); renderTemplateList();
     });
     row.querySelector('.name').addEventListener('click', () => { selTpl = t.id; renderTemplateList(); if (!isMobileStudio()) schedulePreview(); });
-    row.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
+    row.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
       const act = b.dataset.act;
       if (act === 'default') { ev[DK()] = t.id; if (!en.includes(t.id)) ev[TK()] = [...en, t.id]; }
       if (act === 'edit') { openSpec(t.spec.id); return; }
+      if (act === 'del') { deleteCustomTemplate(t.spec.id, t.name); return; }
       if (act === 'up' || act === 'down') {
         const list = enabledIds(); const i = list.indexOf(t.id); const j = act === 'up' ? i - 1 : i + 1;
         if (j < 0 || j >= list.length) return;
@@ -714,14 +716,20 @@ function showListView() {
   $('#specView').classList.add('hidden');
 }
 $('#btnBackList').addEventListener('click', () => { showListView(); renderTemplateList(); });
-$('#btnDelSpec').addEventListener('click', async () => {
+async function deleteCustomTemplate(id, name) {
+  if (!(await showStudioConfirm('Hapus Template', `Hapus template "${name || 'ini'}"?`, 'Hapus', 'Batal', '🗑️'))) return;
+  ev.custom_templates = (ev.custom_templates || []).filter((t) => t.id !== id);
+  ev.templates = (ev.templates || []).filter((i) => i !== 'c:' + id);
+  if (ev.default_template === 'c:' + id) ev.default_template = 'klasik';
+  if (selTpl === 'c:' + id) selTpl = ev.default_template || 'klasik';
+  setDirty();
+  showListView();
+  renderTemplateList();
+  schedulePreview();
+}
+$('#btnDelSpec').addEventListener('click', () => {
   const s = curSpec();
-  if (!(await showStudioConfirm('Hapus Template', `Hapus template "${s.name}"?`, 'Hapus', 'Batal', '🗑️'))) return;
-  ev.custom_templates = ev.custom_templates.filter((t) => t.id !== s.id);
-  ev.templates = (ev.templates || []).filter((i) => i !== 'c:' + s.id);
-  if (ev.default_template === 'c:' + s.id) ev.default_template = 'klasik';
-  selTpl = ev.default_template;
-  setDirty(); showListView(); renderTemplateList(); schedulePreview();
+  if (s) deleteCustomTemplate(s.id, s.name);
 });
 $('#btnDupSpec').addEventListener('click', () => {
   const s = clone(curSpec()); s.id = uid(); s.name += ' (salinan)';
@@ -907,11 +915,22 @@ async function runPreview() {
   if (!ev || $('#tab-templates').classList.contains('hidden')) return;
   const seq = ++pvSeq;
   const t = allTemplates().find((x) => x.id === selTpl) || allTemplates()[0];
+  if (t && t.spec && t.spec.kind === 'overlay') {
+    const frames = t.spec.frames || {};
+    if (!frames[pvLayout]) {
+      const firstWithFrame = Object.keys(frames)[0];
+      if (firstWithFrame && firstWithFrame !== pvLayout) {
+        setLayout(firstWithFrame);
+        return;
+      }
+    }
+  }
   $('#pvName').textContent = 'Preview: ' + t.name;
   $('#pvImg').style.opacity = 0.5;
   try {
     const j = await api('/api/studio/preview', { json: {
       eventId: ev.id, event: ev, template: t.id, spec: t.spec || null,
+      output: isPhoto() ? 'photo' : 'thermal',
       layout: pvLayout, caption: $('#pvCaption') ? $('#pvCaption').value : '' } });
     if (seq !== pvSeq) return;
     $('#pvImg').src = j.image;

@@ -1626,6 +1626,8 @@ def event_asset_public(fname):
     used = {ev.get("logo"), ev.get("intro_photo"), (ev.get("theme") or {}).get("bg_image")}
     used |= set(ev.get("intro_photos") or [])
     used |= set((ev.get("photo_frames") or {}).values())
+    for t in (ev.get("custom_templates") or []):
+        used |= set((t.get("frames") or {}).values())
     if not ev.get("id") or fname not in used:
         abort(404)
     return send_from_directory(asset_dir, fname)
