@@ -323,8 +323,11 @@ def print_lang(ev):
 
 
 def apply_watermark(img):
-    """Beri tanda pita DEMO di bagian paling bawah jika belum berlisensi."""
-    return LIC.watermark(img) if LIC.status()["demo"] else img
+    """Beri tanda pita DEMO di bawah jika belum berlisensi, atau 'powered by adsbooth' kecil jika berlisensi."""
+    s = LIC.status()
+    if s.get("demo", True):
+        return LIC.watermark(img)
+    return LIC.powered_by(img)
 
 
 def render_receipt(*a, **kw):

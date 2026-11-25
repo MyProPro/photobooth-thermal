@@ -317,3 +317,36 @@ def watermark(img):
         th = bb[3] - bb[1]
         d.text(((W - tw) / 2, H + (band - th) / 2 - bb[1]), msg, font=fb, fill=(255, 255, 255))
         return ext.convert(mode) if mode != "RGB" else ext
+
+
+def powered_by(img):
+    """Tanda branding 'powered by adsbooth' kecil di kanan bawah untuk versi berlisensi."""
+    from PIL import Image, ImageDraw
+    import templates as T
+    mode = img.mode
+    W, H = img.size
+    msg = "powered by adsbooth"
+    if mode in ("1", "L"):
+        pad = 24
+        ext = Image.new("L", (W, H + pad), 255)
+        ext.paste(img.convert("L"), (0, 0))
+        d = ImageDraw.Draw(ext)
+        f = T.F("sans", 13)
+        tw = d.textlength(msg, font=f)
+        bb = f.getbbox(msg)
+        th = bb[3] - bb[1]
+        d.text((W - tw - 16, H + (pad - th) // 2 - bb[1]), msg, font=f, fill=0)
+        return ext.convert(mode)
+    else:
+        out = img.copy()
+        d = ImageDraw.Draw(out)
+        f = T.F("sans", max(14, int(W * 0.016)))
+        tw = d.textlength(msg, font=f)
+        bb = f.getbbox(msg)
+        th = bb[3] - bb[1]
+        x = W - tw - int(W * 0.025)
+        y = H - th - int(W * 0.02)
+        for ox, oy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            d.text((x + ox, y + oy), msg, font=f, fill=(255, 255, 255))
+        d.text((x, y), msg, font=f, fill=(80, 80, 80))
+        return out
