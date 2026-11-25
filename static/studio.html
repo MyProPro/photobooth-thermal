@@ -78,8 +78,8 @@ label{display:block}
 .check input{width:18px;height:18px;accent-color:var(--ink)}
 .split{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:22px;align-items:start}
 .preview{position:sticky;top:80px;display:flex;flex-direction:column;gap:10px}
-.preview .paperbox{background:#d9d4ca;border-radius:14px;padding:14px;max-height:calc(100vh - 230px);overflow:auto;display:flex;justify-content:center}
-.preview img{width:288px;image-rendering:auto;box-shadow:0 2px 10px rgba(0,0,0,.15);background:#fff}
+.preview .paperbox{background:#d9d4ca;border-radius:14px;padding:14px;max-height:calc(100vh - 230px);overflow-y:auto;overflow-x:hidden;display:flex;justify-content:center;align-items:flex-start}
+.preview img{width:288px;max-width:100%;height:auto!important;object-fit:contain;align-self:flex-start;flex-shrink:0;image-rendering:auto;box-shadow:0 2px 10px rgba(0,0,0,.15);background:#fff}
 .seg{display:inline-flex;border:1.5px solid var(--ink);border-radius:10px;overflow:hidden}
 .seg button{border:0;border-radius:0;padding:6px 10px}
 .seg button.on{background:var(--ink);color:#fff}
@@ -141,7 +141,7 @@ body.ev-photo .thermal-only{display:none!important}
 .color-in input{width:100%;height:40px;border:1.5px solid var(--line);border-radius:8px;padding:2px;background:#fff;cursor:pointer}
 .theme-split{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:18px;margin-top:12px;align-items:start}
 .tpl-inline-pv{display:none}
-@media (max-width:1100px){.split{grid-template-columns:1fr}.preview{position:static}.wrap{grid-template-columns:1fr}.side{border-right:0;border-bottom:1.5px solid var(--line)}#tab-templates .split{grid-template-columns:minmax(0,1fr) 260px;gap:16px}#tab-templates .preview img{width:210px}}
+@media (max-width:1100px){.split{grid-template-columns:1fr}.preview{position:static}.wrap{grid-template-columns:1fr}.side{border-right:0;border-bottom:1.5px solid var(--line)}#tab-templates .split{grid-template-columns:minmax(0,1fr) 260px;gap:16px}#tab-templates .preview img{width:210px;max-width:100%;height:auto!important}}
 /* ====== Tampilan HP (mobile) ====== */
 @media (max-width:600px){
   .top{padding:10px 14px;gap:8px;flex-wrap:wrap}
@@ -164,12 +164,12 @@ body.ev-photo .thermal-only{display:none!important}
   .theme-split{grid-template-columns:1fr}
   #tab-templates .split{grid-template-columns:1fr}
   #tab-templates .preview{display:none}
-  .tpl-inline-pv{display:flex;justify-content:center;align-items:flex-start;background:#d9d4ca;border-radius:10px;padding:10px;margin:2px 2px 12px;max-height:50vh;overflow:auto}
-  .tpl-inline-pv img{max-width:240px;width:100%;background:#fff;border-radius:2px;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+  .tpl-inline-pv{display:flex;justify-content:center;align-items:flex-start;background:#d9d4ca;border-radius:10px;padding:10px;margin:2px 2px 12px;max-height:50vh;overflow-y:auto;overflow-x:hidden}
+  .tpl-inline-pv img{max-width:240px;width:100%;height:auto!important;object-fit:contain;flex-shrink:0;background:#fff;border-radius:2px;box-shadow:0 2px 10px rgba(0,0,0,.15)}
   .main .row > label.field{width:auto!important;flex:1 1 150px;min-width:0}
   .preview{position:static}
   .preview .paperbox{max-height:none}
-  .preview img{width:100%;max-width:300px}
+  .preview img{width:100%;max-width:300px;height:auto!important;object-fit:contain;align-self:flex-start;flex-shrink:0}
   .tpl-row{grid-template-columns:24px 1fr auto;gap:8px;padding:8px}
   .sec{font-size:16px}
   .savebar{left:12px;right:12px;bottom:12px;justify-content:space-between;padding:10px 12px}
@@ -524,7 +524,7 @@ body.ev-photo .thermal-only{display:none!important}
       <div class="tabs">
         <button data-tab="info" class="on">Info event</button>
         <button data-tab="templates">Template</button>
-        <button data-tab="guest">Buku tamu, undian &amp; statistik</button>
+        <button data-tab="guest">Statistik</button>
       </div>
 
       <!-- INFO -->
@@ -538,7 +538,7 @@ body.ev-photo .thermal-only{display:none!important}
           <label class="field"><span>Nama event (di Studio)</span><input type="text" data-k="name"></label>
           <label class="field"><span>Nama yang dicetak di struk</span><input type="text" data-k="event_name"><span class="hint">Dipakai di semua template sebagai {event}.</span></label>
           <label class="field"><span>Teks penutup (footer)</span><input type="text" data-k="footer"></label>
-          <label class="field"><span>Bahasa teks cetak</span><select data-k="print_lang"><option value="id">Bahasa Indonesia</option><option value="en">English</option></select><span class="hint">Teks bawaan di struk/foto (judul template, tanggal, undian, buku tamu). Nama event, footer &amp; caption tetap seperti yang diketik.</span></label>
+          <label class="field"><span>Bahasa teks cetak</span><select data-k="print_lang"><option value="id">Bahasa Indonesia</option><option value="en">English</option></select><span class="hint">Teks bawaan di struk/foto (judul template, tanggal). Nama event, footer &amp; caption tetap seperti yang diketik.</span></label>
           <label class="field"><span>Hitung mundur layar QR selesai</span>
             <select data-k="reset_seconds">
               <option value="30">30 detik</option>
@@ -613,8 +613,6 @@ body.ev-photo .thermal-only{display:none!important}
 
         <div class="sec">Fitur tambahan</div>
         <div class="grid2" id="featureChecks">
-          <label class="check card"><input type="checkbox" data-f="guestbook"> <span><b>Buku tamu + tanda tangan</b><br><span class="hint">Tamu menulis ucapan &amp; tanda tangan di tablet, ikut tercetak dan tersimpan.</span></span></label>
-          <label class="check card"><input type="checkbox" data-f="lucky_draw"> <span><b>Nomor undian</b><br><span class="hint">Setiap struk dapat nomor undian. Undi di tab Buku tamu &amp; undian.</span></span></label>
           <label class="check card"><input type="checkbox" data-f="pose_challenge"> <span><b>Tantangan pose</b><br><span class="hint">Pose acak muncul sebelum tiap jepretan, ikut tercetak.</span></span></label>
           <label class="check card"><input type="checkbox" data-f="host_copy"> <span><b>Cetak arsip tuan rumah</b><br><span class="hint">Otomatis cetak 1 salinan tambahan berlabel ARSIP.</span></span></label>
           <label class="check card"><input type="checkbox" data-f="living_photo"> <span><b>QR video (Living Photo)</b><br><span class="hint">QR unik di bawah struk. Tamu scan, pilih video dari HP-nya sekali, lalu video diputar tiap kali di-scan. Video tetap di HP tamu.</span></span></label>
@@ -724,36 +722,17 @@ body.ev-photo .thermal-only{display:none!important}
         </div>
       </section>
 
-      <!-- BUKU TAMU & UNDIAN -->
+      <!-- STATISTIK -->
       <section id="tab-guest" class="hidden">
         <div class="card" style="margin-bottom:16px">
           <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Statistik event</b>
             <a class="btn" id="csvOpen" target="_blank" rel="noopener">Unduh CSV ↓</a></div>
-          <div class="grid4" id="statNums" style="margin-top:12px"></div>
+          <div class="grid2" id="statNums" style="margin-top:12px"></div>
           <div class="grid2" style="margin-top:14px">
             <div><b class="small">Template terpopuler</b><div id="statTpl" class="small" style="margin-top:6px"></div></div>
             <div><b class="small">Sesi per jam</b><div id="statHours" class="small" style="margin-top:6px"></div></div>
           </div>
           <p class="hint" style="margin-top:10px">Dari database <span class="mono">output/photobooth.db</span> (SQLite). CSV bisa dibuka di Excel.</p>
-        </div>
-        <div class="grid2">
-          <div class="card">
-            <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Undian doorprize</b><span class="badge" id="drawCount">-</span></div>
-            <div id="drawWinner" style="text-align:center;padding:18px 0">
-              <div class="mono muted small">NOMOR PEMENANG</div>
-              <div id="drawNum" style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:96px;line-height:1">----</div>
-              <img id="drawPhoto" alt="Foto pemenang" class="hidden" style="max-width:100%;max-height:220px;border-radius:10px;margin-top:10px">
-            </div>
-            <div class="row"><button class="accent" id="btnDraw">Undi sekarang</button><button class="ghost" id="btnDrawReset">Reset undian</button></div>
-            <p class="small" style="margin-top:12px"><b>Sudah keluar:</b> <span id="drawList" class="mono">-</span></p>
-            <p class="hint">Aktifkan "Nomor undian" di Info event. Nomor yang sudah keluar tidak akan keluar lagi.</p>
-          </div>
-          <div class="card">
-            <div class="row" style="justify-content:space-between"><b style="font-family:'Space Grotesk',sans-serif;font-size:19px">Buku tamu</b><span class="badge" id="gbCount">-</span></div>
-            <p class="hint">Semua ucapan &amp; tanda tangan tamu event ini. Buka halamannya lalu Cetak / Simpan PDF untuk diberikan ke tuan rumah.</p>
-            <a class="btn primary" id="gbOpen" target="_blank" rel="noopener">Buka halaman buku tamu ↗</a>
-            <div id="gbList" style="margin-top:14px;display:flex;flex-direction:column;gap:10px;max-height:520px;overflow:auto"></div>
-          </div>
         </div>
       </section>
 

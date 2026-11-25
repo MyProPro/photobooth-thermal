@@ -930,58 +930,37 @@ function setLayout(l) {
 }
 $('#pvCaption').addEventListener('input', schedulePreview);
 
-// ---------------------------------------------------------------- buku tamu & undian
+// ---------------------------------------------------------------- statistik event
 const pinQ = () => (sessionStorage.getItem('studioPin') ? '?pin=' + encodeURIComponent(sessionStorage.getItem('studioPin')) : '');
 async function loadGuest() {
   if (!ev) return;
   const id = encodeURIComponent(ev.id);
-  const [g, d, st] = await Promise.all([api(`/api/studio/events/${id}/guestbook`), api(`/api/studio/events/${id}/draw`),
-    api(`/api/studio/events/${id}/stats`).catch(() => null)]);
+  const st = await api(`/api/studio/events/${id}/stats`).catch(() => null);
   if (st) renderStats(st);
-  $('#csvOpen').href = `/studio/export/${id}.csv${pinQ()}`;
-  $('#gbCount').textContent = g.count + ' ucapan';
-  $('#gbOpen').href = `/studio/guestbook/${id}${pinQ()}`;
-  $('#gbList').innerHTML = g.items.slice(0, 30).map((m) => `<div class="row" style="align-items:flex-start;flex-wrap:nowrap;gap:10px;border-bottom:1px solid var(--line);padding-bottom:8px">
-      ${m.photos[0] ? `<img src="/d/${m.id}/${m.photos[0]}" alt="" style="width:72px;height:54px;object-fit:cover;border-radius:6px">` : ''}
-      <div><div style="font-style:italic">${esc(m.guestbook.message)}</div>
-      ${m.guestbook.signature ? `<img src="/d/${m.id}/ttd.png" alt="Tanda tangan" style="height:36px">` : ''}
-      <div class="small"><b>${esc(m.guestbook.name)}</b> <span class="muted">· No. ${m.number}</span></div></div></div>`).join('') || '<p class="hint">Belum ada ucapan.</p>';
-  renderDraw(d);
+  const csv = $('#csvOpen');
+  if (csv) csv.href = `/studio/export/${id}.csv${pinQ()}`;
 }
 function renderStats(s) {
-  const box = (label, val) => `<div class="card" style="padding:12px;text-align:center"><div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:30px">${val}</div><div class="small muted">${label}</div></div>`;
-  $('#statNums').innerHTML = box('sesi foto', s.sessions) + box('lembar dicetak', s.prints) + box('ucapan buku tamu', s.guestbook) + box('nomor undian', s.lucky);
-  const max = Math.max(1, ...s.templates.map((t) => t.n));
-  $('#statTpl').innerHTML = s.templates.slice(0, 6).map((t) => `<div class="row" style="flex-wrap:nowrap;gap:8px;margin:3px 0"><span style="width:130px">${esc(t.name)}</span>
+  const box = (label, val) => `<div class="card" style="padding:14px;text-align:center"><div style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:32px">${val}</div><div class="small muted" style="margin-top:4px">${label}</div></div>`;
+  const statNums = $('#statNums');
+  if (statNums) statNums.innerHTML = box('Total Sesi Foto', s.sessions ?? 0) + box('Total Lembar Dicetak', s.prints ?? 0);
+  const max = Math.max(1, ...(s.templates || []).map((t) => t.n));
+  const statTpl = $('#statTpl');
+  if (statTpl) statTpl.innerHTML = (s.templates || []).slice(0, 6).map((t) => `<div class="row" style="flex-wrap:nowrap;gap:8px;margin:3px 0"><span style="width:130px">${esc(t.name)}</span>
       <span style="flex:1;height:10px;background:var(--ink);border-radius:4px;max-width:${Math.round(100 * t.n / max)}%"></span><b>${t.n}</b></div>`).join('') || '<span class="hint">Belum ada data.</span>';
-  const hmax = Math.max(1, ...s.hours.map((h) => h.n));
-  $('#statHours').innerHTML = s.hours.map((h) => `<div class="row" style="flex-wrap:nowrap;gap:8px;margin:3px 0"><span class="mono" style="width:44px">${h.h}:00</span>
+  const hmax = Math.max(1, ...(s.hours || []).map((h) => h.n));
+  const statHours = $('#statHours');
+  if (statHours) statHours.innerHTML = (s.hours || []).map((h) => `<div class="row" style="flex-wrap:nowrap;gap:8px;margin:3px 0"><span class="mono" style="width:44px">${h.h}:00</span>
       <span style="flex:1;height:10px;background:var(--accent);border-radius:4px;max-width:${Math.round(100 * h.n / hmax)}%"></span><b>${h.n}</b></div>`).join('') || '<span class="hint">Belum ada data.</span>';
 }
-function renderDraw(d) {
-  $('#drawCount').textContent = `${d.issued} nomor · ${d.drawn.length} keluar`;
-  $('#drawList').textContent = d.drawn.length ? d.drawn.map((x) => x.lucky).join(', ') : '-';
+const btnDraw = $('#btnDraw');
+if (btnDraw) {
+  btnDraw.addEventListener('click', async () => {});
 }
-$('#btnDraw').addEventListener('click', async () => {
-  const id = encodeURIComponent(ev.id);
-  try {
-    // efek acak angka sebelum hasil
-    const t = setInterval(() => { $('#drawNum').textContent = String(Math.floor(Math.random() * 9999)).padStart(4, '0'); }, 60);
-    const j = await api(`/api/studio/events/${id}/draw`, { method: 'POST' });
-    await new Promise((r) => setTimeout(r, 1500));
-    clearInterval(t);
-    $('#drawNum').textContent = j.winner.lucky;
-    $('#drawPhoto').classList.toggle('hidden', !j.winner.photo);
-    if (j.winner.photo) $('#drawPhoto').src = j.winner.photo;
-    renderDraw(await api(`/api/studio/events/${id}/draw`));
-  } catch (e) { $('#drawNum').textContent = '----'; await showStudioAlert('Undian', e.message, '⚠️'); }
-});
-$('#btnDrawReset').addEventListener('click', async () => {
-  if (!(await showStudioConfirm('Reset Undian', 'Reset undian? Semua nomor bisa keluar lagi.', 'Reset', 'Batal', '🎲'))) return;
-  await api(`/api/studio/events/${encodeURIComponent(ev.id)}/draw`, { method: 'DELETE' });
-  $('#drawNum').textContent = '----'; $('#drawPhoto').classList.add('hidden');
-  loadGuest();
-});
+const btnDrawReset = $('#btnDrawReset');
+if (btnDrawReset) {
+  btnDrawReset.addEventListener('click', async () => {});
+}
 
 function renderPaper(pp) {
   $('#paperBar').style.width = pp.pct_left + '%';
