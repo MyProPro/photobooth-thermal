@@ -116,12 +116,10 @@ def _coloring(g):
 def stylize(img, size, style="dither", brightness=1.0):
     """Kembalikan gambar mode 'L' sesuai gaya yang dipilih."""
     if style == "bw":
-        # Hitam-putih natural ala 4R: continuous tone grayscale murni, jepretan langsung tanpa dot / dither
+        # Hitam-putih natural ala 4R: continuous tone grayscale murni persis formula photo.py
         img = ImageOps.exif_transpose(img).convert("RGB")
         im = ImageOps.fit(img, size, Image.LANCZOS)
         g = ImageOps.autocontrast(im.convert("L"), cutoff=1)
-        if brightness != 1.0:
-            g = ImageEnhance.Brightness(g).enhance(brightness)
         return ImageEnhance.Contrast(g).enhance(1.1)
 
     g = _prep(img, size)
