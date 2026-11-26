@@ -462,7 +462,7 @@ SOFTCOPY_DEFAULT = SOFTCOPY_BASE_URL
 
 
 def softcopy_url(sid: str, ev=None) -> str:
-    """Link QR Softcopy foto: halaman statis (docs/d/ di GitHub Pages / domain sendiri) atau lokal server."""
+    """Link QR Softcopy foto: mendukung mode Cloud Storage (R2/S3), Cloudflare Tunnel, atau Lokal Wi-Fi."""
     if ev is None:
         ev, _ = current_event()
     if not qr_on(ev):
@@ -478,23 +478,52 @@ def softcopy_url(sid: str, ev=None) -> str:
     if sid == "preview":
         return f"{base}#s=preview"
 
+    import cloud_sync
+    import urllib.parse
+    sc = cloud_sync.get_softcopy_config(CFG)
+    mode = sc.get("mode", "local")
+    auto_del = int((ev or {}).get("download_auto_delete", 3) or 3)
+    ev_name = (ev.get("event_name") or ev.get("name") or "").strip()
+    wifi_name = (sc.get("wifi_ssid") or ev.get("wifi_ssid") or CFG.get("wifi_ssid") or "").strip()
+    if not wifi_name:
+        wifi_name = f"({ev_name}) AdsBooth" if ev_name else "AdsBooth Wi-Fi"
+
+    # Mode 1: Cloud Storage (Cloudflare R2 / AWS S3 / Supabase)
+    if mode == "cloud" and sc.get("cloud", {}).get("public_url"):
+        public_url = sc["cloud"]["public_url"].rstrip("/")
+        params = {
+            "s": sid,
+            "h": public_url,
+            "w": wifi_name,
+            "exp": auto_del,
+            "m": "cloud"
+        }
+        return f"{base}#{urllib.parse.urlencode(params)}"
+
+    # Mode 2: Cloudflare Quick Tunnel (Otomatis online dari laptop)
+    if mode == "tunnel":
+        tun_status = cloud_sync.tunnel.get_status()
+        if tun_status.get("running") and tun_status.get("url"):
+            params = {
+                "s": sid,
+                "h": tun_status["url"],
+                "w": wifi_name,
+                "exp": auto_del,
+                "m": "tunnel"
+            }
+            return f"{base}#{urllib.parse.urlencode(params)}"
+
+    # Mode 3: Lokal Wi-Fi Booth
     local_host = f"{lan_ip()}:{CFG.get('port', 5000)}"
     if local_host in base or "localhost" in base or "127.0.0.1" in base:
         return f"{base.rstrip('/')}/{sid}"
 
-    # Nama event untuk SSID Wi-Fi: bisa custom (wifi_ssid) atau default "(Nama Event) AdsBooth"
-    ev_name = (ev.get("event_name") or ev.get("name") or "").strip()
-    wifi_name = (ev.get("wifi_ssid") or CFG.get("wifi_ssid") or "").strip()
-    if not wifi_name:
-        wifi_name = f"({ev_name}) AdsBooth" if ev_name else "AdsBooth Wi-Fi"
-
-    import urllib.parse
-    auto_del = int((ev or {}).get("download_auto_delete", 3) or 3)
     params = {
         "s": sid,
-        "h": f"http://{lan_ip()}:{CFG.get('port', 5000)}",
+        "h": f"http://{local_host}",
         "w": wifi_name,
-        "exp": auto_del
+        "exp": auto_del,
+        "m": "local"
     }
     return f"{base}#{urllib.parse.urlencode(params)}"
 
@@ -995,6 +1024,11 @@ def api_print():
         with open(os.path.join(folder, "meta.json"), "w", encoding="utf-8") as f:
             json.dump(meta, f, ensure_ascii=False)
         db_safe(DB.add_session, meta)
+        try:
+            import cloud_sync
+            cloud_sync.sync_session_async(folder, sid, CFG, ev)
+        except Exception as _cs_err:
+            log.warning("Cloud sync trigger error: %s", _cs_err)
         jobs = []
         if is_photo(ev, p):
             PHOTO_PRINTER.print_image(img, copies=copies + (1 if ft["host_copy"] else 0))
@@ -1918,6 +1952,90 @@ def studio_restart():
     return jsonify({"ok": True, "message": "Server sedang restart..."})
 
 
+# ---------- Softcopy & Cloud Sync API ----------
+
+@app.get("/api/studio/softcopy")
+@studio_auth
+def studio_softcopy_get():
+    import cloud_sync
+    cfg_sc = cloud_sync.get_softcopy_config(CFG)
+    tun_status = cloud_sync.tunnel.get_status()
+    return jsonify({
+        "ok": True,
+        "config": cfg_sc,
+        "tunnel": tun_status,
+        "lan_ip": lan_ip(),
+        "port": int(CFG.get("port", 5000))
+    })
+
+
+@app.put("/api/studio/softcopy")
+@studio_auth
+def studio_softcopy_put():
+    import cloud_sync
+    p = request.get_json(force=True) or {}
+    mode = p.get("mode", "local")
+    wifi_ssid = p.get("wifi_ssid", "")
+    cloud_cfg = p.get("cloud") or {}
+    tunnel_cfg = p.get("tunnel") or {}
+
+    CFG["softcopy"] = {
+        "mode": mode,
+        "wifi_ssid": wifi_ssid,
+        "cloud": cloud_cfg,
+        "tunnel": tunnel_cfg
+    }
+    CFG["softcopy_mode"] = mode
+    if wifi_ssid:
+        CFG["wifi_ssid"] = wifi_ssid
+    save_config()
+
+    # Kelola state tunnel berdasarkan mode
+    if mode == "tunnel":
+        if not cloud_sync.tunnel.is_running:
+            threading.Thread(target=cloud_sync.tunnel.start, kwargs={"local_port": int(CFG.get("port", 5000))}, daemon=True).start()
+    elif cloud_sync.tunnel.is_running:
+        cloud_sync.tunnel.stop()
+
+    return jsonify({
+        "ok": True,
+        "config": CFG["softcopy"],
+        "tunnel": cloud_sync.tunnel.get_status()
+    })
+
+
+@app.post("/api/studio/tunnel/start")
+@studio_auth
+def studio_tunnel_start():
+    import cloud_sync
+    res = cloud_sync.tunnel.start(int(CFG.get("port", 5000)))
+    return jsonify(res)
+
+
+@app.post("/api/studio/tunnel/stop")
+@studio_auth
+def studio_tunnel_stop():
+    import cloud_sync
+    cloud_sync.tunnel.stop()
+    return jsonify({"ok": True, "tunnel": cloud_sync.tunnel.get_status()})
+
+
+@app.post("/api/studio/cloud/test")
+@studio_auth
+def studio_cloud_test():
+    import cloud_sync
+    p = request.get_json(force=True) or {}
+    s3 = cloud_sync.S3Client(
+        endpoint_url=p.get("endpoint_url", ""),
+        bucket=p.get("bucket", ""),
+        access_key=p.get("access_key_id", ""),
+        secret_key=p.get("secret_access_key", ""),
+        region=p.get("region", "auto")
+    )
+    res = s3.test_connection()
+    return jsonify(res)
+
+
 # ---------- sesi, buku tamu, undian, slideshow, kertas ----------
 
 def sessions(event_id=None, limit=None):
@@ -2474,6 +2592,13 @@ def main():
         print(f" Tablet (HTTPS, kamera): https://{ip}:{hport}/?kiosk=1")
         srv = make_server(host, hport, app, threaded=True, ssl_context=(cert, key))
         threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        import cloud_sync
+        sc = cloud_sync.get_softcopy_config(CFG)
+        if sc.get("mode") == "tunnel" and sc.get("tunnel", {}).get("auto_start", True):
+            threading.Thread(target=cloud_sync.tunnel.start, kwargs={"local_port": port}, daemon=True).start()
+    except Exception as _tun_err:
+        log.warning("Auto tunnel start failed: %s", _tun_err)
     print(f" QR tamu: {base_url()}")
     if not pin_is_set():
         print(f" PIN Studio belum dibuat: buka http://localhost:{port}/studio di perangkat ini.")
