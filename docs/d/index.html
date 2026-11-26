@@ -486,12 +486,14 @@
     host = host.replace(/\/$/, '');
 
     let wifi = params.get('w') || params.get('wifi') || '(Event) AdsBooth';
-    return { sid, host, exp, wifi };
+    let mode = params.get('m') || '';
+    return { sid, host, exp, wifi, mode };
   }
 
   let currentSid = '';
   let currentHost = '';
   let currentExp = 3;
+  let currentMode = '';
   let remainingSeconds = 180;
   let timerInterval = null;
   let currentSessionData = null;
@@ -514,7 +516,10 @@
     clearInterval(wifiPollInterval);
     wifiPollInterval = setInterval(async () => {
       try {
-        const res = await fetchWithTimeout(`${h}/d/${s}/info`, { mode: 'cors' }, 1500);
+        let res = await fetchWithTimeout(`${h}/d/${s}/info`, { mode: 'cors' }, 1500).catch(() => null);
+        if (!res || !res.ok) {
+          res = await fetchWithTimeout(`${h}/d/${s}/info.json`, { mode: 'cors' }, 1500).catch(() => null);
+        }
         if (res && res.ok) {
           clearInterval(wifiPollInterval);
           wifiPollInterval = null;
@@ -534,10 +539,11 @@
   async function loadSession() {
     clearInterval(wifiPollInterval);
     wifiPollInterval = null;
-    const { sid, host, exp, wifi } = parseParams();
+    const { sid, host, exp, wifi, mode } = parseParams();
     currentSid = sid;
     currentHost = host;
     currentExp = exp;
+    currentMode = mode;
 
     if (!sid) {
       return show('s-nocode');
@@ -548,15 +554,19 @@
 
     show('s-loading');
 
-    // URL endpoint API pada mesin booth
+    // URL endpoint API pada mesin booth / Cloud bucket
     const apiUrl = `${host}/d/${sid}/info`;
     const fallbackDirectImg = `${host}/d/${sid}/softcopy_color.jpg`;
 
     try {
-      const res = await fetchWithTimeout(apiUrl, { mode: 'cors' }, 2200).catch(() => null);
+      let res = await fetchWithTimeout(apiUrl, { mode: 'cors' }, 2200).catch(() => null);
+      if (!res || !res.ok) {
+        // Coba info.json untuk S3 / Cloudflare R2 bucket statis
+        res = await fetchWithTimeout(`${host}/d/${sid}/info.json`, { mode: 'cors' }, 2200).catch(() => null);
+      }
       if (!res || !res.ok) {
         if (res && res.status === 403) return show('s-expired');
-        if (res && res.status === 404) return show('s-expired');
+        if (res && res.status === 404 && mode !== 'cloud') return show('s-expired');
         
         // Coba langsung load gambar utama jika info API gagal
         const imgCheck = await fetchWithTimeout(fallbackDirectImg, { method: 'HEAD', mode: 'cors' }, 1500).catch(() => null);

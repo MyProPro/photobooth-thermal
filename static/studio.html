@@ -377,6 +377,120 @@ body.ev-photo .thermal-only{display:none!important}
             <div class="row" style="margin-top:10px"><a class="btn" id="btnLog" href="/api/studio/log">Unduh log (untuk support)</a></div>
           </div>
 
+          <div class="card" style="margin-top:18px" id="softcopyCard">
+            <div class="row" style="justify-content:space-between;align-items:center">
+              <b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Distribusi Softcopy &amp; QR Download</b>
+              <span class="badge" id="scBadge">Lokal Wi-Fi</span>
+            </div>
+            <p class="hint" style="margin-top:4px">Tentukan bagaimana tamu mengunduh softcopy foto digital ke ponsel setelah memindai QR code.</p>
+
+            <div class="field" style="margin-top:14px">
+              <span>Pilihan Jalur Distribusi</span>
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:6px">
+                <label style="border:1.5px solid var(--line);border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px" id="scOptLocal">
+                  <div class="row" style="gap:8px;align-items:center">
+                    <input type="radio" name="scMode" value="local" checked>
+                    <b>📶 Lokal Wi-Fi Booth</b>
+                  </div>
+                  <span class="hint" style="font-size:12px">Offline total / tanpa internet. Tamu menyambungkan Wi-Fi HP ke hotspot booth.</span>
+                </label>
+
+                <label style="border:1.5px solid var(--line);border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px" id="scOptTunnel">
+                  <div class="row" style="gap:8px;align-items:center">
+                    <input type="radio" name="scMode" value="tunnel">
+                    <b>⚡ Cloudflare Tunnel</b>
+                  </div>
+                  <span class="hint" style="font-size:12px">Otomatis online dari laptop. Tamu scan pakai 4G/5G langsung unduh tanpa ganti Wi-Fi.</span>
+                </label>
+
+                <label style="border:1.5px solid var(--line);border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px" id="scOptCloud">
+                  <div class="row" style="gap:8px;align-items:center">
+                    <input type="radio" name="scMode" value="cloud">
+                    <b>☁️ Cloud Storage (R2/S3)</b>
+                  </div>
+                  <span class="hint" style="font-size:12px">Foto otomatis diunggah ke Cloudflare R2 / AWS S3. Secepat kilat dan bebas beban server.</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Panel Mode 1: Lokal Wi-Fi -->
+            <div id="scPanelLocal" class="sc-panel" style="margin-top:14px;background:var(--card-inner);border:1px solid var(--line);border-radius:14px;padding:14px">
+              <label class="field">
+                <span>Nama SSID Wi-Fi yang Ditampilkan ke Tamu</span>
+                <input type="text" id="scWifiSsid" placeholder="mis. AdsBooth Wi-Fi atau nama Wi-Fi venue">
+                <span class="hint">Kosongkan untuk otomatis menggunakan nama event: "(Nama Event) AdsBooth".</span>
+              </label>
+            </div>
+
+            <!-- Panel Mode 2: Cloudflare Tunnel -->
+            <div id="scPanelTunnel" class="sc-panel hidden" style="margin-top:14px;background:var(--card-inner);border:1px solid var(--line);border-radius:14px;padding:14px">
+              <div class="row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+                <div>
+                  <div><b>Status Quick Tunnel:</b> <span id="scTunStatus" class="mono" style="font-weight:700">Tidak Aktif</span></div>
+                  <div class="small muted" id="scTunUrl" style="word-break:break-all;margin-top:4px">-</div>
+                </div>
+                <div class="row" style="gap:8px">
+                  <button type="button" class="primary" id="btnTunStart">Mulai Tunnel</button>
+                  <button type="button" class="ghost" id="btnTunStop" disabled>Hentikan</button>
+                </div>
+              </div>
+              <label class="check" style="margin-top:12px">
+                <input type="checkbox" id="scTunAuto"> Otomatis nyalakan tunnel saat aplikasi dibuka
+              </label>
+              <p class="hint" style="margin-top:8px" id="scTunBinHint">Menggunakan Cloudflare Quick Tunnel bawaan. Laptop perlu terkoneksi internet.</p>
+            </div>
+
+            <!-- Panel Mode 3: Cloud Storage -->
+            <div id="scPanelCloud" class="sc-panel hidden" style="margin-top:14px;background:var(--card-inner);border:1px solid var(--line);border-radius:14px;padding:14px">
+              <div class="grid2">
+                <label class="field">
+                  <span>Penyedia Cloud</span>
+                  <select id="scCloudProvider">
+                    <option value="r2">Cloudflare R2 (S3-Compatible, 10GB Gratis)</option>
+                    <option value="s3">Amazon AWS S3</option>
+                    <option value="custom">S3-Compatible Lainnya (Supabase, MinIO, Wasabi)</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Nama Bucket</span>
+                  <input type="text" id="scCloudBucket" placeholder="adsbooth-photos">
+                </label>
+              </div>
+
+              <div class="grid2" style="margin-top:10px">
+                <label class="field">
+                  <span>S3 Endpoint URL</span>
+                  <input type="text" id="scCloudEndpoint" placeholder="https://<accountid>.r2.cloudflarestorage.com">
+                </label>
+                <label class="field">
+                  <span>Public URL / Domain Akses Tamu</span>
+                  <input type="text" id="scCloudPublicUrl" placeholder="https://pub-xxxx.r2.dev atau domain sendiri">
+                </label>
+              </div>
+
+              <div class="grid2" style="margin-top:10px">
+                <label class="field">
+                  <span>Access Key ID</span>
+                  <input type="password" id="scCloudKey" placeholder="Access Key ID">
+                </label>
+                <label class="field">
+                  <span>Secret Access Key</span>
+                  <input type="password" id="scCloudSecret" placeholder="Secret Access Key">
+                </label>
+              </div>
+
+              <div class="row" style="margin-top:14px;gap:10px;align-items:center">
+                <button type="button" id="btnScCloudTest">Uji Koneksi Cloud</button>
+                <span class="small" id="scCloudTestMsg"></span>
+              </div>
+            </div>
+
+            <div class="row" style="margin-top:16px;justify-content:space-between;align-items:center">
+              <button class="primary" type="button" id="btnSaveSoftcopy">Simpan Pengaturan Softcopy</button>
+              <span class="small" id="scSaveMsg"></span>
+            </div>
+          </div>
+
           <div class="card" style="margin-top:18px">
             <b class="h3" style="font-family:'Space Grotesk',sans-serif;font-size:19px">Buka kiosk di tablet</b>
             <div class="row" style="margin-top:12px;align-items:flex-start;gap:18px">

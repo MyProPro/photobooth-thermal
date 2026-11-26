@@ -1332,6 +1332,7 @@ async function openSettings() {
   loadLicense();
   loadSecurity().catch((e) => { $('#secMsg').textContent = 'Gagal memuat: ' + e.message; });
   loadPhotoPrinter().catch((e) => { $('#ppMsg').textContent = 'Gagal memuat: ' + e.message; });
+  loadSoftcopy().catch((e) => { console.warn('Softcopy load error:', e); });
   const k = await api('/api/studio/connect');
   $('#kioskQr').src = k.kiosk_qr; $('#kioskUrl').textContent = k.kiosk;
   $('#httpsToggle').checked = k.https_enabled;
@@ -1505,6 +1506,206 @@ $('#btnRestartServer').addEventListener('click', async () => {
   }
   btn.disabled = false; msg.className = 'small warn';
   msg.textContent = 'Server belum kembali setelah 60 detik. Cek jendela server / jalankan run.bat lagi.';
+});
+
+// ---------------------------------------------------------------- Distribusi Softcopy
+function updateSoftcopyUI(mode) {
+  ['local', 'tunnel', 'cloud'].forEach((m) => {
+    const opt = $(`#scOpt${m.charAt(0).toUpperCase() + m.slice(1)}`);
+    if (opt) {
+      opt.style.borderColor = (m === mode) ? 'var(--accent, #d9381e)' : 'var(--line)';
+      opt.style.background = (m === mode) ? 'rgba(217,56,30,0.06)' : 'transparent';
+    }
+  });
+  $('#scPanelLocal')?.classList.toggle('hidden', mode !== 'local');
+  $('#scPanelTunnel')?.classList.toggle('hidden', mode !== 'tunnel');
+  $('#scPanelCloud')?.classList.toggle('hidden', mode !== 'cloud');
+
+  const badge = $('#scBadge');
+  if (badge) {
+    if (mode === 'tunnel') {
+      badge.textContent = 'Cloudflare Tunnel';
+      badge.style.color = '#38bdf8';
+    } else if (mode === 'cloud') {
+      badge.textContent = 'Cloud Storage';
+      badge.style.color = '#a78bfa';
+    } else {
+      badge.textContent = 'Lokal Wi-Fi';
+      badge.style.color = '';
+    }
+  }
+}
+
+async function loadSoftcopy() {
+  const res = await api('/api/studio/softcopy');
+  if (!res || !res.ok) return;
+  const cfg = res.config || {};
+  const mode = cfg.mode || 'local';
+
+  const radio = document.querySelector(`input[name="scMode"][value="${mode}"]`);
+  if (radio) radio.checked = true;
+  updateSoftcopyUI(mode);
+
+  if ($('#scWifiSsid')) $('#scWifiSsid').value = cfg.wifi_ssid || '';
+
+  const cc = cfg.cloud || {};
+  if ($('#scCloudProvider')) $('#scCloudProvider').value = cc.provider || 'r2';
+  if ($('#scCloudBucket')) $('#scCloudBucket').value = cc.bucket || '';
+  if ($('#scCloudEndpoint')) $('#scCloudEndpoint').value = cc.endpoint_url || '';
+  if ($('#scCloudPublicUrl')) $('#scCloudPublicUrl').value = cc.public_url || '';
+  if ($('#scCloudKey')) $('#scCloudKey').value = cc.access_key_id || '';
+  if ($('#scCloudSecret')) $('#scCloudSecret').value = cc.secret_access_key || '';
+
+  const tun = res.tunnel || {};
+  renderTunnelStatus(tun);
+  if ($('#scTunAuto')) $('#scTunAuto').checked = !!(cfg.tunnel && cfg.tunnel.auto_start);
+}
+
+function renderTunnelStatus(tun) {
+  const st = $('#scTunStatus');
+  const url = $('#scTunUrl');
+  const btnStart = $('#btnTunStart');
+  const btnStop = $('#btnTunStop');
+  const hint = $('#scTunBinHint');
+
+  if (!tun.installed) {
+    if (st) { st.textContent = 'cloudflared.exe Belum Terpasang'; st.style.color = 'var(--red, #ef4444)'; }
+    if (url) url.textContent = 'Simpan file cloudflared.exe di folder bin/ aplikasi untuk mengaktifkan Quick Tunnel.';
+    if (btnStart) btnStart.disabled = true;
+    if (btnStop) btnStop.disabled = true;
+    if (hint) hint.className = 'hint warn';
+    return;
+  }
+
+  if (tun.running && tun.url) {
+    if (st) { st.textContent = '🟢 Aktif (Online)'; st.style.color = 'var(--green, #10b981)'; }
+    if (url) url.innerHTML = `Link Publik: <a href="${tun.url}" target="_blank" style="color:#38bdf8">${tun.url}</a>`;
+    if (btnStart) btnStart.disabled = true;
+    if (btnStop) btnStop.disabled = false;
+  } else {
+    if (st) { st.textContent = '⚪ Tidak Aktif'; st.style.color = 'var(--muted)'; }
+    if (url) url.textContent = 'Tunnel berhenti. Klik "Mulai Tunnel" untuk menghubungkan ke internet.';
+    if (btnStart) btnStart.disabled = false;
+    if (btnStop) btnStop.disabled = true;
+  }
+}
+
+// Event listeners Softcopy
+document.querySelectorAll('input[name="scMode"]').forEach((el) => {
+  el.addEventListener('change', (e) => updateSoftcopyUI(e.target.value));
+});
+
+$('#scCloudProvider')?.addEventListener('change', (e) => {
+  const val = e.target.value;
+  const ep = $('#scCloudEndpoint');
+  if (val === 'r2' && ep && !ep.value) {
+    ep.placeholder = 'https://<accountid>.r2.cloudflarestorage.com';
+  } else if (val === 's3' && ep && !ep.value) {
+    ep.placeholder = 'https://s3.<region>.amazonaws.com';
+  }
+});
+
+$('#btnTunStart')?.addEventListener('click', async () => {
+  const btn = $('#btnTunStart');
+  const st = $('#scTunStatus');
+  btn.disabled = true;
+  if (st) st.textContent = 'Menghubungkan ke Cloudflare…';
+  try {
+    const res = await api('/api/studio/tunnel/start', { method: 'POST' });
+    if (res.ok) {
+      renderTunnelStatus({ installed: true, running: true, url: res.url });
+    } else {
+      alert('Gagal memulai tunnel: ' + (res.error || 'Terjadi kesalahan'));
+      renderTunnelStatus({ installed: true, running: false });
+    }
+  } catch (err) {
+    alert('Gagal memulai tunnel: ' + err.message);
+    renderTunnelStatus({ installed: true, running: false });
+  }
+});
+
+$('#btnTunStop')?.addEventListener('click', async () => {
+  const btn = $('#btnTunStop');
+  btn.disabled = true;
+  try {
+    await api('/api/studio/tunnel/stop', { method: 'POST' });
+    renderTunnelStatus({ installed: true, running: false });
+  } catch (err) {
+    alert('Gagal menghentikan tunnel: ' + err.message);
+  }
+});
+
+$('#btnScCloudTest')?.addEventListener('click', async () => {
+  const msg = $('#scCloudTestMsg');
+  const btn = $('#btnScCloudTest');
+  btn.disabled = true;
+  msg.className = 'small';
+  msg.textContent = 'Menguji koneksi…';
+  try {
+    const payload = {
+      endpoint_url: $('#scCloudEndpoint')?.value || '',
+      bucket: $('#scCloudBucket')?.value || '',
+      access_key_id: $('#scCloudKey')?.value || '',
+      secret_access_key: $('#scCloudSecret')?.value || '',
+      provider: $('#scCloudProvider')?.value || 'r2'
+    };
+    const res = await api('/api/studio/cloud/test', { method: 'POST', json: payload });
+    if (res.ok) {
+      msg.className = 'small okc';
+      msg.textContent = '✅ ' + (res.message || 'Koneksi S3 / R2 Berhasil!');
+    } else {
+      msg.className = 'small warn';
+      msg.textContent = '❌ ' + (res.error || 'Gagal koneksi.');
+    }
+  } catch (err) {
+    msg.className = 'small warn';
+    msg.textContent = '❌ Gagal: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('#btnSaveSoftcopy')?.addEventListener('click', async () => {
+  const msg = $('#scSaveMsg');
+  const btn = $('#btnSaveSoftcopy');
+  btn.disabled = true;
+  msg.className = 'small';
+  msg.textContent = 'Menyimpan…';
+
+  const selectedMode = document.querySelector('input[name="scMode"]:checked')?.value || 'local';
+  const payload = {
+    mode: selectedMode,
+    wifi_ssid: $('#scWifiSsid')?.value.trim() || '',
+    cloud: {
+      provider: $('#scCloudProvider')?.value || 'r2',
+      bucket: $('#scCloudBucket')?.value.trim() || '',
+      endpoint_url: $('#scCloudEndpoint')?.value.trim() || '',
+      public_url: $('#scCloudPublicUrl')?.value.trim() || '',
+      access_key_id: $('#scCloudKey')?.value.trim() || '',
+      secret_access_key: $('#scCloudSecret')?.value.trim() || ''
+    },
+    tunnel: {
+      auto_start: !!$('#scTunAuto')?.checked
+    }
+  };
+
+  try {
+    const res = await api('/api/studio/softcopy', { method: 'PUT', json: payload });
+    if (res.ok) {
+      msg.className = 'small okc';
+      msg.textContent = '✅ Pengaturan distribusi softcopy tersimpan.';
+      updateSoftcopyUI(selectedMode);
+      if (res.tunnel) renderTunnelStatus(res.tunnel);
+    } else {
+      msg.className = 'small warn';
+      msg.textContent = '❌ Gagal: ' + (res.error || 'Terjadi kesalahan');
+    }
+  } catch (err) {
+    msg.className = 'small warn';
+    msg.textContent = '❌ Gagal: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---------------------------------------------------------------- PIN Studio
