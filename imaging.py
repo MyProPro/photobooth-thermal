@@ -2,7 +2,7 @@
 import os
 from datetime import datetime
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 try:
     import qrcode
@@ -131,9 +131,9 @@ def stylize(img, size, style="dither", brightness=1.0):
         e = ImageOps.invert(ImageOps.autocontrast(e))
         out = e.point(lambda v: WHITE if v > 200 else BLACK)
     elif style == "bw":
-        # Hitam-putih murni / natural tanpa efek filter atau unsharp mask berlebih
+        # Hitam-putih natural ala 4R: continuous tone grayscale murni, jepretan langsung tanpa dot / dither
         g = ImageOps.autocontrast(g, cutoff=1)
-        out = g.convert("1").convert("L")
+        out = ImageEnhance.Contrast(g).enhance(1.1)
     else:  # dither Floyd–Steinberg
         g = g.filter(ImageFilter.UnsharpMask(radius=2, percent=80))
         out = g.convert("1").convert("L")
@@ -248,7 +248,7 @@ def compose_receipt(photos, layout="strip", style="dither", caption="", show_log
                 event=event_name, caption=caption, number=number, qr=qr, logo=logo, width=width,
                 logo_src=logo_src, asset_dir=asset_dir, now=now, social=social, opts=opts,
                 ph_cache=ph_cache, footer=footer, has_living=has_living)
-    return T.render(template, ctx, custom).convert("1", dither=Image.NONE)
+    return T.render(template, ctx, custom)
 
 
 def stylize_sample(img, style, width=576, brightness=1.0):
@@ -307,10 +307,11 @@ def append_extras(img, extras, width=576, logo_path=None):
         p.y = p.center("Simpan struk ini untuk undian doorprize", T.F("sans", 17)) + 10
     if extras.get("living"):
         p.y = living_block(p, extras["living"], L, R, logo_path=logo_path)
-    block = p.finish(bottom_pad=24).convert("1", dither=Image.NONE)
-    out = Image.new("1", (width, img.height + block.height), 1)
+    block = p.finish(bottom_pad=24)
+    out_mode = img.mode if img.mode in ("1", "L", "RGB") else "L"
+    out = Image.new(out_mode, (width, img.height + block.height), 255 if out_mode in ("L", "RGB") else 1)
     out.paste(img, (0, 0))
-    out.paste(block, (0, img.height))
+    out.paste(block.convert(out_mode), (0, img.height))
     return out
 
 
@@ -378,8 +379,9 @@ def host_copy(img, width=576, label="ARSIP TUAN RUMAH"):
     p.d.rectangle((0, 0, width, 56), fill=T.K)
     p.center(label, T.F("monob", 22), y=17, fill=T.P, spacing=4)
     p.y = 66
-    head = p.finish(bottom_pad=0).convert("1", dither=Image.NONE)
-    out = Image.new("1", (width, img.height + head.height), 1)
-    out.paste(head, (0, 0))
+    head = p.finish(bottom_pad=0)
+    out_mode = img.mode if img.mode in ("1", "L", "RGB") else "L"
+    out = Image.new(out_mode, (width, img.height + head.height), 255 if out_mode in ("L", "RGB") else 1)
+    out.paste(head.convert(out_mode), (0, 0))
     out.paste(img, (0, head.height))
     return out

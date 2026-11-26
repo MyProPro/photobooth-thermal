@@ -571,10 +571,7 @@ class Paper:
 
     def finish(self, bottom_pad=40):
         h = int(self.y + bottom_pad)
-        cropped = self.img.crop((0, 0, self.W, h))
-        if self.is_color:
-            return cropped
-        return cropped.point(lambda v: P if v > 127 else K)
+        return self.img.crop((0, 0, self.W, h))
 
 
 def qr_fit(qr, size):
