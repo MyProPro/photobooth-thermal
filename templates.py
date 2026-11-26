@@ -549,7 +549,7 @@ class Paper:
         if c.qr is None:
             if getattr(c, "logo", None) is not None and not getattr(c, "has_living", False):
                 lg = c.logo.copy()
-                lg.thumbnail((int(self.W * 0.25), 45))
+                lg.thumbnail((int(self.W * 0.32), 60))
                 self.paste(lg, (self.W - lg.width) / 2, self.y)
                 self.y += lg.height + 12
             return self.y
@@ -564,7 +564,7 @@ class Paper:
         self.y += size
         if getattr(c, "logo", None) is not None and not getattr(c, "has_living", False):
             lg = c.logo.copy()
-            lg.thumbnail((int(self.W * 0.25), 45))
+            lg.thumbnail((int(self.W * 0.32), 60))
             self.paste(lg, (self.W - lg.width) / 2, self.y + 10)
             self.y += lg.height + 18
         return self.y

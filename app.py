@@ -348,6 +348,30 @@ def license_block(ev, p=None):
     return None
 
 
+def resolve_logo_path(ev=None, asset_dir=None) -> str | None:
+    """Mendapatkan path logo untuk footer hasil cetak dan preview:
+    1. Logo kustom event (jika ada logo yang di-upload untuk event tersebut)
+    2. Logo dari config.json (CFG['logo_path'])
+    3. Logo bawaan sistem AdsBooth ('static/logo.png' atau 'assets/logo.png')
+    """
+    if ev:
+        logo = ev.get("logo")
+        if logo and asset_dir:
+            p = os.path.join(asset_dir, logo)
+            if os.path.exists(p):
+                return p
+    cfg_logo = CFG.get("logo_path")
+    if cfg_logo:
+        p = cfg_logo if os.path.isabs(cfg_logo) else os.path.join(BASE, cfg_logo)
+        if os.path.exists(p):
+            return p
+    for candidate in ("static/logo.png", "assets/logo.png"):
+        p = os.path.join(BASE, candidate)
+        if os.path.exists(p):
+            return p
+    return None
+
+
 def _render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_override=None, ph_cache=None,
                     lucky=None):
     TPL.set_lang(print_lang(ev))   # dipakai template, blok tambahan & arsip di thread ini
@@ -361,14 +385,14 @@ def _render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_ove
         social["username"] = p["username"]
     if p.get("website") is not None:
         social["website"] = p["website"]
+    logo_path = resolve_logo_path(ev, asset_dir)
     if is_photo(ev, p):
-        logo = ev.get("logo")
         style = p.get("style") if p.get("style") in PH.STYLE_IDS else "warna"
         return PH.compose_photo(
             photos, layout=p.get("layout") if p.get("layout") in LAYOUTS else "strip", style=style,
             caption=p.get("caption", ""), show_logo=bool(p.get("showLogo", True)),
             event_name=event_name,
-            logo_path=os.path.join(asset_dir, logo) if logo else None, qr_url=qr_url,
+            logo_path=logo_path, qr_url=qr_url,
             template=p.get("template") or ev.get("photo_default_template", "klasik"), theme=ev.get("theme"),
             lucky=lucky, number=number, frames=ev.get("photo_frames"), asset_dir=asset_dir,
             footer=footer, brightness=brightness, social=social, opts=p.get("opts") or ev.get("opts"))
@@ -376,7 +400,6 @@ def _render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_ove
     custom = {t["id"]: t for t in ev.get("custom_templates", [])}
     if spec_override:
         custom[spec_override["id"]] = spec_override
-    logo = ev.get("logo")
     return compose_receipt(
         photos,
         layout=layout,
@@ -384,7 +407,7 @@ def _render_receipt(photos, p, ev, asset_dir, qr_url=None, number=None, spec_ove
         caption=p.get("caption", ""),
         show_logo=bool(p.get("showLogo", True)),
         event_name=event_name,
-        logo_path=os.path.join(asset_dir, logo) if logo else None,
+        logo_path=logo_path,
         qr_url=qr_url,
         number=number,
         width=int(CFG.get("paper_px", 576)),
@@ -556,8 +579,7 @@ def receipt_from_payload(p, qr_url=None, number=None, lucky=None, with_extras=Tr
     img = _render_receipt(photos, p, ev, asset_dir, qr_url, number, lucky=lucky)
     ex = extras_from_payload(p, ev, lucky, code) if with_extras else {}
     if ex and not is_photo(ev, p):   # mode foto: buku tamu tetap tersimpan, tidak ikut dicetak
-        logo = ev.get("logo")
-        logo_path = os.path.join(asset_dir, logo) if (logo and asset_dir) else None
+        logo_path = resolve_logo_path(ev, asset_dir)
         show_logo = p.get("showLogo", True)
         img = append_extras(img, ex, int(CFG.get("paper_px", 576)), logo_path=logo_path if show_logo else None)
     img = apply_watermark(img)
@@ -958,10 +980,11 @@ def api_print():
         else:
             # Mode Receipt Photobooth: generate softcopy berwarna resolusi tinggi dengan template
             try:
+                logo_path = resolve_logo_path(ev, asset_dir)
                 sc = PH.compose_photo(photos, layout=p.get("layout", "strip"), style="warna",
                                       caption=p.get("caption", ""), show_logo=bool(p.get("showLogo", True)),
                                       event_name=p.get("event_name") or ev.get("event_name", ""),
-                                      logo_path=os.path.join(asset_dir, ev.get("logo")) if ev.get("logo") else None,
+                                      logo_path=logo_path,
                                       template=p.get("template", "klasik"), theme=ev.get("theme"),
                                       footer=p.get("footer", ""), social=social, opts=p.get("opts") or ev.get("opts"),
                                       number=number, lucky=lucky)
@@ -1050,8 +1073,7 @@ def api_print():
         resp["photo_borderless"] = bool(_pp.get("borderless", True))
     if qr:
         from imaging import make_qr_with_logo
-        logo = ev.get("logo")
-        logo_path = os.path.join(asset_dir, logo) if (logo and asset_dir) else None
+        logo_path = resolve_logo_path(ev, asset_dir)
         resp["qr"] = to_data_url(make_qr_with_logo(qr, logo=logo_path, box_size=6, border=2, as_rgb=True))
         resp["url"] = qr
     return jsonify(resp)
@@ -1771,8 +1793,7 @@ def studio_preview():
     if ft["living_photo"]:
         ex["living"] = living_url(ev, "preview")
     if ex:
-        logo = ev.get("logo")
-        logo_path = os.path.join(asset_dir, logo) if (logo and asset_dir) else None
+        logo_path = resolve_logo_path(ev, asset_dir)
         img = append_extras(img, ex, int(CFG.get("paper_px", 576)), logo_path=logo_path)
     img = apply_watermark(img)
     return jsonify({"image": to_data_url(img), "height": img.height})
