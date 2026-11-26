@@ -482,9 +482,11 @@ def softcopy_url(sid: str, ev=None) -> str:
     if local_host in base or "localhost" in base or "127.0.0.1" in base:
         return f"{base.rstrip('/')}/{sid}"
 
-    # Nama event untuk SSID Wi-Fi: (Nama Event) AdsBooth
+    # Nama event untuk SSID Wi-Fi: bisa custom (wifi_ssid) atau default "(Nama Event) AdsBooth"
     ev_name = (ev.get("event_name") or ev.get("name") or "").strip()
-    wifi_name = f"({ev_name}) AdsBooth" if ev_name else "AdsBooth Wi-Fi"
+    wifi_name = (ev.get("wifi_ssid") or CFG.get("wifi_ssid") or "").strip()
+    if not wifi_name:
+        wifi_name = f"({ev_name}) AdsBooth" if ev_name else "AdsBooth Wi-Fi"
 
     import urllib.parse
     auto_del = int((ev or {}).get("download_auto_delete", 3) or 3)
