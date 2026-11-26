@@ -70,6 +70,48 @@ class PaperCounter:
                 json.dump({"used_mm": 0.0, "prints": 0, "since": datetime.now().strftime("%Y-%m-%d %H:%M")}, f)
 
 
+try:
+    import numba
+    import numpy as np
+
+    @numba.njit(fastmath=True)
+    def _atkinson_jit(arr):
+        h, w = arr.shape
+        out = np.empty((h, w), dtype=np.uint8)
+        for y in range(h):
+            for x in range(w):
+                old = arr[y, x]
+                new = 255.0 if old > 128.0 else 0.0
+                out[y, x] = 255 if new > 128.0 else 0
+                err = (old - new) * 0.125
+                if x + 1 < w: arr[y, x + 1] += err
+                if x + 2 < w: arr[y, x + 2] += err
+                if y + 1 < h:
+                    if x - 1 >= 0: arr[y + 1, x - 1] += err
+                    arr[y + 1, x] += err
+                    if x + 1 < w: arr[y + 1, x + 1] += err
+                if y + 2 < h: arr[y + 2, x] += err
+        return out
+except Exception:
+    _atkinson_jit = None
+
+
+def to_thermal_1bit(img):
+    """Konversi gambar ke mode '1' menggunakan Atkinson Studio Clean yang tajam dan bersih untuk printer thermal."""
+    if img.mode == "1":
+        return img
+    from PIL import Image as PImg
+    im = img.convert("L")
+    if _atkinson_jit is not None:
+        try:
+            arr = np.array(im, dtype=np.float32)
+            out_arr = _atkinson_jit(arr)
+            return PImg.fromarray(out_arr, mode="L").convert("1")
+        except Exception:
+            pass
+    return im.convert("1")
+
+
 class ThermalPrinter:
     def __init__(self, cfg, out_dir="output", counter=None):
         self.out_dir = out_dir
@@ -157,7 +199,7 @@ class ThermalPrinter:
     def _escpos_raster_builtin(self, img, copies=1):
         """Generator ESC/POS murni (GS v 0) tanpa dependensi library eksternal.
         Sangat andal untuk Epson TM-T82/TM-T82X/TM-m30 di Android/Linux/Windows."""
-        im = img.convert("1")
+        im = to_thermal_1bit(img)
         w, h = im.size
         w_bytes = (w + 7) // 8
         if w % 8 != 0:
@@ -197,32 +239,34 @@ class ThermalPrinter:
 
     def escpos_bytes(self, img, copies=1):
         """Data ESC/POS mentah untuk gambar ini (dipakai mode webusb, android_usb, network)."""
+        im = to_thermal_1bit(img)
         try:
             from escpos.printer import Dummy
             p = Dummy(profile=self.cfg.get("profile") or None)
             for _ in range(max(1, copies)):
-                p.image(img, impl=self.cfg.get("impl", "bitImageRaster"),
+                p.image(im, impl=self.cfg.get("impl", "bitImageRaster"),
                         fragment_height=int(self.cfg.get("fragment_height", 256)))
                 p.text("\n" * int(self.cfg.get("feed_lines", 3)))
                 if self.cfg.get("cut", True):
                     p.cut()
             return p.output
         except Exception:
-            return self._escpos_raster_builtin(img, copies)
+            return self._escpos_raster_builtin(im, copies)
 
     def print_image(self, img, copies=1, sink=None):
-        """img: PIL Image mode '1'. Selalu simpan salinan PNG di output/prints.
+        """img: PIL Image mode '1' atau 'L'. Selalu simpan salinan PNG di output/prints.
         Mode webusb & android_usb: data ESC/POS disalurkan ke USB printer."""
         os.makedirs(os.path.join(self.out_dir, "prints"), exist_ok=True)
         path = os.path.join(self.out_dir, "prints", datetime.now().strftime("%Y%m%d_%H%M%S_%f") + ".png")
         img.save(path)
+        im_print = to_thermal_1bit(img)
         if self.counter:
             for _ in range(max(1, copies)):
-                self.counter.add(img.height, int(self.cfg.get("feed_lines", 3)))
+                self.counter.add(im_print.height, int(self.cfg.get("feed_lines", 3)))
         if self.mode == "file":
             return path
         if self.mode in ("webusb", "android_usb"):
-            data = self.escpos_bytes(img, copies)
+            data = self.escpos_bytes(im_print, copies)
             bridge = get_android_usb_bridge()
             if bridge:
                 import base64
@@ -239,7 +283,7 @@ class ThermalPrinter:
                 sink.append(data)
             return path
         if self.mode == "network":
-            data = self.escpos_bytes(img, copies)
+            data = self.escpos_bytes(im_print, copies)
             host = self.cfg.get("host")
             port = int(self.cfg.get("port", 9100))
             if not host:
@@ -251,7 +295,7 @@ class ThermalPrinter:
             p = self._make()
             try:
                 for _ in range(max(1, copies)):
-                    p.image(img, impl=self.cfg.get("impl", "bitImageRaster"),
+                    p.image(im_print, impl=self.cfg.get("impl", "bitImageRaster"),
                             fragment_height=int(self.cfg.get("fragment_height", 256)))
                     p.text("\n" * int(self.cfg.get("feed_lines", 3)))
                     if self.cfg.get("cut", True):
