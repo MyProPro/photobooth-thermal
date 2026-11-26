@@ -120,6 +120,8 @@ def stylize(img, size, style="dither", brightness=1.0):
         img = ImageOps.exif_transpose(img).convert("RGB")
         im = ImageOps.fit(img, size, Image.LANCZOS)
         g = ImageOps.autocontrast(im.convert("L"), cutoff=0.5)
+        if brightness != 1.0:
+            g = ImageEnhance.Brightness(g).enhance(brightness)
         g = g.filter(ImageFilter.UnsharpMask(radius=1.8, percent=120, threshold=2))
         return ImageEnhance.Contrast(g).enhance(1.08)
 
