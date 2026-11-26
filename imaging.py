@@ -114,7 +114,16 @@ def _coloring(g):
 
 
 def stylize(img, size, style="dither", brightness=1.0):
-    """Kembalikan gambar mode 'L' yang isinya hanya 0/255."""
+    """Kembalikan gambar mode 'L' sesuai gaya yang dipilih."""
+    if style == "bw":
+        # Hitam-putih natural ala 4R: continuous tone grayscale murni, jepretan langsung tanpa dot / dither
+        img = ImageOps.exif_transpose(img).convert("RGB")
+        im = ImageOps.fit(img, size, Image.LANCZOS)
+        g = ImageOps.autocontrast(im.convert("L"), cutoff=1)
+        if brightness != 1.0:
+            g = ImageEnhance.Brightness(g).enhance(brightness)
+        return ImageEnhance.Contrast(g).enhance(1.1)
+
     g = _prep(img, size)
     if brightness != 1.0:
         g = g.point(lambda v: max(0, min(255, int(v * brightness))))
@@ -130,10 +139,6 @@ def stylize(img, size, style="dither", brightness=1.0):
         e = g.filter(ImageFilter.GaussianBlur(1)).filter(ImageFilter.FIND_EDGES)
         e = ImageOps.invert(ImageOps.autocontrast(e))
         out = e.point(lambda v: WHITE if v > 200 else BLACK)
-    elif style == "bw":
-        # Hitam-putih natural ala 4R: continuous tone grayscale murni, jepretan langsung tanpa dot / dither
-        g = ImageOps.autocontrast(g, cutoff=1)
-        out = ImageEnhance.Contrast(g).enhance(1.1)
     else:  # dither Floyd–Steinberg
         g = g.filter(ImageFilter.UnsharpMask(radius=2, percent=80))
         out = g.convert("1").convert("L")

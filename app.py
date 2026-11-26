@@ -770,7 +770,13 @@ def api_sample_styles():
 
     sample_param = request.args.get("sample", "random")
 
-    if intro_files:
+    if sample_param in ("cewe", "cowo"):
+        sample_key = sample_param
+        img_path = os.path.join(BASE, "static", f"sample_{sample_key}.jpg")
+        if not os.path.exists(img_path):
+            img_path = os.path.join(BASE, "static", "sample_cewe.jpg")
+        cache_key = ("model", sample_key, mode, brightness)
+    elif intro_files:
         # Pakai foto intro yang diupload untuk event aktif
         if sample_param == "random":
             chosen_path = random.choice(intro_files)
@@ -784,13 +790,7 @@ def api_sample_styles():
         cache_key = (ev.get("id"), sample_key, mode, brightness)
         img_path = chosen_path
     else:
-        # Default: fallback ke contoh model cewe / cowo statis
-        if sample_param == "random":
-            sample_key = random.choice(["cewe", "cowo"])
-        elif sample_param in ("cewe", "cowo"):
-            sample_key = sample_param
-        else:
-            sample_key = "cewe"
+        sample_key = "cewe"
         cache_key = ("default", sample_key, mode, brightness)
         img_path = os.path.join(BASE, "static", f"sample_{sample_key}.jpg")
         if not os.path.exists(img_path):
@@ -809,8 +809,13 @@ def api_sample_styles():
             out[sid] = to_data_url(styled, "JPEG")
     else:
         for sid in ["bw", "dither", "halftone", "kontras", "sketsa", "ascii", "mewarnai"]:
-            styled = stylize(im, (360, 640), sid, brightness=brightness)
-            out[sid] = to_data_url(styled, "PNG")
+            if sid == "bw":
+                styled = PH.style_photo(im, "bw")
+                styled = ImageOps_fit(styled, (360, 640))
+                out[sid] = to_data_url(styled, "JPEG")
+            else:
+                styled = stylize(im, (360, 640), sid, brightness=brightness)
+                out[sid] = to_data_url(styled, "PNG")
 
     data = {"sample": sample_key, "styles": out}
     _STYLE_SAMPLE_CACHE[cache_key] = data
