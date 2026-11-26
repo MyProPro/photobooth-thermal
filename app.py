@@ -797,7 +797,15 @@ def api_sample_styles():
             img_path = os.path.join(BASE, "static", "sample_cewe.jpg")
 
     if cache_key in _STYLE_SAMPLE_CACHE:
-        return jsonify(_STYLE_SAMPLE_CACHE[cache_key])
+        data = dict(_STYLE_SAMPLE_CACHE[cache_key])
+        # Selalu update info favorite_style secara live berdasarkan data sesi > 100
+        try:
+            fav_data = DB.get_favorite_style(ev.get("id"))
+            data["favorite_style"] = fav_data.get("favorite") if fav_data else None
+            data["total_sessions"] = fav_data.get("total", 0) if fav_data else 0
+        except Exception:
+            data["favorite_style"] = None
+        return jsonify(data)
 
     im = Image.open(img_path).convert("RGB")
 
@@ -817,7 +825,17 @@ def api_sample_styles():
                 styled = stylize(im, (360, 640), sid, brightness=brightness)
                 out[sid] = to_data_url(styled, "PNG")
 
-    data = {"sample": sample_key, "styles": out}
+    favorite_style = None
+    tot_sessions = 0
+    try:
+        fav_data = DB.get_favorite_style(ev.get("id"))
+        if fav_data:
+            favorite_style = fav_data.get("favorite")
+            tot_sessions = fav_data.get("total", 0)
+    except Exception as e:
+        log.warning(f"Gagal memuat style favorit: {e}")
+
+    data = {"sample": sample_key, "styles": out, "favorite_style": favorite_style, "total_sessions": tot_sessions}
     _STYLE_SAMPLE_CACHE[cache_key] = data
     return jsonify(data)
 
@@ -2056,6 +2074,22 @@ def studio_stats(eid):
         r["name"] = names.get(r["template"], r["template"] or "-")
         r["pct"] = round(100 * r["n"] / total_sessions, 1) if s["sessions"] > 0 else 0
     for r in s["layouts"]:
+        r["pct"] = round(100 * r["n"] / total_sessions, 1) if s["sessions"] > 0 else 0
+    style_names = {
+        "bw": "Black & White",
+        "dither": "Retro Dither",
+        "halftone": "Halftone",
+        "kontras": "Contrast",
+        "sketsa": "Sketch",
+        "ascii": "ASCII Art",
+        "mewarnai": "Coloring Book",
+        "asli": "Original Color",
+        "vivid": "Vivid Color",
+        "hangat": "Warm",
+        "dingin": "Cool",
+    }
+    for r in s["styles"]:
+        r["name"] = style_names.get(r["style"], (r["style"] or "-").title())
         r["pct"] = round(100 * r["n"] / total_sessions, 1) if s["sessions"] > 0 else 0
     return jsonify(s)
 

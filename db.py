@@ -102,6 +102,28 @@ def reset_draws(event):
         c.execute("DELETE FROM draws WHERE event=?", (event,))
 
 
+def get_favorite_style(event=None):
+    """Kembalikan style paling populer jika total sesi dengan style > 100."""
+    with _conn() as c:
+        where = "WHERE event=? AND style IS NOT NULL AND style != ''" if event else "WHERE style IS NOT NULL AND style != ''"
+        params = (event,) if event else ()
+        tot = c.execute(f"SELECT COUNT(*) FROM sessions {where}", params).fetchone()[0]
+
+        # Jika event aktif <= 100, periksa juga akumulasi total sesi keseluruhan database
+        if tot <= 100 and event:
+            tot = c.execute("SELECT COUNT(*) FROM sessions WHERE style IS NOT NULL AND style != ''").fetchone()[0]
+            where = "WHERE style IS NOT NULL AND style != ''"
+            params = ()
+
+        if tot > 100:
+            top = c.execute(f"""SELECT style, COUNT(*) as n FROM sessions 
+                               {where} GROUP BY style ORDER BY n DESC LIMIT 1""", params).fetchone()
+            if top and top[0]:
+                return {"favorite": top[0], "count": top[1], "total": tot}
+
+        return {"favorite": None, "count": 0, "total": tot}
+
+
 def backfill(sessions_root):
     """Masukkan sesi lama (meta.json) yang belum ada di database."""
     if not os.path.isdir(sessions_root):

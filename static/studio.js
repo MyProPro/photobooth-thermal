@@ -1118,6 +1118,26 @@ function renderStats(s) {
     }
   }
 
+  // Print Style Terfavorit
+  const maxSty = Math.max(1, ...(s.styles || []).map((st) => st.n));
+  const statStyle = $('#statStyle');
+  if (statStyle) {
+    if (s.styles && s.styles.length > 0) {
+      statStyle.innerHTML = s.styles.map((st, idx) => `
+        <div style="margin:8px 0">
+          <div class="row" style="justify-content:space-between;margin-bottom:3px">
+            <span><b style="color:var(--accent)">#${idx + 1}</b> ${esc(st.name || st.style)}</span>
+            <b>${st.n} sesi <span class="muted" style="font-weight:normal">(${st.pct}%)</span></b>
+          </div>
+          <div style="height:8px;background:var(--line);border-radius:4px;overflow:hidden">
+            <div style="height:100%;background:var(--ink);width:${Math.round(100 * st.n / maxSty)}%"></div>
+          </div>
+        </div>`).join('');
+    } else {
+      statStyle.innerHTML = '<span class="hint">Belum ada data gaya cetak pada periode ini.</span>';
+    }
+  }
+
   // Jam Sibuk
   const statPeak = $('#statPeakBadge');
   if (statPeak) {

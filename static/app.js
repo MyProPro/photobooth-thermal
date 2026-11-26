@@ -724,6 +724,17 @@ async function refreshStylePreview() {
         if (data.styles[s]) {
           box.querySelector('img').src = data.styles[s];
         }
+        let fav = box.querySelector('.badge-fav');
+        if (data.favorite_style && s === data.favorite_style) {
+          if (!fav) {
+            fav = document.createElement('span');
+            fav.className = 'badge-fav';
+            fav.textContent = 'FAVORIT';
+            box.appendChild(fav);
+          }
+        } else {
+          if (fav) fav.remove();
+        }
       });
     }
   } catch (e) {

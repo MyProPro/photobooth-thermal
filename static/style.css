@@ -538,8 +538,9 @@ body.mode-photo .tpl .tpl-img{background:transparent}
 
 /* ================= alur 1-tap ================= */
 .style-grid .opt.sm{padding:10px 10px 14px;gap:4px}
-.sthumb{width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;background:color-mix(in srgb,var(--ink) 8%,#fff);margin-bottom:6px}
+.sthumb{position:relative;width:100%;aspect-ratio:4/3;border-radius:12px;overflow:hidden;background:color-mix(in srgb,var(--ink) 8%,#fff);margin-bottom:6px}
 .sthumb img{width:100%;height:100%;object-fit:cover;display:block;image-rendering:auto}
+.sthumb .badge-fav{position:absolute;top:8px;right:8px;background:var(--accent,#d97706);color:#fff;font-size:10px;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.35);pointer-events:none;z-index:2;line-height:1;text-transform:uppercase}
 .opt[data-style="dither"] .sthumb img,.opt[data-style="halftone"] .sthumb img{image-rendering:pixelated}
 .sthumb img:not([src]){visibility:hidden}
 .opt:active{transform:scale(.97)}
